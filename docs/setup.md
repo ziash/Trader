@@ -11,7 +11,7 @@ Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done 
 - [x] Log in at **https://app.ctrader.com** with the cTrader ID (email) you used for the IC Markets demo. The account should appear in the account list.
 - [x] Check the account is in **Hedging** mode, not Netting (account info in cTrader). The whole hedge design (plan 10.6) needs this. *Confirmed: Hedging.*
 - [x] Note the account type: **Raw Spread** (spread + commission) or **Standard** (spread only). Open item in plan Section 12; the Audit Bot will compare them. *Confirmed: Raw Spread.*
-- [x] Note the base currency (USD assumed) and leverage. *Confirmed: USD, 1:500, demo balance USD 5,000 (entity: Raw Trading Ltd).*
+- [x] Note the base currency (USD assumed) and leverage. *Confirmed: USD, 1:500, demo balance USD 5,000 (entity: Raw Trading Ltd). Demo account number: **10124393**.*
 - [ ] Do **not** note down passwords anywhere in this repo. The bot never uses the account password — it uses OAuth tokens (Step 3).
 
 ## Step 2 — Second broker demo (can wait a day or two)
