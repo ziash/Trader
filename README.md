@@ -4,6 +4,7 @@ Trading | Spec Driven Development
 Semi-automated trend-trading bot for cTrader (C# / .NET, Ubuntu).
 
 - **Plan (single source of truth):** [docs/plan.md](docs/plan.md)
+- **Environment setup (Phase 0):** [docs/setup.md](docs/setup.md) — check with `bash scripts/check-env.sh`
 - **Images used by the plan:** [docs/images/](docs/images/)
 - **Bot code:** `src/` (from Phase 1)
 

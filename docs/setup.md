@@ -57,7 +57,7 @@ Check your Ubuntu release first: `lsb_release -a`.
 
 ### 4.1 .NET 10 SDK (LTS)
 
-> **Plan change proposed (v1.4):** .NET 8 and .NET 9 reach end of support on **10 Nov 2026** — one month from now. Use **.NET 10 LTS** instead (supported to Nov 2028).
+> **Plan v1.4:** .NET 8 and .NET 9 reach end of support on **10 Nov 2026**, so the project uses **.NET 10 LTS** (supported to Nov 2028).
 
 Ubuntu 24.04 or newer — .NET 10 is in Ubuntu's own archive:
 
