@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.5** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.6** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 11 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 in progress** — Ubuntu toolchain ready; IC Markets demo confirmed Hedging / Raw Spread; Open API app submitted (awaiting approval); setup checklist in [docs/setup.md](setup.md). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 in progress** — Ubuntu toolchain ready; IC Markets demo confirmed Hedging / Raw Spread; Open API app submitted (awaiting approval); Pepperstone demo created as Broker B; setup checklist in [docs/setup.md](setup.md). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -40,7 +40,7 @@ Resume short-to-mid-term trend trading with a semi-automated setup. The human re
 | 5 | Execution environment | Ubuntu (home PC → Linux VPS later) | Existing machine; same code moves to VPS |
 | 6 | Plan document | Markdown in the private GitHub repo (`docs/plan.md`); Word/PDF exported when needed | Single source of truth next to the code; full change history *(changed v1.3; was .docx in Google Drive)* |
 | 7 | Change control | All future changes go into this document | Version table + change log (Section 11) + Git commits |
-| 8 | Broker candidates | Two of: Pepperstone, IC Markets, FP Markets, Fusion. **Broker A = IC Markets** (cTrader demo created 11-Oct-2026, Hedging, Raw Spread) *(v1.4, v1.5)*; Broker B still to choose | Raw spreads, cTrader, crypto CFDs, regulated groups |
+| 8 | Broker candidates | Two of: Pepperstone, IC Markets, FP Markets, Fusion. **Broker A = IC Markets** (cTrader demo created 11-Oct-2026, Hedging, Raw Spread) *(v1.4, v1.5)*; **Broker B = Pepperstone** (cTrader demo created 11-Oct-2026, Hedging) *(v1.6)* | Raw spreads, cTrader, crypto CFDs, regulated groups |
 | 9 | Trading style | Naked price action; real trades are shorts | Trader's own method (ex-Chris Capre student) |
 | 10 | Loss control | Opposite-side hedge order instead of a stop-loss (Section 10) | Trader's design; specified scenario by scenario |
 | 11 | Position structure | Every trade = 2 half-size shorts + 2 half-size hedges, with numbered legs (Section 10.8) *(new v1.3)* | Clean scale-out; each pair has its own exit |
@@ -187,7 +187,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 | Phase | Name | Deliverable | Target |
 |---|---|---|---|
-| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Started 11-Oct-2026: Git repo done, IC Markets demo created and checked, Ubuntu toolchain ready, Open API app submitted.* | Week 1 |
+| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Started 11-Oct-2026: Git repo done, IC Markets demo created and checked, Ubuntu toolchain ready, Open API app submitted, Pepperstone demo created (Broker B).* | Week 1 |
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
@@ -361,10 +361,11 @@ Every change is recorded here, the version number in the header table is increas
 | v1.3 | 10-Oct-2026 | Plan moved from .docx to Markdown in the private GitHub repo (`docs/plan.md`, chart in `docs/images/`); decision 6 updated. Added Section 10.8: 4-leg split structure, leg naming Tn-S(2n−1)/S(2n), lifecycle rules R1–R8 (protect at 1R, M5 trailing above last lower high with 21 EMA close, bot-opened pyramid adds on retracement to 21 EMA, rotation of even legs, runners), illustration, implementation notes, accepted risks. Hedge size confirmed per pair; 1R defined. Exposure cap for pyramiding added to Section 9. Decisions 11–12 added. Sections 4, 5.2, 7, 8, 10.1, 10.2, open items and glossary aligned. |
 | v1.4 | 11-Oct-2026 | Phase 0 started: setup checklist `docs/setup.md` and check script `scripts/check-env.sh` added. Runtime changed from .NET 8 to .NET 10 LTS (decision 3, Section 7) because .NET 8/9 support ends 10-Nov-2026. IC Markets confirmed as Broker A (demo created). Open API endpoints and token lifetimes confirmed (Section 5.1); OpenAPI.Net library age noted as a risk with fallback. Open items and glossary updated. |
 | v1.5 | 11-Oct-2026 | Phase 0 progress: Ubuntu toolchain ready (`check-env.sh` no failures; .NET 10 SDK, C# Dev Kit, runtime folders, secrets file; NTP fixed by using `pk.pool.ntp.org` as the default time servers are blocked on the home network — see setup.md 4.4). IC Markets demo confirmed Hedging, Raw Spread, USD, 1:500 (decision 8). Open API app "Trend Audit Bot" submitted (ID 43770, trading permission on own accounts). Change-log rows put in version order. Open items updated. |
+| v1.6 | 11-Oct-2026 | Pepperstone chosen as Broker B (decision 8): cTrader demo created under the same cTrader ID, Hedging, USD, 1:200; account type (Razor) to confirm. `pepperstone.com` is blocked on the home network, sign-up via `secure.pepperstone.com` (setup.md Step 2). Open items updated. |
 
 ## 12. Open items / decisions pending
 
-- Which two brokers to audit: **IC Markets chosen as Broker A** (v1.4); choose Broker B from Pepperstone, FP Markets, Fusion Markets, and open its cTrader demo with the same cTrader ID.
+- ~~Which two brokers to audit~~: **IC Markets = Broker A** (v1.4), **Pepperstone = Broker B** (v1.6), both under the same cTrader ID. Still to confirm: Pepperstone demo account type is Razor (raw spread + commission).
 - ~~*(v1.4)* IC Markets demo: confirm Hedging mode and account type (Raw Spread vs Standard).~~ Done v1.5: Hedging, Raw Spread, USD, 1:500.
 - *(v1.4)* Open API application: ~~submit~~ (submitted 11-Oct-2026, app ID 43770, v1.5), await Spotware approval, obtain tokens (setup.md Step 3).
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.

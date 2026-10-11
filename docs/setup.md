@@ -2,7 +2,7 @@
 
 Goal of Phase 0 (plan Section 8): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
 
-Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done (`check-env.sh`: no failures). IC Markets demo checked (Hedging, Raw Spread). Open API app **submitted** (ID 43770, awaiting Spotware approval). Open: tokens after approval; second broker demo.
+Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done (`check-env.sh`: no failures). IC Markets demo checked (Hedging, Raw Spread). Open API app **submitted** (ID 43770, awaiting Spotware approval). Pepperstone cTrader demo created as Broker B (Hedging, same cTrader ID). Open: tokens after approval; confirm Pepperstone demo account type (Razor).
 
 ---
 
@@ -14,10 +14,14 @@ Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done 
 - [x] Note the base currency (USD assumed) and leverage. *Confirmed: USD, 1:500, demo balance USD 5,000 (entity: Raw Trading Ltd). Demo account number: **10124393**.*
 - [ ] Do **not** note down passwords anywhere in this repo. The bot never uses the account password — it uses OAuth tokens (Step 3).
 
-## Step 2 — Second broker demo (can wait a day or two)
+## Step 2 — Second broker demo (done: Pepperstone)
 
-- [ ] Open a cTrader demo at the second broker (Pepperstone, FP Markets or Fusion Markets) **with the same cTrader ID email**, so one access token covers both accounts.
-- [ ] Same checks as Step 1 (Hedging, account type).
+- [x] Open a cTrader demo at the second broker (Pepperstone, FP Markets or Fusion Markets) **with the same cTrader ID email**, so one access token covers both accounts. *Done 11-Oct-2026: **Pepperstone** demo **5357135** (server cTrader DEMO), listed under the same cTrader ID as IC Markets.*
+- [ ] Same checks as Step 1 (Hedging, account type). *Hedging confirmed; USD, 1:200, demo balance USD 5,000. Account type still to confirm — should be **Razor** (Pepperstone's raw spread + commission) to match IC Markets.*
+
+Notes:
+- `pepperstone.com` is blocked on this home network (TLS connection reset); sign-up works through `https://secure.pepperstone.com/register`.
+- A Pepperstone **live** cTrader account (1398129, Razor, USD, 1:200, unfunded) was also created by mistake. It is not used until Phase 5; do not fund it before then.
 
 The Audit Bot needs both, but Phase 0 can finish with one and add the second before Phase 2.
 
