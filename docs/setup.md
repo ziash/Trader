@@ -2,16 +2,16 @@
 
 Goal of Phase 0 (plan Section 8): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
 
-Status on 11-Oct-2026: IC Markets cTrader demo created. Everything else open.
+Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done (`check-env.sh`: no failures). IC Markets demo checked (Hedging, Raw Spread). Open API app **submitted** (ID 43770, awaiting Spotware approval). Open: tokens after approval; second broker demo.
 
 ---
 
-## Step 1 — IC Markets demo account (done: created)
+## Step 1 — IC Markets demo account (done)
 
-- [ ] Log in at **https://app.ctrader.com** with the cTrader ID (email) you used for the IC Markets demo. The account should appear in the account list.
-- [ ] Check the account is in **Hedging** mode, not Netting (account info in cTrader). The whole hedge design (plan 10.6) needs this.
-- [ ] Note the account type: **Raw Spread** (spread + commission) or **Standard** (spread only). Open item in plan Section 12; the Audit Bot will compare them.
-- [ ] Note the base currency (USD assumed) and leverage.
+- [x] Log in at **https://app.ctrader.com** with the cTrader ID (email) you used for the IC Markets demo. The account should appear in the account list.
+- [x] Check the account is in **Hedging** mode, not Netting (account info in cTrader). The whole hedge design (plan 10.6) needs this. *Confirmed: Hedging.*
+- [x] Note the account type: **Raw Spread** (spread + commission) or **Standard** (spread only). Open item in plan Section 12; the Audit Bot will compare them. *Confirmed: Raw Spread.*
+- [x] Note the base currency (USD assumed) and leverage. *Confirmed: USD, 1:500, demo balance USD 5,000 (entity: Raw Trading Ltd).*
 - [ ] Do **not** note down passwords anywhere in this repo. The bot never uses the account password — it uses OAuth tokens (Step 3).
 
 ## Step 2 — Second broker demo (can wait a day or two)
@@ -21,13 +21,13 @@ Status on 11-Oct-2026: IC Markets cTrader demo created. Everything else open.
 
 The Audit Bot needs both, but Phase 0 can finish with one and add the second before Phase 2.
 
-## Step 3 — Register the Open API application
+## Step 3 — Register the Open API application (submitted 11-Oct-2026, awaiting approval)
 
 1. Go to **https://openapi.ctrader.com/** and log in with the same cTrader ID.
 2. Open **https://openapi.ctrader.com/apps** → **Add new app**.
 3. Fill in the form. Give a detailed description — Spotware says this speeds up approval. Suggested text:
    > Personal application for my own cTrader accounts only. A C# (.NET) service on Linux that (1) logs spreads, slippage and execution latency on demo accounts to compare brokers, and later (2) executes and manages my own discretionary trades with server-side protective orders. No third-party users, no copy-trading, no distribution.
-4. Save. Status shows **Submitted**. Spotware reviews it and replies by email (no fixed review time is published).
+4. Save. Status shows **Submitted**. *Done 11-Oct-2026: app "Trend Audit Bot", ID 43770, permission "Access your accounts and trade" only. The portal limits the description to 300 characters, so a shortened version of the text above was used, and app names may not contain third-party brands (cTrader, IC Markets).* Spotware reviews it and replies by email (no fixed review time is published).
 5. After approval:
    - [ ] Copy the **Client ID** and **Client Secret** into the secrets file (Step 6), never into the repo.
    - [ ] Use the **Playground** on the app page to get an **access token** and **refresh token** with scope **`trading`**. (The default redirect URI only works in the Playground, which is fine for a personal bot.)
@@ -118,6 +118,15 @@ timedatectl
 ```
 
 Must show `System clock synchronized: yes` and `NTP service: active`. If not: `sudo timedatectl set-ntp true`. Slippage and latency figures are only valid if the clock is right.
+
+If NTP is active but never synchronises, the network may be blocking the default time servers (UDP 123). On this home network (Pakistan) `ntp.ubuntu.com`, `pool.ntp.org`, Google and Cloudflare all timed out; only `pk.pool.ntp.org` answered, and the clock had drifted ~24 s. Fix used:
+
+```bash
+sudo mkdir -p /etc/systemd/timesyncd.conf.d && printf '[Time]\nNTP=pk.pool.ntp.org\nFallbackNTP=ntp.ubuntu.com\n' | sudo tee /etc/systemd/timesyncd.conf.d/trader.conf
+sudo systemctl restart systemd-timesyncd
+```
+
+To undo: delete that file and restart the service.
 
 ## Step 5 — Network check
 

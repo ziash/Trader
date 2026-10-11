@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.4** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.5** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 11 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 in progress** — IC Markets cTrader demo created; setup checklist in [docs/setup.md](setup.md). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 in progress** — Ubuntu toolchain ready; IC Markets demo confirmed Hedging / Raw Spread; Open API app submitted (awaiting approval); setup checklist in [docs/setup.md](setup.md). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -40,7 +40,7 @@ Resume short-to-mid-term trend trading with a semi-automated setup. The human re
 | 5 | Execution environment | Ubuntu (home PC → Linux VPS later) | Existing machine; same code moves to VPS |
 | 6 | Plan document | Markdown in the private GitHub repo (`docs/plan.md`); Word/PDF exported when needed | Single source of truth next to the code; full change history *(changed v1.3; was .docx in Google Drive)* |
 | 7 | Change control | All future changes go into this document | Version table + change log (Section 11) + Git commits |
-| 8 | Broker candidates | Two of: Pepperstone, IC Markets, FP Markets, Fusion. **Broker A = IC Markets** (cTrader demo created 11-Oct-2026) *(v1.4)*; Broker B still to choose | Raw spreads, cTrader, crypto CFDs, regulated groups |
+| 8 | Broker candidates | Two of: Pepperstone, IC Markets, FP Markets, Fusion. **Broker A = IC Markets** (cTrader demo created 11-Oct-2026, Hedging, Raw Spread) *(v1.4, v1.5)*; Broker B still to choose | Raw spreads, cTrader, crypto CFDs, regulated groups |
 | 9 | Trading style | Naked price action; real trades are shorts | Trader's own method (ex-Chris Capre student) |
 | 10 | Loss control | Opposite-side hedge order instead of a stop-loss (Section 10) | Trader's design; specified scenario by scenario |
 | 11 | Position structure | Every trade = 2 half-size shorts + 2 half-size hedges, with numbered legs (Section 10.8) *(new v1.3)* | Clean scale-out; each pair has its own exit |
@@ -187,7 +187,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 | Phase | Name | Deliverable | Target |
 |---|---|---|---|
-| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Started 11-Oct-2026: Git repo done, IC Markets demo created.* | Week 1 |
+| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Started 11-Oct-2026: Git repo done, IC Markets demo created and checked, Ubuntu toolchain ready, Open API app submitted.* | Week 1 |
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
@@ -358,14 +358,15 @@ Every change is recorded here, the version number in the header table is increas
 | v1.0 | 08-Oct-2026 | First issue. Decisions: TradingView for human interaction; cTrader Open API; C#; Audit Bot first on 2 brokers with per-broker logs and multi-instance awareness; Ubuntu; plan stored as .docx in Google Drive. |
 | v1.1 | 09-Oct-2026 | Added Section 10: hedge-and-recover exit logic (no stop-loss; shorts as real trades, longs as hedge), Scenario 1 defined with worked example and net-position equivalent; Scenarios 2–5 listed. Decisions 9–10 added to Section 2. Sections 5.2, 7, 8 and 9 aligned to the hedge design. Open items and glossary updated. Sections renumbered (change log now 11). |
 | v1.2 | 09-Oct-2026 | Scenario 1 illustrated with AUD/JPY daily chart (Figure 1). Working assumption H = E + ~10 pips. Worked example replaced with real levels (E 114.62, H 114.72, wick 114.97, T 110.00). Constraint on arming distance A added. |
-| v1.4 | 11-Oct-2026 | Phase 0 started: setup checklist `docs/setup.md` and check script `scripts/check-env.sh` added. Runtime changed from .NET 8 to .NET 10 LTS (decision 3, Section 7) because .NET 8/9 support ends 10-Nov-2026. IC Markets confirmed as Broker A (demo created). Open API endpoints and token lifetimes confirmed (Section 5.1); OpenAPI.Net library age noted as a risk with fallback. Open items and glossary updated. |
 | v1.3 | 10-Oct-2026 | Plan moved from .docx to Markdown in the private GitHub repo (`docs/plan.md`, chart in `docs/images/`); decision 6 updated. Added Section 10.8: 4-leg split structure, leg naming Tn-S(2n−1)/S(2n), lifecycle rules R1–R8 (protect at 1R, M5 trailing above last lower high with 21 EMA close, bot-opened pyramid adds on retracement to 21 EMA, rotation of even legs, runners), illustration, implementation notes, accepted risks. Hedge size confirmed per pair; 1R defined. Exposure cap for pyramiding added to Section 9. Decisions 11–12 added. Sections 4, 5.2, 7, 8, 10.1, 10.2, open items and glossary aligned. |
+| v1.4 | 11-Oct-2026 | Phase 0 started: setup checklist `docs/setup.md` and check script `scripts/check-env.sh` added. Runtime changed from .NET 8 to .NET 10 LTS (decision 3, Section 7) because .NET 8/9 support ends 10-Nov-2026. IC Markets confirmed as Broker A (demo created). Open API endpoints and token lifetimes confirmed (Section 5.1); OpenAPI.Net library age noted as a risk with fallback. Open items and glossary updated. |
+| v1.5 | 11-Oct-2026 | Phase 0 progress: Ubuntu toolchain ready (`check-env.sh` no failures; .NET 10 SDK, C# Dev Kit, runtime folders, secrets file; NTP fixed by using `pk.pool.ntp.org` as the default time servers are blocked on the home network — see setup.md 4.4). IC Markets demo confirmed Hedging, Raw Spread, USD, 1:500 (decision 8). Open API app "Trend Audit Bot" submitted (ID 43770, trading permission on own accounts). Change-log rows put in version order. Open items updated. |
 
 ## 12. Open items / decisions pending
 
 - Which two brokers to audit: **IC Markets chosen as Broker A** (v1.4); choose Broker B from Pepperstone, FP Markets, Fusion Markets, and open its cTrader demo with the same cTrader ID.
-- *(v1.4)* IC Markets demo: confirm Hedging mode and account type (Raw Spread vs Standard).
-- *(v1.4)* Open API application: submit, await Spotware approval, obtain tokens (setup.md Step 3).
+- ~~*(v1.4)* IC Markets demo: confirm Hedging mode and account type (Raw Spread vs Standard).~~ Done v1.5: Hedging, Raw Spread, USD, 1:500.
+- *(v1.4)* Open API application: ~~submit~~ (submitted 11-Oct-2026, app ID 43770, v1.5), await Spotware approval, obtain tokens (setup.md Step 3).
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.
 - Final symbol list for the Audit Bot.
 - Price-action entry rules (to be written as a spec in Phase 3).
@@ -374,7 +375,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.3)* Fix the exact M5 swing definition for "last lower high" and the stop buffer (pips above the high).
 - *(v1.3)* Confirm the 21 EMA retracement trigger: candle close at/above the EMA vs. a touch of the EMA.
 - *(v1.3)* Confirm exposure-cap values (effective leverage 1:10, margin level 300%) after the Audit Bot shows real margin requirements.
-- Account type: zero-commission (Standard, spread-only) vs raw-spread + commission for the hedge design — compare using Audit Bot data.
+- Account type: zero-commission (Standard, spread-only) vs raw-spread + commission for the hedge design — compare using Audit Bot data. *(v1.5: Broker A demo is Raw Spread.)*
 - Protection if power/internet drops: confirm the server-side hedge order (before 1R) and stop-loss (after 1R) are sufficient, or add a wide emergency stop-loss as a last-resort backstop.
 - Short-only approach: confirm instruments, and check swap direction for shorts on each one.
 
