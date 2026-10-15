@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.6** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
-| Date | 11 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 in progress** — Ubuntu toolchain ready; IC Markets demo confirmed Hedging / Raw Spread; Open API app submitted (awaiting approval); Pepperstone demo created as Broker B; setup checklist in [docs/setup.md](setup.md). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Document version | **v1.7** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Date | 16 October 2026 |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Next: Phase 1** (starts when the owner says so). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -90,7 +90,7 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 
 ### 5.1 Building blocks
 
-- One Open API application registered on Spotware's Open API portal (client ID + secret).
+- One Open API application registered on Spotware's Open API portal (client ID + secret). *(v1.7: app "Trend Audit Bot", ID 43770, **approved**; access granted with scope `trading` to the two demo accounts only — IC Markets 10124393 and Pepperstone 5357135. Live accounts deliberately not granted; they get a fresh grant in Phase 5.)*
 - One cTrader ID (cTID) linked to both broker demo accounts; OAuth grants the app access to each account.
 - .NET worker service using Spotware's official OpenAPI.Net library (NuGet `cTrader.OpenAPI.Net`) for the TCP/Protobuf connection.
 - Demo and live use separate API hosts: `demo.ctraderapi.com:5035` and `live.ctraderapi.com:5035` (Protobuf over TLS; confirmed v1.4). One connection serves all demo accounts; a second serves all live accounts.
@@ -171,7 +171,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 | Component | Choice |
 |---|---|
-| OS | Ubuntu (current machine) |
+| OS | Ubuntu 26.04 LTS (current machine: HP laptop) *(v1.7)* |
 | Runtime / SDK | .NET 10 LTS SDK from Ubuntu's archive (`dotnet-sdk-10.0`); runtime only on the VPS later *(v1.4)* |
 | Editor | VS Code + C# Dev Kit (AI-assisted coding) |
 | Running the bot | systemd service (one unit per instance) → later Docker container |
@@ -187,7 +187,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 | Phase | Name | Deliverable | Target |
 |---|---|---|---|
-| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Started 11-Oct-2026: Git repo done, IC Markets demo created and checked, Ubuntu toolchain ready, Open API app submitted, Pepperstone demo created (Broker B).* | Week 1 |
+| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Complete 16-Oct-2026: Git repo, IC Markets demo (Broker A), Pepperstone demo (Broker B), Ubuntu toolchain, Open API app approved, tokens in secrets file; `check-env.sh` 0 warnings.* | Week 1 |
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
@@ -362,12 +362,15 @@ Every change is recorded here, the version number in the header table is increas
 | v1.4 | 11-Oct-2026 | Phase 0 started: setup checklist `docs/setup.md` and check script `scripts/check-env.sh` added. Runtime changed from .NET 8 to .NET 10 LTS (decision 3, Section 7) because .NET 8/9 support ends 10-Nov-2026. IC Markets confirmed as Broker A (demo created). Open API endpoints and token lifetimes confirmed (Section 5.1); OpenAPI.Net library age noted as a risk with fallback. Open items and glossary updated. |
 | v1.5 | 11-Oct-2026 | Phase 0 progress: Ubuntu toolchain ready (`check-env.sh` no failures; .NET 10 SDK, C# Dev Kit, runtime folders, secrets file; NTP fixed by using `pk.pool.ntp.org` as the default time servers are blocked on the home network — see setup.md 4.4). IC Markets demo confirmed Hedging, Raw Spread, USD, 1:500 (decision 8). Open API app "Trend Audit Bot" submitted (ID 43770, trading permission on own accounts). Change-log rows put in version order. Open items updated. |
 | v1.6 | 11-Oct-2026 | Pepperstone chosen as Broker B (decision 8): cTrader demo created under the same cTrader ID, Hedging, USD, 1:200; account type (Razor) to confirm. `pepperstone.com` is blocked on the home network, sign-up via `secure.pepperstone.com` (setup.md Step 2). Open items updated. |
+| v1.7 | 16-Oct-2026 | **Phase 0 complete.** Open API app "Trend Audit Bot" (ID 43770) approved; tokens issued with scope `trading` for the two demo accounts only (IC Markets 10124393, Pepperstone 5357135); live accounts not granted (Section 5.1). Client ID, secret and tokens stored in `~/.config/trader/secrets.env`; `check-env.sh` result: no failures, 0 warnings. OS recorded as Ubuntu 26.04 LTS (Section 7). Note added that IC Markets' cTrader entity here is Raw Trading Ltd (Seychelles FSA) — relevant to the live-broker choice. Open items updated. |
 
 ## 12. Open items / decisions pending
 
 - ~~Which two brokers to audit~~: **IC Markets = Broker A** (v1.4), **Pepperstone = Broker B** (v1.6), both under the same cTrader ID. Still to confirm: Pepperstone demo account type is Razor (raw spread + commission).
 - ~~*(v1.4)* IC Markets demo: confirm Hedging mode and account type (Raw Spread vs Standard).~~ Done v1.5: Hedging, Raw Spread, USD, 1:500.
-- *(v1.4)* Open API application: ~~submit~~ (submitted 11-Oct-2026, app ID 43770, v1.5), await Spotware approval, obtain tokens (setup.md Step 3).
+- ~~*(v1.4)* Open API application: submit, await Spotware approval, obtain tokens.~~ Done v1.7: approved, tokens for both demo accounts in the secrets file.
+- *(v1.7)* Client secret was shared in a chat on 16-Oct-2026: regenerate it in the Open API portal (if offered) before any live account is granted (Phase 5).
+- *(v1.7)* Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside Audit Bot results when choosing the live broker.
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.
 - Final symbol list for the Audit Bot.
 - Price-action entry rules (to be written as a spec in Phase 3).

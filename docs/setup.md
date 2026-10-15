@@ -2,7 +2,7 @@
 
 Goal of Phase 0 (plan Section 8): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
 
-Status on 11-Oct-2026: Ubuntu toolchain, network, folders and secrets file done (`check-env.sh`: no failures). IC Markets demo checked (Hedging, Raw Spread). Open API app **submitted** (ID 43770, awaiting Spotware approval). Pepperstone cTrader demo created as Broker B (Hedging, same cTrader ID). Open: tokens after approval; confirm Pepperstone demo account type (Razor).
+Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warnings. Open API app approved; Client ID, secret and tokens (scope `trading`, both demo accounts) in the secrets file. Still open (not blocking Phase 1): confirm Pepperstone demo account type (Razor).
 
 ---
 
@@ -25,7 +25,7 @@ Notes:
 
 The Audit Bot needs both, but Phase 0 can finish with one and add the second before Phase 2.
 
-## Step 3 — Register the Open API application (submitted 11-Oct-2026, awaiting approval)
+## Step 3 — Register the Open API application (done: approved, tokens issued 16-Oct-2026)
 
 1. Go to **https://openapi.ctrader.com/** and log in with the same cTrader ID.
 2. Open **https://openapi.ctrader.com/apps** → **Add new app**.
@@ -33,9 +33,10 @@ The Audit Bot needs both, but Phase 0 can finish with one and add the second bef
    > Personal application for my own cTrader accounts only. A C# (.NET) service on Linux that (1) logs spreads, slippage and execution latency on demo accounts to compare brokers, and later (2) executes and manages my own discretionary trades with server-side protective orders. No third-party users, no copy-trading, no distribution.
 4. Save. Status shows **Submitted**. *Done 11-Oct-2026: app "Trend Audit Bot", ID 43770, permission "Access your accounts and trade" only. The portal limits the description to 300 characters, so a shortened version of the text above was used, and app names may not contain third-party brands (cTrader, IC Markets).* Spotware reviews it and replies by email (no fixed review time is published).
 5. After approval:
-   - [ ] Copy the **Client ID** and **Client Secret** into the secrets file (Step 6), never into the repo.
-   - [ ] Use the **Playground** on the app page to get an **access token** and **refresh token** with scope **`trading`**. (The default redirect URI only works in the Playground, which is fine for a personal bot.)
-   - [ ] Copy both tokens into the secrets file.
+   - [x] Copy the **Client ID** and **Client Secret** into the secrets file (Step 6), never into the repo.
+   - [x] Use the **Playground** on the app page to get an **access token** and **refresh token** with scope **`trading`**. (The default redirect URI only works in the Playground, which is fine for a personal bot.) *Granted to the two demo accounts only (IC Markets 10124393, Pepperstone 5357135); live accounts left unticked.*
+   - [x] Copy both tokens into the secrets file.
+   - [ ] Before any live account is granted (Phase 5): regenerate the client secret if the portal offers it, because it was shared in a chat on 16-Oct-2026.
 
 Facts to know (from Spotware docs):
 
@@ -63,7 +64,7 @@ Check your Ubuntu release first: `lsb_release -a`.
 
 > **Plan v1.4:** .NET 8 and .NET 9 reach end of support on **10 Nov 2026**, so the project uses **.NET 10 LTS** (supported to Nov 2028).
 
-Ubuntu 24.04 or newer — .NET 10 is in Ubuntu's own archive:
+Ubuntu 24.04 or newer (this machine: 26.04 LTS, SDK 10.0.112) — .NET 10 is in Ubuntu's own archive:
 
 ```bash
 sudo apt update
