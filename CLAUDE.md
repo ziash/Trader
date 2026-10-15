@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 0 complete (plan v1.7). Next: Phase 1 — framework + Audit Bot (plan Sections 5, 6, 8).
+- **Current state:** Phase 0 complete (plan v1.7). Phase 1 — framework + Audit Bot (plan Sections 5, 6, 8) in progress: step 1 (connect and list accounts, `src/Trader.ListAccounts`) done.
 
 ## Working rules
 
@@ -37,14 +37,14 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 | Item | Value |
 |---|---|
 | Open API app | "Trend Audit Bot", ID 43770, scope `trading` |
-| Broker A | IC Markets (Raw Trading Ltd) demo **10124393** — Hedging, Raw Spread, USD, 1:500 |
-| Broker B | Pepperstone demo **5357135** — Hedging, USD, 1:200 |
+| Broker A | IC Markets (Raw Trading Ltd) demo **10124393** — Hedging, Raw Spread, USD, 1:500 — `ctidTraderAccountId` 49123893 |
+| Broker B | Pepperstone demo **5357135** — Hedging, USD, 1:200 — `ctidTraderAccountId` 49124666 |
 | Demo endpoint | `demo.ctraderapi.com:5035` (Protobuf over TLS) |
 | Live endpoint | `live.ctraderapi.com:5035` — **do not use** before Phase 5 |
 | Rate limits | 50 req/s, 5 req/s for historical data (per connection) |
 | Heartbeat | every 10 s |
 
-Account numbers above are broker login numbers. The API uses `ctidTraderAccountId`, a different number obtained from `ProtoOAGetAccountListByAccessTokenReq`.
+Account numbers above are broker login numbers. The API uses `ctidTraderAccountId`, a different number obtained from `ProtoOAGetAccountListByAccessTokenReq` (run `dotnet run --project src/Trader.ListAccounts` to list them).
 
 **Demo only.** No code may connect to the live endpoint or place orders on a live account until the plan says Phase 5 has started. Make `CTRADER_ENV=demo` the default and refuse `live` unless explicitly enabled by the owner.
 
