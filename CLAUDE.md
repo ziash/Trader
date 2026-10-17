@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 1 in progress (plan v1.8, steps in Section 8.1): step 1 (connect and list accounts, `src/Trader.ListAccounts`) done; step 2 (stay connected) next.
+- **Current state:** Phase 1 in progress (plan v1.9, steps in Section 8.1): steps 1 (connect and list accounts, `src/Trader.ListAccounts`) and 2 (stay connected, `src/Trader.AuditBot` + `ConnectionManager`) done; step 3 (price feed to disk) next.
 
 ## Working rules
 
@@ -26,11 +26,11 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 ## Secrets — never break these
 
 - Credentials live only in `~/.config/trader/secrets.env` (permissions 600), outside the repo:
-  `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, `CTRADER_ACCESS_TOKEN`, `CTRADER_REFRESH_TOKEN`, `CTRADER_ENV` (= `demo`).
+  `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, `CTRADER_ACCESS_TOKEN`, `CTRADER_REFRESH_TOKEN`, `CTRADER_ENV` (= `demo`), and `CTRADER_ACCESS_TOKEN_EXPIRES_UTC` (written by the bot on each refresh).
 - **Never print, log, echo or commit** any of these values — not in code, tests, logs, commit messages or chat output. Log only "set / not set" or a masked form (first 4 chars + `…`).
 - Never `cat` the secrets file. Read it from code only.
 - Before every commit, check the diff contains no secret values (`git diff --cached`).
-- The refresh token is replaced on every refresh: code that refreshes tokens must write the new pair back to `secrets.env` atomically (write temp file, then rename) and keep permissions 600.
+- The refresh token is replaced on every refresh: code that refreshes tokens must write the new pair back to `secrets.env` atomically (write temp file, then rename) and keep permissions 600. Use `TokenRefresher` / `SecretsFile.WriteTokens` (they hold `secrets.env.lock`); never write the file another way.
 
 ## Accounts and endpoints
 

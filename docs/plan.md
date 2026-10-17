@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.8** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.9** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.8):** step 1 (connect and list accounts) done 16-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.9):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -96,6 +96,8 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 - .NET worker service using Spotware's official OpenAPI.Net library (NuGet `cTrader.OpenAPI.Net`) for the TCP/Protobuf connection.
 - Demo and live use separate API hosts: `demo.ctraderapi.com:5035` and `live.ctraderapi.com:5035` (Protobuf over TLS; confirmed v1.4). One connection serves all demo accounts; a second serves all live accounts.
 - Access token lasts about 30 days; the bot renews it with the refresh token and must save the new refresh token each time (the old one is invalidated).
+- *(v1.9, step 2)* Token refresh runs over the same Protobuf connection (`ProtoOARefreshTokenReq`), when the token has under 7 days left, when its expiry is unknown, or when the server rejects it. The new pair and its expiry (`CTRADER_ACCESS_TOKEN_EXPIRES_UTC`) are written to `secrets.env` atomically (temp file, then rename; mode 600), under a lock file (`secrets.env.lock`) so only one instance refreshes at a time. First refresh 17-Oct-2026: the server returned a lifetime of about 30 days 10 h (expires 16-Nov-2026).
+- *(v1.9, step 2)* Heartbeats: the bot sends one at least every 10 s when idle; the server sends its own only after about 30 s without traffic. Dead-line rule: after 40 s with nothing received the bot sends a ping (`ProtoOAVersionReq`); no reply within 10 s → reconnect. Reconnect waits 1, 2, 4 … up to 60 s (+ up to 20 % random jitter), then authenticates the app and every account again.
 
 > **Library risk (v1.4):** `cTrader.OpenAPI.Net` v1.4.4 was last published in 2022 and targets .NET 6, with old dependencies. It runs on .NET 10, so Phase 1 starts with it. Fallback if it causes problems: generate C# classes from Spotware's `.proto` files and write a thin TLS client.
 >
@@ -275,8 +277,8 @@ Each step is built only when the owner says so.
 | Step | Name | Content | Status |
 |---|---|---|---|
 | 1 | Connect and list accounts | TLS connect to the demo host, app auth, account list, account auth, trader info (`src/Trader.ListAccounts`) | **Done 16-Oct-2026** — both demo accounts Hedged; `ctidTraderAccountId` 49123893 (IC Markets), 49124666 (Pepperstone) |
-| 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair | Next |
-| 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription | |
+| 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair (`src/Trader.AuditBot`, `ConnectionManager`) | **Done 17-Oct-2026** — reconnects tested with simulated drops (back up within ~3 s); first token refresh done |
+| 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | Next |
 | 4 | Instance registry | Section 6.4 | |
 | 5 | Probe orders | Windows of Section 6.2.2; `probes.csv` | |
 | 6 | Daily report | Section 6.5 | |
@@ -451,6 +453,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.6 | 11-Oct-2026 | Pepperstone chosen as Broker B (decision 8): cTrader demo created under the same cTrader ID, Hedging, USD, 1:200; account type (Razor) to confirm. `pepperstone.com` is blocked on the home network, sign-up via `secure.pepperstone.com` (setup.md Step 2). Open items updated. |
 | v1.7 | 16-Oct-2026 | **Phase 0 complete.** Open API app "Trend Audit Bot" (ID 43770) approved; tokens issued with scope `trading` for the two demo accounts only (IC Markets 10124393, Pepperstone 5357135); live accounts not granted (Section 5.1). Client ID, secret and tokens stored in `~/.config/trader/secrets.env`; `check-env.sh` result: no failures, 0 warnings. OS recorded as Ubuntu 26.04 LTS (Section 7). Note added that IC Markets' cTrader entity here is Raw Trading Ltd (Seychelles FSA) — relevant to the live-broker choice. Open items updated. |
 | v1.8 | 17-Oct-2026 | **Phase 1 started**; step list added (Section 8.1); step 1 (connect and list accounts) done, `ctidTraderAccountId`s recorded. Audit Bot symbol list fixed: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (6.2.1; crypto availability checked at both brokers). Probe windows fixed: London open, New York open, quiet hour 03:00 London, US NFP/CPI releases (6.2.2). Spread logging changed from every tick to one summary row per 2 min (main hours) / 5 min (off-peak) (6.2.3). All logs CSV for Google Sheets, with pips and USD per lot; `ticks.csv` → `spreads.csv`, `events.log` → `events.csv` (6.3.1). Decision 13 added. OpenAPI.Net finding added to 5.1. Open items and glossary updated. |
+| v1.9 | 17-Oct-2026 | **Phase 1 step 2 done** (stay connected): event stream, dead-line detection by ping, auto-reconnect with backoff and re-auth, token refresh with atomic save and lock (Section 5.1, 8.1). Token expiry now stored in `secrets.env` as `CTRADER_ACCESS_TOKEN_EXPIRES_UTC`. Server heartbeat behaviour recorded. `events.csv` moved into step 3. Open item added: lost refresh reply. |
 
 ## 12. Open items / decisions pending
 
@@ -461,6 +464,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.7)* Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside Audit Bot results when choosing the live broker.
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.
 - ~~Final symbol list for the Audit Bot.~~ Done v1.8: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (Section 6.2.1).
+- *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
 - *(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD (a 100,000-unit lot does not apply to crypto).
 - *(v1.8)* News probes: confirm the offsets (proposal: 2 min before, a few seconds after, 5 min after the release) and fill in the NFP/CPI dates in the config before the audit run.
 - Price-action entry rules (to be written as a spec in Phase 3).

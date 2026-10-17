@@ -15,7 +15,8 @@ public sealed record TraderSecrets(
     string ClientSecret,
     string AccessToken,
     string RefreshToken,
-    ApiEnvironment Environment)
+    ApiEnvironment Environment,
+    DateTime? AccessTokenExpiresUtc = null)
 {
     /// <summary>First 4 characters followed by "…"; never the whole value.</summary>
     public static string Mask(string? value) =>
@@ -24,5 +25,6 @@ public sealed record TraderSecrets(
     // Keep secrets out of logs if a record is ever formatted by accident.
     public override string ToString() =>
         $"TraderSecrets {{ ClientId = {Mask(ClientId)}, ClientSecret = {Mask(ClientSecret)}, " +
-        $"AccessToken = {Mask(AccessToken)}, RefreshToken = {Mask(RefreshToken)}, Environment = {Environment} }}";
+        $"AccessToken = {Mask(AccessToken)}, RefreshToken = {Mask(RefreshToken)}, Environment = {Environment}, " +
+        $"AccessTokenExpiresUtc = {AccessTokenExpiresUtc?.ToString("u") ?? "unknown"} }}";
 }
