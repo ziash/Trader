@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.7** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
-| Date | 16 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Next: Phase 1** (starts when the owner says so). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Document version | **v1.8** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Date | 17 October 2026 |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.8):** step 1 (connect and list accounts) done 16-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -45,6 +45,7 @@ Resume short-to-mid-term trend trading with a semi-automated setup. The human re
 | 10 | Loss control | Opposite-side hedge order instead of a stop-loss (Section 10) | Trader's design; specified scenario by scenario |
 | 11 | Position structure | Every trade = 2 half-size shorts + 2 half-size hedges, with numbered legs (Section 10.8) *(new v1.3)* | Clean scale-out; each pair has its own exit |
 | 12 | Trade management | Runner leg trails on M5; rotating leg closes when the next pyramid add opens; unlimited adds within an exposure cap *(new v1.3)* | Ride the trend while bounding total exposure |
+| 13 | Audit Bot logs | CSV files that open directly in Google Sheets / Excel; spreads written as one summary row per symbol every 2 min (main hours) or 5 min (off-peak), in pips and USD per lot (Section 6.3) *(new v1.8)* | Easy to export and analyse elsewhere; small files without losing spikes or feed gaps |
 
 ## 3. How the pieces fit
 
@@ -97,6 +98,8 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 - Access token lasts about 30 days; the bot renews it with the refresh token and must save the new refresh token each time (the old one is invalidated).
 
 > **Library risk (v1.4):** `cTrader.OpenAPI.Net` v1.4.4 was last published in 2022 and targets .NET 6, with old dependencies. It runs on .NET 10, so Phase 1 starts with it. Fallback if it causes problems: generate C# classes from Spotware's `.proto` files and write a thin TLS client.
+>
+> *v1.8 finding (Phase 1 step 1):* the library works on .NET 10 — app auth, account list, account auth and trader info all succeed on both demo accounts. Its message definitions date from 2022 and already miss at least one newer field (`brokerTitleShort` in the account list). Not a blocker today; if a later step needs newer fields, switch to the fallback.
 
 ### 5.2 Core functions the bot framework must provide
 
@@ -117,14 +120,42 @@ Run the same measurements on two brokers in parallel for at least 2 weeks on dem
 
 | Measurement | How | Why it matters |
 |---|---|---|
-| Spread | Log every bid/ask tick per symbol | Real cost; widening at news/rollover |
+| Spread | Read every bid/ask tick per symbol; write one summary row per interval (Section 6.2.3) *(v1.8)* | Real cost; widening at news/rollover |
 | Slippage | Small scheduled probe orders (0.01 lot): requested vs filled price | Shows fill fairness, positive vs negative slippage |
 | Execution latency | Time from order send → fill event | Speed of the broker path |
 | Rejections / requotes | Count and reason codes | Hidden friction |
 | Swap & commission | Read from deal/position data | Cost of holding trend trades |
-| Feed gaps | Gaps > N seconds in ticks | Feed stability |
+| Feed gaps | Longest gap between ticks, per interval row | Feed stability |
 
-Symbols for v1: EURUSD, GBPUSD, USDJPY, XAUUSD, US500 (index), BTCUSD. Probe orders open and close immediately, during defined windows (London open, NY open, a quiet hour, around one news release).
+#### 6.2.1 Symbols *(v1.8)*
+
+**AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD** — same names at both brokers, all enabled for trading on both demo accounts (checked 17-Oct-2026 through the API). Replaces the v1.0 draft list (EURUSD, GBPUSD, USDJPY, XAUUSD, US500, BTCUSD).
+
+- Crypto trades 24/7, so BTCUSD and ETHUSD also show weekend spread and feed behaviour while forex is closed.
+- USDJPY and GBPUSD are subscribed **for currency conversion only** (JPY and GBP spread costs → USD); they are not logged or probed.
+- Crypto check, 17-Oct-2026: IC Markets lists 105 crypto symbols, Pepperstone 53; 25 are enabled at both (22 under the same name; Avalanche, Chainlink and Sonic under different names). The bot looks symbols up by name per broker, with a per-broker name map for any that differ.
+
+#### 6.2.2 Probe windows *(v1.8)*
+
+Probe orders (0.01 lot) open and close immediately. Each probe row in `probes.csv` carries its window name. Times are local market times; the bot converts them to UTC with time-zone rules, so daylight-saving changes are automatic (UK clocks change 25-Oct-2026, US clocks 1-Nov-2026 — for that week London and New York are 4 h apart, not 5 h).
+
+| Window (log name) | Local time | Days |
+|---|---|---|
+| `LondonOpen` | 08:00 London | Mon–Fri |
+| `NewYorkOpen` | 08:00 New York | Mon–Fri |
+| `QuietHour` | 03:00 London (Asian session; away from the 17:00 New York rollover) | Mon–Fri |
+| `NewsRelease` | 08:30 New York, on US **Non-Farm Payrolls** and **CPI** release days | Dates listed in the config file |
+
+Per window, each symbol gets one buy probe and one sell probe, a few seconds apart; instances on the same account are staggered (Section 6.4). For `NewsRelease`, probes run just before, just after and about 5 minutes after the release (exact offsets: Section 12).
+
+#### 6.2.3 Log intervals *(v1.8)*
+
+| Period | Definition | Spread row every |
+|---|---|---|
+| Main hours | Mon–Fri, 08:00 London to 17:00 New York (London open to New York close) | **2 min** |
+| Off-peak | All other times, including weekends (crypto only — forex is closed from Fri 17:00 to Sun 17:00 New York) | **5 min** |
+
+Each row summarises all ticks in its interval (min / average / median / 95th-percentile / max spread, tick count, longest gap), so short spikes and gaps between rows are not lost. Events (connect, reconnect, errors, rejections) are written when they happen, not on a timer. The 10-second Open API heartbeat (a Spotware protocol requirement) and the 10-second registry status file (Section 6.4, overwritten in place) are not logs and stay at 10 s.
 
 ### 6.3 Per-broker logging on disk
 
@@ -139,20 +170,63 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
     brokerA-<accountId>-<instanceId>.json
   logs/
     brokerA/<accountId>/<instanceId>/2026-10-12/
-      ticks.csv    # time_utc, symbol, bid, ask, spread
-      probes.csv   # time_utc, symbol, side, req_px, fill_px, slip, latency_ms
-      events.log   # connect, reconnect, errors, rejections
+      spreads.csv  # one summary row per symbol per interval (v1.8; was ticks.csv)
+      probes.csv   # one row per probe order
+      events.csv   # connect, reconnect, errors, rejections (v1.8; was events.log)
     brokerB/<accountId>/<instanceId>/2026-10-12/ ...
   reports/
     daily-compare-2026-10-12.csv
 ```
+
+#### 6.3.1 File format *(v1.8)*
+
+All logs and reports are CSV files that open directly in Google Sheets, Excel or LibreOffice and import into other tools:
+
+- UTF-8, comma-separated, one header row, one record per line; text quoted only when it contains a comma or quote.
+- Times in UTC as `yyyy-MM-dd HH:mm:ss` (Google Sheets reads this as a date-time); the column name says `_utc`.
+- Numbers with a `.` decimal point and no thousands separators; units in the column name (`_pips`, `_usd`, `_ms`, `_s`).
+- One file per day (UTC) per broker / account / instance, path as above.
+
+**Pips and USD per lot.** Spreads and slippage are given in pips and as USD cost for one lot:
+
+- Forex: 1 pip = 0.0001 (0.01 for JPY pairs); 1 lot = 100,000 units of the base currency. USD value uses the live USDJPY or GBPUSD rate from the same broker (e.g. EURGBP: spread × 100,000 × GBPUSD).
+- Crypto: the pip is the broker's own pip size for the symbol, which may differ between brokers — so compare the USD columns, not the pip columns. A 100,000-unit lot does not apply (that would be 100,000 BTC); USD is given per 1 lot = 1 coin (Section 12).
+
+**`spreads.csv`**
+
+| Column | Meaning |
+|---|---|
+| `time_utc` | End of the interval |
+| `interval_s` | 120 (main hours) or 300 (off-peak) |
+| `session` | `main` or `offpeak` |
+| `symbol` | e.g. `EURUSD` |
+| `ticks` | Number of bid/ask updates in the interval |
+| `bid`, `ask` | Last prices in the interval |
+| `spread_min_pips`, `spread_avg_pips`, `spread_median_pips`, `spread_p95_pips`, `spread_max_pips` | Spread statistics over the interval |
+| `spread_avg_usd`, `spread_max_usd` | Average and maximum spread as USD cost per lot |
+| `max_gap_s` | Longest time between two ticks in the interval |
+
+**`probes.csv`**
+
+| Column | Meaning |
+|---|---|
+| `time_utc` | When the order was sent |
+| `window` | `LondonOpen`, `NewYorkOpen`, `QuietHour` or `NewsRelease` |
+| `symbol`, `side`, `lots` | e.g. `EURUSD`, `buy`, `0.01` |
+| `req_px`, `fill_px` | Price seen when sending; price filled |
+| `slip_pips`, `slip_usd` | Slippage; negative = worse for us. USD per lot |
+| `latency_ms` | Order send → fill event |
+| `result`, `reason` | `filled` / `rejected` and the broker's reason code |
+| `label` | Order label (instance ID) |
+
+**`events.csv`:** `time_utc`, `level`, `event`, `detail`.
 
 ### 6.4 Multi-instance awareness ("know your siblings")
 
 Each instance must know how many copies of the Audit Bot are running and behave sensibly.
 
 - **Identity:** on start, an instance creates an ID = broker + account + short GUID and writes it into its log path.
-- **Registry:** it writes a heartbeat file in `run/instances/` every 10 seconds (PID, broker, account, symbols, role, last-seen time). Files older than 30 seconds are treated as dead and cleaned up.
+- **Registry:** it writes a heartbeat file in `run/instances/` every 10 seconds (a status file overwritten in place, not a log) (PID, broker, account, symbols, role, last-seen time). Files older than 30 seconds are treated as dead and cleaned up.
 - **Discovery:** each instance reads the registry to know the total count, and the count per broker/account.
 - **Tactful behaviour:**
   - Different brokers → instances run fully independently.
@@ -164,7 +238,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 ### 6.5 Output
 
-- Daily comparison CSV per broker: median/95th-percentile spread, average slippage, latency, rejection count.
+- Daily comparison CSV per broker, built from `spreads.csv` and `probes.csv` in the format of Section 6.3.1: median/95th-percentile spread (pips and USD per lot), average slippage, latency, rejection count — per symbol and per probe window.
 - Final 2-week summary → broker choice recorded in this document.
 
 ## 7. Execution environment: Ubuntu
@@ -193,6 +267,19 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
 | 4 | Trend bot + human link | Semi-auto execution, hedge-and-recover exit logic, 4-leg structure, trailing and pyramiding, dashboard/config, then TradingView webhook | Weeks 9–12 |
 | 5 | Go-live (small) | VPS deployment, small live account, strict risk limits, review after 1 month | After Phase 4 |
+
+### 8.1 Phase 1 steps *(v1.8)*
+
+Each step is built only when the owner says so.
+
+| Step | Name | Content | Status |
+|---|---|---|---|
+| 1 | Connect and list accounts | TLS connect to the demo host, app auth, account list, account auth, trader info (`src/Trader.ListAccounts`) | **Done 16-Oct-2026** — both demo accounts Hedged; `ctidTraderAccountId` 49123893 (IC Markets), 49124666 (Pepperstone) |
+| 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair | Next |
+| 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription | |
+| 4 | Instance registry | Section 6.4 | |
+| 5 | Probe orders | Windows of Section 6.2.2; `probes.csv` | |
+| 6 | Daily report | Section 6.5 | |
 
 ## 9. Risk guardrails (apply from Phase 4)
 
@@ -363,6 +450,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.5 | 11-Oct-2026 | Phase 0 progress: Ubuntu toolchain ready (`check-env.sh` no failures; .NET 10 SDK, C# Dev Kit, runtime folders, secrets file; NTP fixed by using `pk.pool.ntp.org` as the default time servers are blocked on the home network — see setup.md 4.4). IC Markets demo confirmed Hedging, Raw Spread, USD, 1:500 (decision 8). Open API app "Trend Audit Bot" submitted (ID 43770, trading permission on own accounts). Change-log rows put in version order. Open items updated. |
 | v1.6 | 11-Oct-2026 | Pepperstone chosen as Broker B (decision 8): cTrader demo created under the same cTrader ID, Hedging, USD, 1:200; account type (Razor) to confirm. `pepperstone.com` is blocked on the home network, sign-up via `secure.pepperstone.com` (setup.md Step 2). Open items updated. |
 | v1.7 | 16-Oct-2026 | **Phase 0 complete.** Open API app "Trend Audit Bot" (ID 43770) approved; tokens issued with scope `trading` for the two demo accounts only (IC Markets 10124393, Pepperstone 5357135); live accounts not granted (Section 5.1). Client ID, secret and tokens stored in `~/.config/trader/secrets.env`; `check-env.sh` result: no failures, 0 warnings. OS recorded as Ubuntu 26.04 LTS (Section 7). Note added that IC Markets' cTrader entity here is Raw Trading Ltd (Seychelles FSA) — relevant to the live-broker choice. Open items updated. |
+| v1.8 | 17-Oct-2026 | **Phase 1 started**; step list added (Section 8.1); step 1 (connect and list accounts) done, `ctidTraderAccountId`s recorded. Audit Bot symbol list fixed: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (6.2.1; crypto availability checked at both brokers). Probe windows fixed: London open, New York open, quiet hour 03:00 London, US NFP/CPI releases (6.2.2). Spread logging changed from every tick to one summary row per 2 min (main hours) / 5 min (off-peak) (6.2.3). All logs CSV for Google Sheets, with pips and USD per lot; `ticks.csv` → `spreads.csv`, `events.log` → `events.csv` (6.3.1). Decision 13 added. OpenAPI.Net finding added to 5.1. Open items and glossary updated. |
 
 ## 12. Open items / decisions pending
 
@@ -372,7 +460,9 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.7)* Client secret was shared in a chat on 16-Oct-2026: regenerate it in the Open API portal (if offered) before any live account is granted (Phase 5).
 - *(v1.7)* Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside Audit Bot results when choosing the live broker.
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.
-- Final symbol list for the Audit Bot.
+- ~~Final symbol list for the Audit Bot.~~ Done v1.8: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (Section 6.2.1).
+- *(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD (a 100,000-unit lot does not apply to crypto).
+- *(v1.8)* News probes: confirm the offsets (proposal: 2 min before, a few seconds after, 5 min after the release) and fill in the NFP/CPI dates in the config before the audit run.
 - Price-action entry rules (to be written as a spec in Phase 3).
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.
 - Hedge design: define Scenarios 2–5 (Section 10.7).
@@ -417,3 +507,11 @@ Every change is recorded here, the version number in the header table is increas
 | LTS (Long-Term Support) | A software release that receives security fixes for an extended period (3 years for .NET). |
 | Access token / refresh token | OAuth keys: the access token lets the app act on granted accounts for a limited time; the refresh token is used only to obtain a new access token. |
 | Client ID / Client Secret | The identity and password of the *application* (the bot), issued by Spotware when the Open API app is approved. |
+| ctidTraderAccountId | The number the Open API uses for a trading account; different from the broker login number. |
+| CSV | Comma-separated values: a plain-text table, one row per line, that spreadsheets open directly. |
+| Pip | The standard price step for a symbol: 0.0001 for most forex pairs, 0.01 for JPY pairs; for crypto, set by the broker. |
+| Lot | Standard trade size: 100,000 units of the base currency in forex (e.g. €100,000 for EURUSD). |
+| Rollover | The daily change of trading day at 17:00 New York; spreads often widen around it. |
+| NFP / CPI | US Non-Farm Payrolls (monthly jobs report) and Consumer Price Index (inflation); both released 08:30 New York and move markets strongly. |
+| Main hours / off-peak | Main hours: Mon–Fri from London open to New York close; off-peak: all other times. |
+| Median / 95th percentile | The middle value / the value that 95 % of readings are at or below — shows typical and near-worst cases while ignoring rare extremes. |

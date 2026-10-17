@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 0 complete (plan v1.7). Phase 1 — framework + Audit Bot (plan Sections 5, 6, 8) in progress: step 1 (connect and list accounts, `src/Trader.ListAccounts`) done.
+- **Current state:** Phase 1 in progress (plan v1.8, steps in Section 8.1): step 1 (connect and list accounts, `src/Trader.ListAccounts`) done; step 2 (stay connected) next.
 
 ## Working rules
 
