@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.9** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.10** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.9):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.9):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -46,6 +46,7 @@ Resume short-to-mid-term trend trading with a semi-automated setup. The human re
 | 11 | Position structure | Every trade = 2 half-size shorts + 2 half-size hedges, with numbered legs (Section 10.8) *(new v1.3)* | Clean scale-out; each pair has its own exit |
 | 12 | Trade management | Runner leg trails on M5; rotating leg closes when the next pyramid add opens; unlimited adds within an exposure cap *(new v1.3)* | Ride the trend while bounding total exposure |
 | 13 | Audit Bot logs | CSV files that open directly in Google Sheets / Excel; spreads written as one summary row per symbol every 2 min (main hours) or 5 min (off-peak), in pips and USD per lot (Section 6.3) *(new v1.8)* | Easy to export and analyse elsewhere; small files without losing spikes or feed gaps |
+| 14 | Bot framework | All bots share one library, `src/Trader.Core` (connection, tokens, logging, start-up); each bot is its own small project referencing it. No copied connection code (Section 5.3) *(new v1.10)* | A fix reaches every bot at once; all bots must refresh tokens the same way because they share one secrets file |
 
 ## 3. How the pieces fit
 
@@ -111,6 +112,19 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 - Receive execution events (fills, rejections) and reconcile positions on reconnect, rebuilding leg pairs from their labels.
 - Respect Open API request-rate limits (shared budget per connection) — trailing stops and 4-leg trades increase order-modify traffic.
 - Structured logging (Serilog) in UTC timestamps.
+
+### 5.3 One framework, many bots *(v1.10)*
+
+The owner may run up to ~10 bots at the same time. The functions of Section 5.2 are therefore written **once**, in the shared library `src/Trader.Core`, and every bot uses it; bots never copy that code. Usage guide: [`src/Trader.Core/README.md`](../src/Trader.Core/README.md).
+
+- **One project per bot:** `src/Trader.<BotName>/`, referencing `Trader.Core`. A new bot starts as a copy of `src/Trader.SampleBot` (the smallest complete bot, ~30 lines); the steps are in the usage guide.
+- **`BotRunner`** gives every bot the same start-up and shut-down: common options (`--account`, `--verbose`, `--test-drop-after`, `--help`), logging, secrets (demo only), clean stop on Ctrl+C / SIGTERM, exit codes (0 normal, 1 fatal, 2 bad options, 3 bug).
+- **Accounts per bot:** each bot chooses its accounts (`--account <ctid>`, or a default in code); default is all demo accounts the token grants.
+- **Identity:** each running bot gets an instance ID = bot name + 6 hex characters, e.g. `AuditBot-3f9a1c`, shown on every log line.
+- **Order labels:** instance ID, optionally followed by the leg name (10.8.2), e.g. `TrendBot-3f9a1c-T1-S1`; at most 100 characters (Spotware limit). The instance ID changes on every restart but positions do not, so after a restart a bot recognises its own positions by **bot name** (plus account and leg) and uses the instance ID only to attribute fills and log lines.
+- **Connections:** each bot has its own connection (own 50 req/s budget). One secrets file serves all bots; when one refreshes the tokens, the others pick up the new ones (Section 5.1).
+- **Tested 17-Oct-2026:** 10 bots at once on separate connections, all authenticating the same two demo accounts, ran without errors or dropped sessions. Spotware does not publish a limit on simultaneous connections (Section 12).
+- **Outside this repo:** pack `Trader.Core` as a versioned NuGet package in `~/tradebot/packages` and reference a fixed version, rather than copying the folder.
 
 ## 6. First bot: the Audit Bot
 
@@ -227,7 +241,7 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 
 Each instance must know how many copies of the Audit Bot are running and behave sensibly.
 
-- **Identity:** on start, an instance creates an ID = broker + account + short GUID and writes it into its log path.
+- **Identity:** on start, an instance creates an ID = bot name + short random ID (e.g. `AuditBot-3f9a1c`, Section 5.3) and writes it into its log path; broker and account are already in that path and in the registry file name. *(v1.10; was broker + account + short GUID)*
 - **Registry:** it writes a heartbeat file in `run/instances/` every 10 seconds (a status file overwritten in place, not a log) (PID, broker, account, symbols, role, last-seen time). Files older than 30 seconds are treated as dead and cleaned up.
 - **Discovery:** each instance reads the registry to know the total count, and the count per broker/account.
 - **Tactful behaviour:**
@@ -282,6 +296,8 @@ Each step is built only when the owner says so.
 | 4 | Instance registry | Section 6.4 | |
 | 5 | Probe orders | Windows of Section 6.2.2; `probes.csv` | |
 | 6 | Daily report | Section 6.5 | |
+
+*Between steps 2 and 3 (17-Oct-2026, v1.10):* framework made reusable for many bots — `BotRunner`, per-bot accounts, instance ID and order labels, usage guide, `src/Trader.SampleBot` (Section 5.3).
 
 ## 9. Risk guardrails (apply from Phase 4)
 
@@ -382,7 +398,7 @@ Economically, Scenario 1 is the same as: close the short at H, then re-open the 
 
 #### 10.8.2 Leg naming convention
 
-Leg numbers keep counting up across trades. Trade *n* uses the odd/even pair of numbers (2n − 1, 2n). The label is written into each order's label/comment field and is used to rebuild pairs after a reconnect.
+Leg numbers keep counting up across trades. Trade *n* uses the odd/even pair of numbers (2n − 1, 2n). The label is written into each order's label/comment field and is used to rebuild pairs after a reconnect. *(v1.10)* Full label = bot instance ID + leg, e.g. `TrendBot-3f9a1c-T1-S1` (Section 5.3).
 
 | Trade | Runner pair (odd) | Rotating pair (even) |
 |---|---|---|
@@ -454,6 +470,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.7 | 16-Oct-2026 | **Phase 0 complete.** Open API app "Trend Audit Bot" (ID 43770) approved; tokens issued with scope `trading` for the two demo accounts only (IC Markets 10124393, Pepperstone 5357135); live accounts not granted (Section 5.1). Client ID, secret and tokens stored in `~/.config/trader/secrets.env`; `check-env.sh` result: no failures, 0 warnings. OS recorded as Ubuntu 26.04 LTS (Section 7). Note added that IC Markets' cTrader entity here is Raw Trading Ltd (Seychelles FSA) — relevant to the live-broker choice. Open items updated. |
 | v1.8 | 17-Oct-2026 | **Phase 1 started**; step list added (Section 8.1); step 1 (connect and list accounts) done, `ctidTraderAccountId`s recorded. Audit Bot symbol list fixed: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (6.2.1; crypto availability checked at both brokers). Probe windows fixed: London open, New York open, quiet hour 03:00 London, US NFP/CPI releases (6.2.2). Spread logging changed from every tick to one summary row per 2 min (main hours) / 5 min (off-peak) (6.2.3). All logs CSV for Google Sheets, with pips and USD per lot; `ticks.csv` → `spreads.csv`, `events.log` → `events.csv` (6.3.1). Decision 13 added. OpenAPI.Net finding added to 5.1. Open items and glossary updated. |
 | v1.9 | 17-Oct-2026 | **Phase 1 step 2 done** (stay connected): event stream, dead-line detection by ping, auto-reconnect with backoff and re-auth, token refresh with atomic save and lock (Section 5.1, 8.1). Token expiry now stored in `secrets.env` as `CTRADER_ACCESS_TOKEN_EXPIRES_UTC`. Server heartbeat behaviour recorded. `events.csv` moved into step 3. Open item added: lost refresh reply. |
+| v1.10 | 17-Oct-2026 | **Framework reusable for many bots** (new Section 5.3, decision 14): shared library `src/Trader.Core` with `BotRunner` (common options, logging, secrets, Ctrl+C/SIGTERM, exit codes), per-bot account choice, bot instance ID (`<BotName>-<6 hex>`) on every log line and in order labels (max 100 characters), usage guide `src/Trader.Core/README.md`, template `src/Trader.SampleBot`. Instance identity changed from broker + account + GUID to bot name + short ID (6.4); label format added to 10.8.2. 10 simultaneous bots tested. Open items and glossary updated. |
 
 ## 12. Open items / decisions pending
 
@@ -464,6 +481,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.7)* Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside Audit Bot results when choosing the live broker.
 - TradingView plan level (webhooks need a paid tier) — decide before Phase 4b.
 - ~~Final symbol list for the Audit Bot.~~ Done v1.8: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (Section 6.2.1).
+- *(v1.10)* Simultaneous connections: Spotware publishes no limit per application or token. 10 bots at once worked on 17-Oct-2026 (45 s test); confirm with Spotware or a longer test before running many bots for days. Fallback if a limit appears: one connection process shared by several bots.
 - *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
 - *(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD (a 100,000-unit lot does not apply to crypto).
 - *(v1.8)* News probes: confirm the offsets (proposal: 2 min before, a few seconds after, 5 min after the release) and fill in the NFP/CPI dates in the config before the audit run.
@@ -517,5 +535,9 @@ Every change is recorded here, the version number in the header table is increas
 | Lot | Standard trade size: 100,000 units of the base currency in forex (e.g. €100,000 for EURUSD). |
 | Rollover | The daily change of trading day at 17:00 New York; spreads often widen around it. |
 | NFP / CPI | US Non-Farm Payrolls (monthly jobs report) and Consumer Price Index (inflation); both released 08:30 New York and move markets strongly. |
+| Library / project reference | A library is shared code with no program of its own (`Trader.Core`); a bot uses it through a project reference — one line in the bot's project file. |
+| NuGet package | A versioned zip of compiled .NET code that projects can install; the way to share a library across repos. |
+| Instance ID | The name of one running copy of a bot, e.g. `AuditBot-3f9a1c`; new on every start. |
+| SIGTERM / SIGINT | Linux stop signals: SIGTERM is what systemd sends to stop a service; SIGINT is Ctrl+C. Bots stop cleanly on both. |
 | Main hours / off-peak | Main hours: Mon–Fri from London open to New York close; off-peak: all other times. |
 | Median / 95th percentile | The middle value / the value that 95 % of readings are at or below — shows typical and near-worst cases while ignoring rare extremes. |

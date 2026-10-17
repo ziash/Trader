@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 1 in progress (plan v1.9, steps in Section 8.1): steps 1 (connect and list accounts, `src/Trader.ListAccounts`) and 2 (stay connected, `src/Trader.AuditBot` + `ConnectionManager`) done; step 3 (price feed to disk) next.
+- **Current state:** Phase 1 in progress (plan v1.10, steps in Section 8.1): steps 1 (connect and list accounts) and 2 (stay connected) done; framework made reusable for many bots (plan 5.3); step 3 (price feed to disk) next.
 
 ## Working rules
 
@@ -54,8 +54,9 @@ Account numbers above are broker login numbers. The API uses `ctidTraderAccountI
 - cTrader library: NuGet `cTrader.OpenAPI.Net` (old, targets .NET 6 — see plan 5.1 library risk; fallback is generating classes from Spotware's `.proto` files).
 - Logging: Serilog, **UTC timestamps** everywhere.
 - Layout: source in `src/`, tests in `tests/`, one solution file at the repo root.
+- **Many bots, one framework (plan 5.3, decision 14):** shared code lives in `src/Trader.Core` (usage guide: `src/Trader.Core/README.md`); each bot is `src/Trader.<BotName>/`, started from a copy of `src/Trader.SampleBot`, using `BotRunner`. Never copy connection/token/logging code into a bot; anything two bots need goes into `Trader.Core`. A change there affects every bot: run all tests.
 - Runtime data lives outside the repo, under `~/tradebot/` (`config/`, `run/instances/`, `logs/`, `reports/`) — plan Section 6.3.
-- Every order carries a label (instance ID, and later leg names like `T1-S1-L1`, plan 10.8.2).
+- Every order carries a label from `BotIdentity.Label()`: instance ID + optional leg, e.g. `TrendBot-3f9a1c-T1-S1` (plan 5.3, 10.8.2); max 100 characters. Reconcile positions after a restart by bot name, not instance ID.
 - Every live position must always have a server-side protective order (hedge buy-stop before 1R, stop-loss after) — plan Section 7 protection rule.
 
 ## Before finishing a task

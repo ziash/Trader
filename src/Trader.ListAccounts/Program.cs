@@ -5,18 +5,13 @@
 // Exit codes: 0 = OK, 1 = secrets/config problem, 2 = API or network problem.
 
 using Serilog;
-using Serilog.Events;
 using Trader.Core.Config;
 using Trader.Core.Logging;
 using Trader.Core.OpenApi;
 
 var verbose = args.Contains("--verbose") || args.Contains("-v");
 
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Is(verbose ? LogEventLevel.Debug : LogEventLevel.Information)
-    .Enrich.WithUtcTimestamp()
-    .WriteTo.Console(outputTemplate: UtcTimestampEnricher.Template + " [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .CreateLogger();
+Log.Logger = BotLogging.Create(identity: null, verbose);
 
 try
 {

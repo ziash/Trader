@@ -13,6 +13,10 @@ public sealed record TradingAccount(long CtidTraderAccountId, long TraderLogin);
 
 public sealed class ConnectionOptions
 {
+    /// <summary>The accounts (ctidTraderAccountId) this bot uses. Empty = every demo account the token grants.
+    /// A listed account that the token does not grant is a fatal error.</summary>
+    public IReadOnlyCollection<long> AccountIds { get; init; } = [];
+
     /// <summary>Silence on the line after which a ping is sent. The server itself only sends a heartbeat after ~30 s.</summary>
     public TimeSpan PingAfterSilence { get; init; } = TimeSpan.FromSeconds(40);
 
@@ -202,11 +206,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
     private async Task AuthenticateAccountsAsync(CTraderSession session)
     {
         var all = await session.GetAccountsAsync(_secrets);
-        var demo = all.Where(a => !a.IsLive)
-            .Select(a => new TradingAccount((long)a.CtidTraderAccountId, (long)a.TraderLogin))
-            .ToList();
-        if (demo.Count == 0)
-            throw new FatalConnectionException("The access token grants no demo accounts");
+        var demo = SelectAccounts(all, _options.AccountIds);
 
         foreach (var acc in demo)
             await AuthenticateAccountAsync(session, acc.CtidTraderAccountId);
@@ -214,10 +214,29 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
         if (!demo.SequenceEqual(_accounts))
             log.Information("Accounts authenticated: {Accounts}{Live}",
                 string.Join(", ", demo.Select(a => $"{a.CtidTraderAccountId} (login {a.TraderLogin})")),
-                all.Count > demo.Count ? $"; {all.Count - demo.Count} live account(s) skipped" : "");
+                all.Count > demo.Count ? $"; {all.Count - demo.Count} other account(s) not used" : "");
         else
             log.Information("{Count} account(s) authenticated", demo.Count);
         _accounts = demo;
+    }
+
+    /// <summary>Demo accounts granted by the token, narrowed to <paramref name="wanted"/> when it is not empty.</summary>
+    internal static List<TradingAccount> SelectAccounts(IEnumerable<ProtoOACtidTraderAccount> granted, IReadOnlyCollection<long> wanted)
+    {
+        var demo = granted.Where(a => !a.IsLive)
+            .Select(a => new TradingAccount((long)a.CtidTraderAccountId, (long)a.TraderLogin))
+            .ToList();
+        if (demo.Count == 0)
+            throw new FatalConnectionException("The access token grants no demo accounts");
+        if (wanted.Count == 0)
+            return demo;
+
+        var missing = wanted.Where(id => demo.All(a => a.CtidTraderAccountId != id)).ToList();
+        if (missing.Count > 0)
+            throw new FatalConnectionException(
+                $"Account(s) {string.Join(", ", missing)} not granted by the access token (granted demo accounts: " +
+                $"{string.Join(", ", demo.Select(a => a.CtidTraderAccountId))})");
+        return demo.Where(a => wanted.Contains(a.CtidTraderAccountId)).ToList();
     }
 
     private async Task AuthenticateAccountAsync(CTraderSession session, long ctid)
