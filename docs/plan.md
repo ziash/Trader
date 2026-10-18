@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.12** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.13** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.12):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; step 3 (price feed to disk) and step 4 (instance registry) done 18-Oct-2026; order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.13):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -169,9 +169,18 @@ Probe orders (0.01 lot) open and close immediately. Each probe row in `probes.cs
 | `LondonOpen` | 08:00 London | Mon–Fri |
 | `NewYorkOpen` | 08:00 New York | Mon–Fri |
 | `QuietHour` | 03:00 London (Asian session; away from the 17:00 New York rollover) | Mon–Fri |
-| `NewsRelease` | 08:30 New York, on US **Non-Farm Payrolls** and **CPI** release days | Dates listed in the config file |
+| `NewsRelease-2m`, `NewsRelease+5s`, `NewsRelease+5m` *(v1.13)* | 2 min before, 5 s after and 5 min after 08:30 New York, on US **Non-Farm Payrolls** and **CPI** release days | Dates in `~/tradebot/config/news-releases.json` (from the BLS schedules; NFP 6-Nov, 4-Dec, 8-Jan, 5-Feb; CPI 10-Nov, 10-Dec, 13-Jan, 11-Feb) |
 
 Per window, each symbol gets one buy probe and one sell probe, a few seconds apart; instances on the same account are staggered (Section 6.4). For `NewsRelease`, probes run just before, just after and about 5 minutes after the release (exact offsets: Section 12).
+
+*(v1.13, built in step 5)* How a probe runs:
+- **Who:** only the instance that is **Primary** on the account (6.4). Accounts run in parallel; within an account one probe at a time, symbols in config order, buy then sell, 2 s apart. A symbol whose market is closed is skipped. A window more than 60 s late (computer asleep, bot busy) is skipped and logged.
+- **Order:** market order of **0.01 lot** (forex 1,000 units; crypto 0.01 coin), labelled with the instance ID, with a wide server-side **backup stop-loss**: 50 pips for forex, 2 % of the price for crypto. Then closed at once **by its `positionId`** (ownership rule, 5.3). Both the open and the close are written to `probes.csv`.
+- **Measured:** requested price = ask for a buy, bid for a sell, at the moment of sending; fill price from the fill message; latency = request sent → fill message received on this machine; commission from the fill.
+- **Left-overs:** before every window, after every connect and on becoming Primary, the bot asks the server for all open positions (reconcile) and closes any with an `AuditBot-…` label. Tested 18-Oct-2026 by killing the bot (`kill -9`) while a probe was open: the next start closed it. Positions without the label are never touched; their number is logged (`ForeignPositions`), and fills of foreign orders are logged once (`ForeignTrade`).
+- **Close failures:** retried up to 3 times; if the position is still open the bot logs `ProbeCloseFailed`, the backup stop-loss stays on the server, and the clean-up retries before the next window.
+- **Test option:** `--test-probe-now` runs one window named `Test` at start-up.
+- **First results (18-Oct-2026, Sunday, crypto only):** all orders filled, no rejections; latency ~470 ms (IC Markets) and ~580 ms (Pepperstone); commission 0 on crypto at both.
 
 #### 6.2.3 Log intervals *(v1.8)*
 
@@ -196,7 +205,7 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
   logs/
     brokerA/<accountId>/<instanceId>/2026-10-12/
       spreads.csv  # one summary row per symbol per interval (v1.8; was ticks.csv)
-      probes.csv   # one row per probe order
+      probes.csv   # one row per probe order (open and close each a row, v1.13)
       events.csv   # connect, reconnect, errors, rejections (v1.8; was events.log)
     brokerB/<accountId>/<instanceId>/2026-10-12/ ...
   reports/
@@ -238,12 +247,15 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | Column | Meaning |
 |---|---|
 | `time_utc` | When the order was sent |
-| `window` | `LondonOpen`, `NewYorkOpen`, `QuietHour` or `NewsRelease` |
+| `window` | `LondonOpen`, `NewYorkOpen`, `QuietHour`, `NewsRelease-2m` / `+5s` / `+5m`, or `Test` |
+| `action` *(v1.13)* | `open` (the probe) or `close` (closing it — also an order with its own slippage and latency) |
 | `symbol`, `side`, `lots` | e.g. `EURUSD`, `buy`, `0.01` |
 | `req_px`, `fill_px` | Price seen when sending; price filled |
 | `slip_pips`, `slip_usd` | Slippage; negative = worse for us. USD per lot |
 | `latency_ms` | Order send → fill event |
-| `result`, `reason` | `filled` / `rejected` and the broker's reason code |
+| `commission_usd` *(v1.13)* | Commission charged for this order (positive = paid), from the fill |
+| `result`, `reason` | `filled` / `rejected` / `error` and the broker's reason code (`TIMEOUT`, `DISCONNECTED` for `error`) |
+| `position_id` *(v1.13)* | The position the order opened or closed |
 | `label` | Order label (instance ID) |
 
 **`events.csv`:** `time_utc`, `level`, `event`, `detail`.
@@ -283,7 +295,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | Clock | NTP sync enabled; all logs in UTC |
 | Later | Small Linux VPS near broker servers (London / New York); same container |
 
-> **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server. Before 1R this is the leg's hedge buy-stop; from 1R onward it is the leg's server-side trailing stop-loss (Section 10.8).
+> **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server. Before 1R this is the leg's hedge buy-stop; from 1R onward it is the leg's server-side trailing stop-loss (Section 10.8). *(v1.13)* Audit Bot probes (open for about a second) carry a wide server-side backup stop-loss instead (6.2.2).
 
 ## 8. Phased roadmap
 
@@ -306,8 +318,8 @@ Each step is built only when the owner says so.
 | 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair (`src/Trader.AuditBot`, `ConnectionManager`) | **Done 17-Oct-2026** — reconnects tested with simulated drops (back up within ~3 s); first token refresh done |
 | 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | **Done 18-Oct-2026** — live on both demos (Sunday: crypto rows every 5 min, forex skipped while closed; resubscribe after forced drops) |
 | 4 | Instance registry | Section 6.4 (lock-file Primary, per-account roles, slots) | **Done 18-Oct-2026** — 3 copies live; Primary killed with `kill -9`, takeover within 1 s |
-| 5 | Probe orders | Windows of Section 6.2.2; `probes.csv`; ownership rule (5.3) | Next |
-| 6 | Daily report | Section 6.5 | |
+| 5 | Probe orders | Windows of Section 6.2.2; `probes.csv`; ownership rule (5.3) | **Done 18-Oct-2026** — probes on both demos (crypto, Sunday); left-over clean-up tested with `kill -9`; manual (unlabelled) position left untouched |
+| 6 | Daily report | Section 6.5 | Next |
 
 *Between steps 2 and 3 (17-Oct-2026, v1.10):* framework made reusable for many bots — `BotRunner`, per-bot accounts, instance ID and order labels, usage guide, `src/Trader.SampleBot` (Section 5.3).
 
@@ -485,6 +497,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.10 | 17-Oct-2026 | **Framework reusable for many bots** (new Section 5.3, decision 14): shared library `src/Trader.Core` with `BotRunner` (common options, logging, secrets, Ctrl+C/SIGTERM, exit codes), per-bot account choice, bot instance ID (`<BotName>-<6 hex>`) on every log line and in order labels (max 100 characters), usage guide `src/Trader.Core/README.md`, template `src/Trader.SampleBot`. Instance identity changed from broker + account + GUID to bot name + short ID (6.4); label format added to 10.8.2. 10 simultaneous bots tested. Open items and glossary updated. |
 | v1.11 | 18-Oct-2026 | **Phase 1 step 3 done** (price feed to disk), 18-Oct-2026: per-broker config files (`config/audit.brokerA.json`, `audit.brokerB.json` → `~/tradebot/config/`); symbol lookup with name map; spot and M5 trendbar subscriptions renewed after every reconnect; `spreads.csv` and `events.csv` per broker/account/instance/day. Rules added to 6.2.3 (server timestamps, closed-market rows skipped by broker schedule, stale re-sent prices ignored) and 6.3.1 (lot size from symbol data, conversion symbols found automatically, median/p95 definitions). Crypto lot = 1 coin confirmed (open item closed). Second library finding (5.1): `PayloadDecoder` fallback for messages the library cannot decode. Shared parts in `Trader.Core` (MarketData, Csv, events.csv sink). |
 | v1.12 | 18-Oct-2026 | **Order ownership rule** added (5.3): bot touches only orders/positions with its own label, closes by `positionId`, records its fills; foreign positions never modified but counted for risk; relies on Hedging accounts. **Phase 1 step 4 done** (instance registry, 6.4): owner chose **lock-file Primary** instead of promotion after the 30 s heartbeat timeout — instant takeover, never two Primaries on one machine; roles per account; slots for staggering; dead instances also detected by PID; registry in `Trader.Core` for all bots. |
+| v1.13 | 18-Oct-2026 | **Phase 1 step 5 done** (probe orders, 6.2.2): owner accepted the recommendations — news windows 2 min before / 5 s after / 5 min after (NFP/CPI dates from BLS to Feb 2027 in `news-releases.json`); **open and close each a row** in `probes.csv` with new columns `action`, `commission_usd`, `position_id` (6.3.1); **backup stop-loss** on every probe (50 pips forex, 2 % crypto; note under the protection rule, Section 7). Probe procedure, left-over clean-up and first results recorded in 6.2.2. Order functions (market order, close by positionId, reconcile) in `Trader.Core`. Open item closed (news offsets); new one: dates after Feb 2027. |
 
 ## 12. Open items / decisions pending
 
@@ -498,7 +511,8 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.10)* Simultaneous connections: Spotware publishes no limit per application or token. 10 bots at once worked on 17-Oct-2026 (45 s test); confirm with Spotware or a longer test before running many bots for days. Fallback if a limit appears: one connection process shared by several bots.
 - *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
 - ~~*(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD.~~ Done v1.11: confirmed from both brokers' symbol data.
-- *(v1.8)* News probes: confirm the offsets (proposal: 2 min before, a few seconds after, 5 min after the release) and fill in the NFP/CPI dates in the config before the audit run.
+- ~~*(v1.8)* News probes: confirm the offsets and fill in the NFP/CPI dates.~~ Done v1.13: 2 min before, 5 s after, 5 min after (owner accepted); dates to Feb 2027 in `news-releases.json`.
+- *(v1.13)* Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
 - Price-action entry rules (to be written as a spec in Phase 3).
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.
 - Hedge design: define Scenarios 2–5 (Section 10.7).
@@ -552,6 +566,10 @@ Every change is recorded here, the version number in the header table is increas
 | Library / project reference | A library is shared code with no program of its own (`Trader.Core`); a bot uses it through a project reference — one line in the bot's project file. |
 | NuGet package | A versioned zip of compiled .NET code that projects can install; the way to share a library across repos. |
 | Instance ID | The name of one running copy of a bot, e.g. `AuditBot-3f9a1c`; new on every start. |
+| Market order | An order filled at once at the best available price, as opposed to a pending order waiting for a price. |
+| Latency | Delay: here the time from sending an order to receiving its fill message. |
+| Backup stop-loss | A stop-loss far from the price, held on the broker's server, that only matters if the bot fails to close a position itself. |
+| Reconcile | Asking the server for all open positions and orders, to rebuild the bot's picture after a restart. |
 | Lock file | A file one process holds exclusively open; Linux releases it automatically when that process ends, however it ends. Used to make exactly one instance Primary. |
 | PID | Process ID: the number Linux gives each running program. |
 | Foreign position | A position or order on the account without this bot's label — e.g. the owner's manual trade; never modified by the bot. |

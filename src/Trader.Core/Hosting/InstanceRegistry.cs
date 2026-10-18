@@ -190,7 +190,7 @@ public sealed class InstanceRegistry : IDisposable
             return;
 
         log.Event("Siblings").Information(
-            "{Broker} account {Ctid}: {Count} {Bot} instance(s) [{List}]; this one {Role}, slot {Slot}; {Total} instance registration(s) in total",
+            "{Broker} account {Ctid}: {Count} {BotName} instance(s) [{List}]; this one {Role}, slot {Slot}; {Total} instance registration(s) in total",
             r.Broker, r.AccountId, view.Siblings.Count, _identity.BotName,
             string.Join(", ", view.Siblings.Select(s => $"{s.InstanceId} {s.Role}")), view.Role.ToString(), view.Slot, view.TotalInstances);
         r.LastSiblingKey = key;

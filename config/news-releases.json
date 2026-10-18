@@ -1,0 +1,15 @@
+{
+  // US releases for NewsRelease probe windows (plan 6.2.2). Times are New York local time.
+  // Source: BLS release schedules (bls.gov/schedule), checked 18-Oct-2026. Add new dates before each audit run.
+  // Live copy: ~/tradebot/config/news-releases.json
+  "releases": [
+    { "time": "2026-11-06 08:30", "event": "NFP" },
+    { "time": "2026-11-10 08:30", "event": "CPI" },
+    { "time": "2026-12-04 08:30", "event": "NFP" },
+    { "time": "2026-12-10 08:30", "event": "CPI" },
+    { "time": "2027-01-08 08:30", "event": "NFP" },
+    { "time": "2027-01-13 08:30", "event": "CPI" },
+    { "time": "2027-02-05 08:30", "event": "NFP" },
+    { "time": "2027-02-11 08:30", "event": "CPI" }
+  ]
+}

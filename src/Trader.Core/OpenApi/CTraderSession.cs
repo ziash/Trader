@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Google.Protobuf;
 using OpenAPI.Net;
 using OpenAPI.Net.Helpers;
@@ -23,8 +24,8 @@ public sealed class CTraderApiException(string errorCode, string? description)
 /// <summary>
 /// One TLS connection to the cTrader Open API (demo host only), on top of Spotware's OpenAPI.Net client.
 ///
-/// - Requests carry a unique clientMsgId; the reply with the same ID completes the request,
-///   so several requests can be in flight at once.
+/// - Requests carry a unique clientMsgId; replies with the same ID go to that request, so several
+///   requests can be in flight at once. Orders get several replies (accepted, filled, …) under one ID.
 /// - Every decoded incoming message (replies and server events such as spots or fills) is also
 ///   raised on <see cref="MessageReceived"/>.
 /// - <see cref="Closed"/> completes once when the connection ends, for any reason.
@@ -41,7 +42,10 @@ public sealed class CTraderSession : IAsyncDisposable
     private readonly OpenClient _client;
     private readonly ILogger _log;
     private readonly IDisposable _subscription;
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<IMessage>> _pending = new();
+    // Requests waiting for replies, by clientMsgId. OnMessage returns true when the request needs no more replies.
+    private readonly ConcurrentDictionary<string, Pending> _pending = new();
+
+    private sealed record Pending(Func<IMessage, bool> OnMessage, Action<Exception> Fail);
     private readonly TaskCompletionSource<Exception?> _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private long _lastReceivedTicks = DateTime.UtcNow.Ticks;
     private volatile bool _disposing;
@@ -171,27 +175,104 @@ public sealed class CTraderSession : IAsyncDisposable
         RequestAsync<ProtoOAVersionRes>(new ProtoOAVersionReq(), timeout);
 
     /// <summary>Sends <paramref name="request"/> and waits for its reply, or throws on an error reply / timeout / disconnect.</summary>
-    public async Task<TRes> RequestAsync<TRes>(IMessage request, TimeSpan? timeout = null)
-        where TRes : class, IMessage
+    public Task<TRes> RequestAsync<TRes>(IMessage request, TimeSpan? timeout = null)
+        where TRes : class, IMessage =>
+        SendAsync<TRes>(request, (message, done) =>
+        {
+            switch (message)
+            {
+                case TRes res: done.TrySetResult(res); break;
+                case ProtoOAErrorRes err: done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description)); break;
+                case ProtoErrorRes err: done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description)); break;
+                default: done.TrySetException(new InvalidOperationException($"Unexpected reply {message.GetType().Name} to {request.GetType().Name}")); break;
+            }
+            return true;
+        }, timeout);
+
+    /// <summary>
+    /// Opens a market order and waits until it is filled (or rejected). Returns the fill: price, position,
+    /// commission and latency (request sent → fill message received). Throws <see cref="CTraderApiException"/>
+    /// when the broker rejects it.
+    /// </summary>
+    /// <param name="volume">In Open API units: hundredths of a unit (0.01 lot EURUSD = 1,000 units = 100,000).</param>
+    /// <param name="relativeStopLoss">Optional server-side stop-loss distance in 1/100,000 of the price.</param>
+    public Task<OrderFill> PlaceMarketOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOATradeSide side, long volume,
+        string label, string clientOrderId, long? relativeStopLoss = null, TimeSpan? timeout = null)
+    {
+        var req = new ProtoOANewOrderReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            SymbolId = symbolId,
+            OrderType = ProtoOAOrderType.Market,
+            TradeSide = side,
+            Volume = volume,
+            Label = label,
+            ClientOrderId = clientOrderId,
+        };
+        if (relativeStopLoss is { } sl)
+            req.RelativeStopLoss = sl;
+        return ExecuteAsync(req, timeout);
+    }
+
+    /// <summary>Closes (part of) a position by its ID and waits for the fill. Never closes anything else.</summary>
+    public Task<OrderFill> ClosePositionAsync(long ctidTraderAccountId, long positionId, long volume, TimeSpan? timeout = null) =>
+        ExecuteAsync(new ProtoOAClosePositionReq { CtidTraderAccountId = ctidTraderAccountId, PositionId = positionId, Volume = volume }, timeout);
+
+    /// <summary>All open positions and pending orders of the account (used to find left-overs after a crash).</summary>
+    public Task<ProtoOAReconcileRes> ReconcileAsync(long ctidTraderAccountId) =>
+        RequestAsync<ProtoOAReconcileRes>(new ProtoOAReconcileReq { CtidTraderAccountId = ctidTraderAccountId });
+
+    // The server answers an order request with several execution events under the request's clientMsgId:
+    // ORDER_ACCEPTED, then ORDER_FILLED (with the deal) — or an order error / ORDER_REJECTED. On a close, the
+    // position's stop-loss order is also cancelled under the same ID; only events for our own order count.
+    private Task<OrderFill> ExecuteAsync(IMessage request, TimeSpan? timeout)
+    {
+        var clock = Stopwatch.StartNew();
+        long? orderId = null;
+        return SendAsync<OrderFill>(request, (message, done) =>
+        {
+            switch (message)
+            {
+                case ProtoOAExecutionEvent e when e.Order is not null && orderId is not null && e.Order.OrderId != orderId:
+                    return false; // another order (e.g. the stop-loss being cancelled)
+                case ProtoOAExecutionEvent { ExecutionType: ProtoOAExecutionType.OrderAccepted } e:
+                    orderId ??= e.Order?.OrderId;
+                    return false;
+                case ProtoOAExecutionEvent { ExecutionType: ProtoOAExecutionType.OrderFilled, Deal: not null } e:
+                    done.TrySetResult(OrderFill.From(e, clock.Elapsed));
+                    return true;
+                case ProtoOAExecutionEvent { ExecutionType: ProtoOAExecutionType.OrderRejected or ProtoOAExecutionType.OrderCancelled or ProtoOAExecutionType.OrderExpired } e:
+                    done.TrySetException(new CTraderApiException(string.IsNullOrEmpty(e.ErrorCode) ? e.ExecutionType.ToString() : e.ErrorCode, "order not filled"));
+                    return true;
+                case ProtoOAOrderErrorEvent err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                case ProtoOAErrorRes err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                case ProtoErrorRes err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                default:
+                    return false; // e.g. partial fill: keep waiting
+            }
+        }, timeout);
+    }
+
+    /// <summary>Sends a request with a new clientMsgId and feeds every reply with that ID to <paramref name="onReply"/>
+    /// until it returns true; the result is whatever <paramref name="onReply"/> puts into the completion source.</summary>
+    private async Task<T> SendAsync<T>(IMessage request, Func<IMessage, TaskCompletionSource<T>, bool> onReply, TimeSpan? timeout)
     {
         var id = Guid.NewGuid().ToString("N")[..12];
-        var reply = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[id] = reply;
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[id] = new Pending(m => onReply(m, done), ex => done.TrySetException(ex));
         var name = request.GetType().Name;
         var wait = timeout ?? DefaultTimeout;
         try
         {
             _log.Debug("→ {Request} {ClientMsgId}", name, id);
             await _client.SendMessage(request, id);
-
-            var message = await reply.Task.WaitAsync(wait);
-            return message switch
-            {
-                TRes res => res,
-                ProtoOAErrorRes err => throw new CTraderApiException(err.ErrorCode, err.Description),
-                ProtoErrorRes err => throw new CTraderApiException(err.ErrorCode, err.Description),
-                _ => throw new InvalidOperationException($"Unexpected reply {message.GetType().Name} to {name}"),
-            };
+            return await done.Task.WaitAsync(wait);
         }
         catch (TimeoutException)
         {
@@ -231,10 +312,11 @@ public sealed class CTraderSession : IAsyncDisposable
                     return;
                 }
 
-                if (envelope.HasClientMsgId && _pending.TryGetValue(envelope.ClientMsgId, out var reply))
+                if (envelope.HasClientMsgId && _pending.TryGetValue(envelope.ClientMsgId, out var pending))
                 {
                     _log.Debug("← {Response} {ClientMsgId}", decoded.GetType().Name, envelope.ClientMsgId);
-                    reply.TrySetResult(decoded);
+                    if (pending.OnMessage(decoded))
+                        _pending.TryRemove(envelope.ClientMsgId, out _);
                 }
                 if (libraryCannotDecode)
                     MessageReceived?.Invoke(decoded);
@@ -258,7 +340,7 @@ public sealed class CTraderSession : IAsyncDisposable
 
         var reason = _disposing ? null : error ?? new IOException("Connection closed by the server");
         foreach (var (_, pending) in _pending)
-            pending.TrySetException(new IOException("Connection closed", reason));
+            pending.Fail(new IOException("Connection closed", reason));
     }
 
     public ValueTask DisposeAsync()

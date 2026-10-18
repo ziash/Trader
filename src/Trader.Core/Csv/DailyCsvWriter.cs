@@ -63,7 +63,7 @@ public static class CsvFormat
 
     /// <summary>Fixed decimals, '.' as decimal point, no thousands separator; empty for null/NaN.</summary>
     public static string Num(double? value, int decimals) =>
-        value is { } v && double.IsFinite(v) ? v.ToString("F" + decimals, CultureInfo.InvariantCulture) : "";
+        value is { } v && double.IsFinite(v) ? (Math.Round(v, decimals) + 0.0).ToString("F" + decimals, CultureInfo.InvariantCulture) : ""; // + 0.0 turns -0 into 0
 
     public static string Int(long value) => value.ToString(CultureInfo.InvariantCulture);
 

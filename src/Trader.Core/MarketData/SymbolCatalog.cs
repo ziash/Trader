@@ -6,6 +6,8 @@ namespace Trader.Core.MarketData;
 /// <param name="Name">The name used in our config and logs (e.g. "AVAXUSD").</param>
 /// <param name="BrokerName">The broker's own name for it (e.g. "AVXUSD" at IC Markets).</param>
 /// <param name="LotUnits">Units in 1 lot: 100,000 for forex, 1 coin for crypto (from ProtoOASymbol.LotSize, which is in hundredths).</param>
+/// <param name="MinVolume">Smallest order volume, in Open API units (hundredths of a unit).</param>
+/// <param name="StepVolume">Order volumes must be a multiple of this, in Open API units.</param>
 public sealed record SymbolInfo(
     long SymbolId,
     string Name,
@@ -17,12 +19,32 @@ public sealed record SymbolInfo(
     long LotUnits,
     bool Enabled,
     ProtoOATradingMode TradingMode,
-    TradingSchedule Schedule)
+    TradingSchedule Schedule,
+    long MinVolume = 1,
+    long StepVolume = 1)
 {
     /// <summary>1 pip as a price: 0.0001 for EURUSD, 0.01 for JPY pairs; for crypto the broker decides.</summary>
     public double PipSize => Math.Pow(10, -PipPosition);
 
     public bool IsTradable => Enabled && TradingMode == ProtoOATradingMode.Enabled;
+
+    /// <summary>Order volume in Open API units for <paramref name="lots"/>, rounded down to the step; at least the minimum.</summary>
+    public long VolumeForLots(double lots)
+    {
+        var raw = (long)Math.Round(lots * LotUnits * 100);
+        var step = Math.Max(1, StepVolume);
+        return Math.Max(MinVolume, raw / step * step);
+    }
+
+    /// <summary>Lots for an Open API volume (e.g. 100,000 on EURUSD = 0.01 lot).</summary>
+    public double LotsForVolume(long volume) => volume / 100.0 / LotUnits;
+
+    /// <summary>A price distance in Open API relative units (1/100,000), rounded to the symbol's price digits.</summary>
+    public long RelativeDistance(double priceDistance)
+    {
+        var step = (long)Math.Pow(10, Math.Max(0, 5 - Digits));
+        return Math.Max(step, (long)Math.Round(priceDistance * 100_000 / step) * step);
+    }
 
     /// <summary>Open API prices are integers in units of 0.00001, whatever the symbol's digits.</summary>
     public static double PriceFromRaw(ulong raw) => raw / 100_000.0;
@@ -105,7 +127,7 @@ public sealed class SymbolCatalog
                 var l = x.Light!;
                 var f = full[l.SymbolId];
                 return new SymbolInfo(l.SymbolId, x.Name, l.SymbolName, AssetName(l.BaseAssetId), AssetName(l.QuoteAssetId),
-                    f.Digits, f.PipPosition, f.LotSize / 100, l.Enabled, f.TradingMode, TradingSchedule.From(f));
+                    f.Digits, f.PipPosition, f.LotSize / 100, l.Enabled, f.TradingMode, TradingSchedule.From(f), f.MinVolume, f.StepVolume);
             })
             .ToList();
     }

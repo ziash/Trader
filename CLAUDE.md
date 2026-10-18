@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 1 in progress (plan v1.12, steps in Section 8.1): steps 1–4 done (connect, stay connected, price feed to disk, instance registry); framework reusable for many bots (plan 5.3); step 5 (probe orders) next.
+- **Current state:** Phase 1 in progress (plan v1.13, steps in Section 8.1): steps 1–5 done (connect, stay connected, price feed to disk, instance registry, probe orders on demo); framework reusable for many bots (plan 5.3); step 6 (daily report) next.
 
 ## Working rules
 
@@ -60,7 +60,8 @@ Account numbers above are broker login numbers. The API uses `ctidTraderAccountI
 - Every order carries a label from `BotIdentity.Label()`: instance ID + optional leg, e.g. `TrendBot-3f9a1c-T1-S1` (plan 5.3, 10.8.2); max 100 characters. Reconcile positions after a restart by bot name, not instance ID.
 - **Ownership rule (plan 5.3):** a bot only modifies/closes orders and positions with its own label, always by `positionId` (never "close all on a symbol"); everything else (the owner's manual trades) is foreign — never touched, but counted for risk.
 - **Orders only from the Primary:** a bot may place orders on an account only while `InstanceRegistry.RoleOn(account)` is Primary (plan 6.4).
-- Every live position must always have a server-side protective order (hedge buy-stop before 1R, stop-loss after) — plan Section 7 protection rule.
+- Every live position must always have a server-side protective order (hedge buy-stop before 1R, stop-loss after) — plan Section 7 protection rule. Audit Bot probes carry a wide backup stop-loss (plan 6.2.2).
+- Live tests place real orders on the **demo** accounts (probes are 0.01 lot). Leave the accounts flat afterwards: check with a reconcile; never close a position that lacks the bot's label.
 
 ## Before finishing a task
 

@@ -1,4 +1,4 @@
-// Audit Bot (plan Section 6). Phase 1 steps 3–4: price feed to disk, instance registry.
+// Audit Bot (plan Section 6). Phase 1 steps 3–5: price feed to disk, instance registry, probe orders.
 // - Reads ~/tradebot/config/audit.*.json (one per broker).
 // - Stays connected (heartbeat, reconnect, token refresh — Trader.Core).
 // - Subscribes to bid/ask and M5 trendbars for the configured symbols, plus the symbols needed to
@@ -7,9 +7,12 @@
 //   ~/tradebot/logs/<broker>/<ctidTraderAccountId>/<instanceId>/<yyyy-MM-dd>/.
 // - Registers in ~/tradebot/run/instances/ (plan 6.4): per account, one instance is Primary (may send
 //   probe orders from step 5), the others Passive; a Passive takes over at once if the Primary stops.
-// Probe orders follow in step 5 (plan 8.1). Places no orders.
+// - Probe orders (plan 6.2.2): 0.01 lot buy + sell per symbol in each window (London open, New York open,
+//   quiet hour, US NFP/CPI releases from news-releases.json), opened and closed at once, only while Primary;
+//   written to probes.csv. Left-over AuditBot positions are closed; other positions are never touched.
 //
-// Options: --config-dir <dir> (default ~/tradebot/config), plus the common ones (--help).
+// Options: --config-dir <dir> (default ~/tradebot/config), --test-probe-now (run one probe window at once),
+// plus the common ones (--help).
 
 using System.Collections.Concurrent;
 using Trader.AuditBot;
@@ -31,10 +34,14 @@ if (dirIndex >= 0)
     configDir = args[dirIndex + 1];
 }
 
+var probeNow = args.Contains("--test-probe-now");
+
 IReadOnlyList<AuditConfig> configs;
+IReadOnlyList<NewsRelease> news;
 try
 {
     configs = AuditConfig.LoadAll(configDir);
+    news = ProbeSchedule.LoadNews(Path.Combine(configDir, "news-releases.json"));
 }
 catch (AuditConfigException ex)
 {
@@ -63,6 +70,32 @@ return await BotRunner.RunAsync("AuditBot", args, async (bot, ct) =>
     foreach (var c in configs)
         registry.Register(c.Broker, c.AccountId, c.Symbols);
 
+    var probeWriters = configs.ToDictionary(c => c.AccountId,
+        c => new DailyCsvWriter(d => DayFile(c, d, "probes.csv"), ProbeRunner.Header));
+    var prober = new ProbeRunner(bot.Log, bot.Identity, registry, feed, recorder, new ProbeSchedule(news), configs, probeWriters);
+    registry.RoleChanged += (ctid, role) =>
+    {
+        if (role == InstanceRole.Primary)
+            prober.CleanupInBackground(ctid, "became Primary");
+    };
+    bot.Log.Information("News releases loaded: {Count} ({Next})", news.Count,
+        news.FirstOrDefault(n => n.NewYorkTime > DateTime.UtcNow.AddHours(-5)) is { } nx ? $"next {nx.Event} {nx.NewYorkTime:yyyy-MM-dd HH:mm} New York" : "none upcoming");
+
+    // Fills of orders that are not ours (e.g. the owner's manual trades) are logged once and otherwise ignored.
+    var foreignSeen = new ConcurrentDictionary<long, bool>();
+    bot.Connection.MessageReceived += message =>
+    {
+        if (message is not ProtoOAExecutionEvent { ExecutionType: ProtoOAExecutionType.OrderFilled, Deal: not null } e)
+            return;
+        var label = e.Order?.TradeData?.Label ?? e.Position?.TradeData?.Label;
+        if (BotIdentity.TryParseLabel(label, out var owner, out _, out _) && owner == bot.Identity.BotName)
+            return;
+        if (foreignSeen.TryAdd(e.Deal.PositionId, true))
+            bot.Log.Event("ForeignTrade").ForAccount(e.CtidTraderAccountId).Information(
+                "Account {Ctid}: fill on position {Position} not opened by {BotName} (label \"{Label}\") — ignored (ownership rule)",
+                e.CtidTraderAccountId, e.Deal.PositionId, bot.Identity.BotName, label ?? "");
+    };
+
     // Log once per connection and account that M5 trendbars are arriving (they are used from Phase 4).
     var trendbarSeen = new ConcurrentDictionary<long, bool>();
     feed.TrendbarReceived += (ctid, _, bar) =>
@@ -78,8 +111,12 @@ return await BotRunner.RunAsync("AuditBot", args, async (bot, ct) =>
     {
         feed.Reset();
         trendbarSeen.Clear();
+        prober.SetSession(session);
         foreach (var c in configs.Where(c => accounts.Any(a => a.CtidTraderAccountId == c.AccountId)))
+        {
             await SubscribeAsync(session, c);
+            prober.CleanupInBackground(c.AccountId, "after connect");
+        }
     };
 
     async Task SubscribeAsync(CTraderSession session, AuditConfig c)
@@ -129,11 +166,14 @@ return await BotRunner.RunAsync("AuditBot", args, async (bot, ct) =>
 
     try
     {
-        await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync, recorder.RunAsync);
+        await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync, recorder.RunAsync,
+            token => prober.RunAsync(token, probeNow));
     }
     finally
     {
         registry.Dispose();
         events.Dispose();
+        foreach (var w in probeWriters.Values)
+            w.Dispose();
     }
 }, new BotOptions { AccountIds = configs.Select(c => c.AccountId).ToList() });

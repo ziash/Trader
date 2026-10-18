@@ -87,6 +87,21 @@ await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync)
 - `registry.View(ctid)` gives the siblings, this copy's role and its **slot** (0 = oldest) for staggering orders.
 - **Place orders only while Primary**, and follow the ownership rule: only touch orders/positions with your own label, close by `positionId` (plan 5.3).
 
+## Orders
+
+```csharp
+var fill = await session.PlaceMarketOrderAsync(ctid, symbol.SymbolId, ProtoOATradeSide.Buy,
+    symbol.VolumeForLots(0.01), bot.Identity.Label(), clientOrderId: "my-" + Guid.NewGuid().ToString("N")[..12],
+    relativeStopLoss: symbol.RelativeDistance(50 * symbol.PipSize));      // server-side stop 50 pips away
+// fill.Price, fill.PositionId, fill.Latency, fill.Commission
+await session.ClosePositionAsync(ctid, fill.PositionId, fill.FilledVolume); // always by positionId
+var open = await session.ReconcileAsync(ctid);                              // all open positions and orders
+```
+
+- Order calls wait for the fill (several replies come back per order) and throw `CTraderApiException` with the broker's code on rejection (e.g. `TRADING_BAD_VOLUME`).
+- Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`.
+- Place orders only while Primary on the account, and follow the ownership rule (plan 5.3).
+
 ## Common options (every bot)
 
 | Option | Meaning |

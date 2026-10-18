@@ -138,7 +138,25 @@ public sealed class SpreadRecorder(ILogger log, PriceFeed feed, Func<DateTime>? 
         return written;
     }
 
-    /// <summary>USD value of a price move of 1.0 in the symbol's quote currency; null if no conversion price is known yet.</summary>
+    /// <summary>The account's symbols in config order (after the last Configure); empty before that.</summary>
+    public IReadOnlyList<SymbolInfo> SymbolsOf(long ctid)
+    {
+        lock (_lock)
+        {
+            if (!_accounts.TryGetValue(ctid, out var acc))
+                return [];
+            var order = acc.Config.Symbols.Select((name, i) => (name, i)).ToDictionary(x => x.name, x => x.i, StringComparer.OrdinalIgnoreCase);
+            return acc.Symbols.Values.OrderBy(s => order.GetValueOrDefault(s.Name, int.MaxValue)).ToList();
+        }
+    }
+
+    /// <summary>USD value of a price move of 1.0 in the symbol's quote currency on this account; null if not known yet.</summary>
+    public double? UsdPerPriceUnit(long ctid, SymbolInfo symbol)
+    {
+        lock (_lock)
+            return _accounts.TryGetValue(ctid, out var acc) ? UsdPerPriceUnit(acc, symbol) : null;
+    }
+
     private double? UsdPerPriceUnit(Account acc, SymbolInfo symbol)
     {
         if (symbol.QuoteAsset.Equals("USD", StringComparison.OrdinalIgnoreCase))

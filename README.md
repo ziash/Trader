@@ -15,6 +15,7 @@ dotnet build
 dotnet test
 dotnet run --project src/Trader.ListAccounts          # add --verbose to see each request/response
 dotnet run --project src/Trader.AuditBot              # runs until Ctrl+C; --help lists the options
+dotnet run --project src/Trader.AuditBot -- --test-probe-now   # one probe window at once (demo orders)
 dotnet run --project src/Trader.SampleBot -- --account 49123893
 ```
 
