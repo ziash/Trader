@@ -2,6 +2,7 @@ using System.Threading.Channels;
 using Google.Protobuf;
 using Serilog;
 using Trader.Core.Config;
+using Trader.Core.Logging;
 
 namespace Trader.Core.OpenApi;
 
@@ -114,7 +115,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 reason = $"{ex.GetType().Name}: {ex.Message}";
                 if (ex is not (TimeoutException or IOException or CTraderApiException
                     or OpenAPI.Net.Exceptions.ConnectionException or System.Net.Sockets.SocketException))
-                    log.Error(ex, "Unexpected error in connection loop");
+                    log.Event("UnexpectedError").Error(ex, "Unexpected error in connection loop");
             }
             finally
             {
@@ -132,7 +133,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 Reconnects++;
             var delay = forceRefresh && attempt == 0 ? TimeSpan.FromSeconds(1) : Backoff.Delay(attempt);
             attempt++;
-            log.Warning("Connection lost ({Reason}); reconnecting in {Delay:0.0} s (attempt {Attempt})",
+            log.Event("ConnectionLost").Warning("Connection lost ({Reason}); reconnecting in {Delay:0.0} s (attempt {Attempt})",
                 reason, delay.TotalSeconds, attempt);
             try
             {
@@ -144,7 +145,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             }
         }
 
-        log.Information("Connection manager stopped");
+        log.Event("Stopped").Information("Connection manager stopped");
     }
 
     private async Task AuthenticateApplicationAsync(CTraderSession session)
@@ -158,7 +159,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             throw new FatalConnectionException(
                 $"Application authentication failed ({ex.ErrorCode}): check CTRADER_CLIENT_ID / CTRADER_CLIENT_SECRET", ex);
         }
-        log.Information("Application authenticated");
+        log.Event("AppAuthenticated").Information("Application authenticated");
     }
 
     /// <returns>True if new tokens are now in use.</returns>
@@ -168,12 +169,12 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             return false;
 
         if (force)
-            log.Warning("Access token rejected by the server; refreshing");
+            log.Event("TokenRejected").Warning("Access token rejected by the server; refreshing");
         else if (_secrets.AccessTokenExpiresUtc is { } expires)
-            log.Information("Access token expires {Expires:yyyy-MM-dd HH:mm}Z (less than {Days} days); refreshing",
+            log.Event("TokenRefreshDue").Information("Access token expires {Expires:yyyy-MM-dd HH:mm}Z (less than {Days} days); refreshing",
                 expires, TokenRefresher.RefreshMargin.TotalDays);
         else
-            log.Information("Access token expiry unknown (first run); refreshing to learn it");
+            log.Event("TokenRefreshDue").Information("Access token expiry unknown (first run); refreshing to learn it");
 
         bool refreshed;
         try
@@ -191,15 +192,15 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
         {
             // If the server did refresh but the reply was lost, the old refresh token is now invalid
             // and the next attempt will fail with a fatal error asking for new tokens.
-            log.Warning("Token refresh did not complete ({Message})", ex.Message);
+            log.Event("TokenRefreshFailed").Warning("Token refresh did not complete ({Message})", ex.Message);
             throw;
         }
 
         if (refreshed)
-            log.Information("Token refreshed: new access token {Token}, expires {Expires:yyyy-MM-dd HH:mm}Z; saved to {Path}",
+            log.Event("TokenRefreshed").Information("Token refreshed: new access token {Token}, expires {Expires:yyyy-MM-dd HH:mm}Z; saved to {Path}",
                 TraderSecrets.Mask(_secrets.AccessToken), _secrets.AccessTokenExpiresUtc, secretsPath);
         else
-            log.Information("Tokens were already refreshed by another instance; reloaded from {Path}", secretsPath);
+            log.Event("TokenReloaded").Information("Tokens were already refreshed by another instance; reloaded from {Path}", secretsPath);
         return true;
     }
 
@@ -212,11 +213,11 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             await AuthenticateAccountAsync(session, acc.CtidTraderAccountId);
 
         if (!demo.SequenceEqual(_accounts))
-            log.Information("Accounts authenticated: {Accounts}{Live}",
+            log.Event("AccountsAuthenticated").Information("Accounts authenticated: {Accounts}{Live}",
                 string.Join(", ", demo.Select(a => $"{a.CtidTraderAccountId} (login {a.TraderLogin})")),
                 all.Count > demo.Count ? $"; {all.Count - demo.Count} other account(s) not used" : "");
         else
-            log.Information("{Count} account(s) authenticated", demo.Count);
+            log.Event("AccountsAuthenticated").Information("{Count} account(s) authenticated", demo.Count);
         _accounts = demo;
     }
 
@@ -294,7 +295,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 nextHousekeeping = now + _options.HousekeepingInterval;
                 if (await EnsureTokenAsync(session, force: false, ct))
                     await AuthenticateAccountsAsync(session);
-                log.Information("Status: connected for {Uptime}, reconnects {Reconnects}, accounts {Accounts}, access token expires {Expires}",
+                log.Event("Status").Information("Status: connected for {Uptime}, reconnects {Reconnects}, accounts {Accounts}, access token expires {Expires}",
                     FormatDuration(now - connectedAt), Reconnects, _accounts.Count,
                     _secrets.AccessTokenExpiresUtc is { } e ? $"{e:yyyy-MM-dd HH:mm}Z" : "unknown");
             }
@@ -316,7 +317,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 await AuthenticateAccountsAsync(session);
                 break;
             case Signal.AccountDisconnected(var ctid):
-                log.Warning("Server ended the session of account {Ctid}; authenticating it again", ctid);
+                log.Event("AccountDisconnected").Warning("Server ended the session of account {Ctid}; authenticating it again", ctid);
                 await AuthenticateAccountAsync(session, ctid);
                 break;
         }
@@ -328,7 +329,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
         switch (message)
         {
             case ProtoOAAccountsTokenInvalidatedEvent e:
-                log.Warning("Server invalidated the access token for {Count} account(s): {Reason}",
+                log.Event("TokenInvalidated").Warning("Server invalidated the access token for {Count} account(s): {Reason}",
                     e.CtidTraderAccountIds.Count, e.Reason);
                 _signals.Writer.TryWrite(new Signal.TokenInvalidated());
                 break;
@@ -336,7 +337,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 _signals.Writer.TryWrite(new Signal.AccountDisconnected((long)e.CtidTraderAccountId));
                 break;
             case ProtoOAClientDisconnectEvent e:
-                log.Warning("Server is closing the connection: {Reason}", e.Reason);
+                log.Event("ServerDisconnect").Warning("Server is closing the connection: {Reason}", e.Reason);
                 break;
         }
 

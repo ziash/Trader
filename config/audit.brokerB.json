@@ -1,0 +1,9 @@
+{
+  // Audit Bot settings for Broker B (plan 6.2.1, 6.3). Live copy: ~/tradebot/config/audit.brokerB.json
+  "broker": "brokerB",
+  "brokerName": "Pepperstone",
+  "accountId": 49124666,
+  "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"],
+  // Only where the broker's symbol name differs from ours, e.g. "AVAXUSD": "AVAXUSD"
+  "symbolNames": {}
+}

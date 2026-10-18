@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.10** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.11** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.9):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.11):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; step 3 (price feed to disk) done 18-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -103,6 +103,8 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 > **Library risk (v1.4):** `cTrader.OpenAPI.Net` v1.4.4 was last published in 2022 and targets .NET 6, with old dependencies. It runs on .NET 10, so Phase 1 starts with it. Fallback if it causes problems: generate C# classes from Spotware's `.proto` files and write a thin TLS client.
 >
 > *v1.8 finding (Phase 1 step 1):* the library works on .NET 10 — app auth, account list, account auth and trader info all succeed on both demo accounts. Its message definitions date from 2022 and already miss at least one newer field (`brokerTitleShort` in the account list). Not a blocker today; if a later step needs newer fields, switch to the fallback.
+>
+> *v1.11 finding (Phase 1 step 3):* the library's message factory cannot decode some replies — e.g. `ProtoOASubscribeLiveTrendbarRes` (payload type 2165) — so those requests timed out. Fixed in `Trader.Core` (`PayloadDecoder`): when the factory returns nothing, the message is decoded from a table built from the library's own generated message classes (84 types). Still no need for the full fallback.
 
 ### 5.2 Core functions the bot framework must provide
 
@@ -171,7 +173,7 @@ Per window, each symbol gets one buy probe and one sell probe, a few seconds apa
 | Main hours | Mon–Fri, 08:00 London to 17:00 New York (London open to New York close) | **2 min** |
 | Off-peak | All other times, including weekends (crypto only — forex is closed from Fri 17:00 to Sun 17:00 New York) | **5 min** |
 
-Each row summarises all ticks in its interval (min / average / median / 95th-percentile / max spread, tick count, longest gap), so short spikes and gaps between rows are not lost. Events (connect, reconnect, errors, rejections) are written when they happen, not on a timer. The 10-second Open API heartbeat (a Spotware protocol requirement) and the 10-second registry status file (Section 6.4, overwritten in place) are not logs and stay at 10 s.
+Each row summarises all ticks in its interval (min / average / median / 95th-percentile / max spread, tick count, longest gap), so short spikes and gaps between rows are not lost. *(v1.11)* Ticks are placed in intervals by the **server's timestamp**. A row is skipped only when there were no ticks **and** the market was closed during the interval, per the broker's own trading schedule for the symbol (weekend, and the daily break around 17:00 New York: ~2 min for forex, up to 6 min for crypto). No ticks while the market is open gives a row with `ticks` = 0 — a feed gap (including time the bot itself was disconnected; `events.csv` shows which). The last price the server re-sends on every subscribe carries its old timestamp and is ignored. Events (connect, reconnect, errors, rejections) are written when they happen, not on a timer. The 10-second Open API heartbeat (a Spotware protocol requirement) and the 10-second registry status file (Section 6.4, overwritten in place) are not logs and stay at 10 s.
 
 ### 6.3 Per-broker logging on disk
 
@@ -206,7 +208,9 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 **Pips and USD per lot.** Spreads and slippage are given in pips and as USD cost for one lot:
 
 - Forex: 1 pip = 0.0001 (0.01 for JPY pairs); 1 lot = 100,000 units of the base currency. USD value uses the live USDJPY or GBPUSD rate from the same broker (e.g. EURGBP: spread × 100,000 × GBPUSD).
-- Crypto: the pip is the broker's own pip size for the symbol, which may differ between brokers — so compare the USD columns, not the pip columns. A 100,000-unit lot does not apply (that would be 100,000 BTC); USD is given per 1 lot = 1 coin (Section 12).
+- Crypto: the pip is the broker's own pip size for the symbol, which may differ between brokers — so compare the USD columns, not the pip columns. A 100,000-unit lot does not apply (that would be 100,000 BTC); USD is given per 1 lot = 1 coin. *(v1.11, confirmed from the API 18-Oct-2026: both brokers' lot = 1 coin; BTCUSD/ETHUSD pip = 0.01 at IC Markets, 0.1 at Pepperstone.)*
+- Lot size is read from each symbol's details (`lotSize`); forex = 100,000 units at both brokers. The conversion symbols (USDJPY, GBPUSD) are found automatically from the broker's symbol list. USD figures use the conversion rate at the end of the interval.
+- Median = middle value; 95th percentile = nearest-rank (the smallest spread with at least 95 % of ticks at or below it).
 
 **`spreads.csv`**
 
@@ -292,8 +296,8 @@ Each step is built only when the owner says so.
 |---|---|---|---|
 | 1 | Connect and list accounts | TLS connect to the demo host, app auth, account list, account auth, trader info (`src/Trader.ListAccounts`) | **Done 16-Oct-2026** — both demo accounts Hedged; `ctidTraderAccountId` 49123893 (IC Markets), 49124666 (Pepperstone) |
 | 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair (`src/Trader.AuditBot`, `ConnectionManager`) | **Done 17-Oct-2026** — reconnects tested with simulated drops (back up within ~3 s); first token refresh done |
-| 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | Next |
-| 4 | Instance registry | Section 6.4 | |
+| 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | **Done 18-Oct-2026** — live on both demos (Sunday: crypto rows every 5 min, forex skipped while closed; resubscribe after forced drops) |
+| 4 | Instance registry | Section 6.4 | Next |
 | 5 | Probe orders | Windows of Section 6.2.2; `probes.csv` | |
 | 6 | Daily report | Section 6.5 | |
 
@@ -471,6 +475,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.8 | 17-Oct-2026 | **Phase 1 started**; step list added (Section 8.1); step 1 (connect and list accounts) done, `ctidTraderAccountId`s recorded. Audit Bot symbol list fixed: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (6.2.1; crypto availability checked at both brokers). Probe windows fixed: London open, New York open, quiet hour 03:00 London, US NFP/CPI releases (6.2.2). Spread logging changed from every tick to one summary row per 2 min (main hours) / 5 min (off-peak) (6.2.3). All logs CSV for Google Sheets, with pips and USD per lot; `ticks.csv` → `spreads.csv`, `events.log` → `events.csv` (6.3.1). Decision 13 added. OpenAPI.Net finding added to 5.1. Open items and glossary updated. |
 | v1.9 | 17-Oct-2026 | **Phase 1 step 2 done** (stay connected): event stream, dead-line detection by ping, auto-reconnect with backoff and re-auth, token refresh with atomic save and lock (Section 5.1, 8.1). Token expiry now stored in `secrets.env` as `CTRADER_ACCESS_TOKEN_EXPIRES_UTC`. Server heartbeat behaviour recorded. `events.csv` moved into step 3. Open item added: lost refresh reply. |
 | v1.10 | 17-Oct-2026 | **Framework reusable for many bots** (new Section 5.3, decision 14): shared library `src/Trader.Core` with `BotRunner` (common options, logging, secrets, Ctrl+C/SIGTERM, exit codes), per-bot account choice, bot instance ID (`<BotName>-<6 hex>`) on every log line and in order labels (max 100 characters), usage guide `src/Trader.Core/README.md`, template `src/Trader.SampleBot`. Instance identity changed from broker + account + GUID to bot name + short ID (6.4); label format added to 10.8.2. 10 simultaneous bots tested. Open items and glossary updated. |
+| v1.11 | 18-Oct-2026 | **Phase 1 step 3 done** (price feed to disk), 18-Oct-2026: per-broker config files (`config/audit.brokerA.json`, `audit.brokerB.json` → `~/tradebot/config/`); symbol lookup with name map; spot and M5 trendbar subscriptions renewed after every reconnect; `spreads.csv` and `events.csv` per broker/account/instance/day. Rules added to 6.2.3 (server timestamps, closed-market rows skipped by broker schedule, stale re-sent prices ignored) and 6.3.1 (lot size from symbol data, conversion symbols found automatically, median/p95 definitions). Crypto lot = 1 coin confirmed (open item closed). Second library finding (5.1): `PayloadDecoder` fallback for messages the library cannot decode. Shared parts in `Trader.Core` (MarketData, Csv, events.csv sink). |
 
 ## 12. Open items / decisions pending
 
@@ -483,7 +488,7 @@ Every change is recorded here, the version number in the header table is increas
 - ~~Final symbol list for the Audit Bot.~~ Done v1.8: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (Section 6.2.1).
 - *(v1.10)* Simultaneous connections: Spotware publishes no limit per application or token. 10 bots at once worked on 17-Oct-2026 (45 s test); confirm with Spotware or a longer test before running many bots for days. Fallback if a limit appears: one connection process shared by several bots.
 - *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
-- *(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD (a 100,000-unit lot does not apply to crypto).
+- ~~*(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD.~~ Done v1.11: confirmed from both brokers' symbol data.
 - *(v1.8)* News probes: confirm the offsets (proposal: 2 min before, a few seconds after, 5 min after the release) and fill in the NFP/CPI dates in the config before the audit run.
 - Price-action entry rules (to be written as a spec in Phase 3).
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.

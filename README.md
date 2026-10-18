@@ -7,6 +7,7 @@ Semi-automated trend-trading bot for cTrader (C# / .NET, Ubuntu).
 - **Instructions for Claude Code:** [CLAUDE.md](CLAUDE.md)
 - **Environment setup (Phase 0):** [docs/setup.md](docs/setup.md) — check with `bash scripts/check-env.sh`
 - **Images used by the plan:** [docs/images/](docs/images/)
+- **Bot config (reference copies):** [config/](config/) — the bots read `~/tradebot/config/`; logs go to `~/tradebot/logs/`
 - **Bot code:** `src/` (from Phase 1) — `Trader.Core` (shared framework for all bots; [usage guide](src/Trader.Core/README.md)), `Trader.SampleBot` (template for a new bot), `Trader.ListAccounts` (connect + list accounts), `Trader.AuditBot` (Audit Bot; so far: stays connected, reconnects, refreshes tokens)
 
 ```bash

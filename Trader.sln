@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Trader.AuditBot", "src\Trad
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Trader.SampleBot", "src\Trader.SampleBot\Trader.SampleBot.csproj", "{4C596003-6D5D-4368-8CDC-4E196151701B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Trader.AuditBot.Tests", "tests\Trader.AuditBot.Tests\Trader.AuditBot.Tests.csproj", "{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,18 @@ Global
 		{4C596003-6D5D-4368-8CDC-4E196151701B}.Release|x64.Build.0 = Release|Any CPU
 		{4C596003-6D5D-4368-8CDC-4E196151701B}.Release|x86.ActiveCfg = Release|Any CPU
 		{4C596003-6D5D-4368-8CDC-4E196151701B}.Release|x86.Build.0 = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|x64.Build.0 = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Debug|x86.Build.0 = Debug|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|x64.ActiveCfg = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|x64.Build.0 = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|x86.ActiveCfg = Release|Any CPU
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,5 +111,6 @@ Global
 		{7B24026D-1D34-4B83-BC19-D1B91CF00604} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{3B5C2202-9D2B-4183-8ACF-93694BFDBA32} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{4C596003-6D5D-4368-8CDC-4E196151701B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{6A010FC4-17DE-4ABE-BD8B-0DCF41771AA6} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

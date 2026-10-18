@@ -8,7 +8,10 @@ logging and start-up/shut-down live here **once**; bots do not copy them (plan d
 | `Hosting/` | `BotRunner` (start-up, options, Ctrl+C/SIGTERM, exit codes), `BotIdentity` (instance ID, order labels) |
 | `OpenApi/` | `ConnectionManager` (stay connected: reconnect, dead-line ping, token refresh, account auth), `CTraderSession` (requests/replies on one connection) |
 | `Config/` | `SecretsFile` (reads `~/.config/trader/secrets.env`, demo only), `TokenRefresher` (refresh + atomic save under a lock) |
-| `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line) |
+| `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line), `LogTap` + `CsvEventSink` (events.csv), `log.Event("Name")` |
+| `MarketData/` | `SymbolCatalog` (names → IDs, details, currency conversion symbols), `PriceFeed` (spot events → bid/ask quotes, live trendbars), `TradingSchedule` (is the market open?), `MarketHours` (main hours / off-peak, 2/5-min boundaries) |
+| `Csv/` | `DailyCsvWriter` (one file per UTC day, header, flushed per row), `CsvFormat` (time and number formats for Google Sheets) |
+| `Hosting/TradebotPaths` | `~/tradebot/{config,logs,run/instances,reports}` (`TRADEBOT_HOME` overrides) |
 
 ## Add a new bot (about 5 minutes)
 
@@ -45,6 +48,30 @@ return await BotRunner.RunAsync("MyBot", args, async (bot, ct) =>
 });
 ```
 
+## Prices, symbols and files
+
+```csharp
+var feed = new PriceFeed();
+bot.Connection.MessageReceived += feed.Handle;        // spot events → quotes
+feed.QuoteReceived += q => { /* q.Bid, q.Ask, q.Spread, q.TimeUtc (server time) */ };
+
+bot.Connection.OnReady = async (session, accounts, ct) =>
+{
+    feed.Reset();                                     // new connection: prices start fresh
+    var ctid = accounts[0].CtidTraderAccountId;
+    var catalog = await SymbolCatalog.LoadAsync(session, ctid);
+    var symbols = await catalog.GetDetailsAsync(session, new Dictionary<string, string> { ["EURUSD"] = "EURUSD" });
+    await session.SubscribeSpotsAsync(ctid, symbols.Select(s => s.SymbolId));
+    await session.SubscribeLiveTrendbarAsync(ctid, symbols[0].SymbolId, ProtoOATrendbarPeriod.M5);
+};
+```
+
+- `SymbolInfo` gives `PipSize`, `LotUnits` (100,000 for forex, 1 coin for crypto), `Digits`, `QuoteAsset`, `Schedule`.
+- `catalog.FindConversion("JPY", "USD")` → the symbol to subscribe for converting costs (e.g. USDJPY, divide).
+- CSV files: `new DailyCsvWriter(day => path, header)`; format values with `CsvFormat.Time/Num/Int`.
+- events.csv: `var events = new CsvEventSink(); events.AddAccount(ctid, writer); bot.LogTap.Add(events);`
+  then `log.Event("Name").Information(...)`; add `.ForAccount(ctid)` to write to one account's file only.
+
 ## Common options (every bot)
 
 | Option | Meaning |
@@ -61,6 +88,7 @@ Exit codes: `0` stopped normally · `1` secrets/config or fatal API problem (e.g
 ## What the connection does for you
 
 - TLS to `demo.ctraderapi.com:5035`; a heartbeat so the client is never silent for more than 10 s.
+- Decodes every server message, including ones the old cTrader library cannot (`PayloadDecoder`).
 - After 40 s with nothing received it sends a ping; no reply within 10 s → reconnect.
 - Reconnect waits 1, 2, 4 … up to 60 s (plus random jitter), then authenticates the app and the accounts again, then calls `OnReady` again.
 - Refreshes the access token when it has under 7 days left, or when the server rejects it, and saves the new pair to `secrets.env`.

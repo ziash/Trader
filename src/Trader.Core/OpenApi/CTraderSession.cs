@@ -4,6 +4,7 @@ using OpenAPI.Net;
 using OpenAPI.Net.Helpers;
 using Serilog;
 using Trader.Core.Config;
+using Trader.Core.Logging;
 
 namespace Trader.Core.OpenApi;
 
@@ -73,7 +74,7 @@ public sealed class CTraderSession : IAsyncDisposable
         // maxRequestPerSecond: Spotware allows 50/s per connection; stay well under it.
         var client = new OpenClient(host, ApiInfo.Port, Heartbeat, maxRequestPerSecond: 40, useWebSocket: false);
         var session = new CTraderSession(client, log);
-        log.Information("Connecting to {Host}:{Port} (TLS)", host, ApiInfo.Port);
+        log.Event("Connecting").Information("Connecting to {Host}:{Port} (TLS)", host, ApiInfo.Port);
         try
         {
             await client.Connect();
@@ -83,7 +84,7 @@ public sealed class CTraderSession : IAsyncDisposable
             await session.DisposeAsync();
             throw;
         }
-        log.Information("Connected");
+        log.Event("Connected").Information("Connected");
         return session;
     }
 
@@ -124,6 +125,39 @@ public sealed class CTraderSession : IAsyncDisposable
         var res = await RequestAsync<ProtoOAAssetListRes>(new ProtoOAAssetListReq { CtidTraderAccountId = ctidTraderAccountId });
         return res.Asset;
     }
+
+    /// <summary>All symbols of the account, light form (ID, name, assets, enabled).</summary>
+    public async Task<IReadOnlyList<ProtoOALightSymbol>> GetSymbolsAsync(long ctidTraderAccountId)
+    {
+        var res = await RequestAsync<ProtoOASymbolsListRes>(new ProtoOASymbolsListReq { CtidTraderAccountId = ctidTraderAccountId });
+        return res.Symbol;
+    }
+
+    /// <summary>Full symbol details: digits, pip position, lot size, trading schedule …</summary>
+    public async Task<IReadOnlyList<ProtoOASymbol>> GetSymbolDetailsAsync(long ctidTraderAccountId, IEnumerable<long> symbolIds)
+    {
+        var req = new ProtoOASymbolByIdReq { CtidTraderAccountId = ctidTraderAccountId };
+        req.SymbolId.AddRange(symbolIds);
+        var res = await RequestAsync<ProtoOASymbolByIdRes>(req);
+        return res.Symbol;
+    }
+
+    /// <summary>Starts ProtoOASpotEvent (bid/ask) messages for the symbols, with server timestamps.</summary>
+    public Task SubscribeSpotsAsync(long ctidTraderAccountId, IEnumerable<long> symbolIds)
+    {
+        var req = new ProtoOASubscribeSpotsReq { CtidTraderAccountId = ctidTraderAccountId, SubscribeToSpotTimestamp = true };
+        req.SymbolId.AddRange(symbolIds);
+        return RequestAsync<ProtoOASubscribeSpotsRes>(req);
+    }
+
+    /// <summary>Adds live candles of <paramref name="period"/> to the spot events of a symbol (spots must be subscribed first).</summary>
+    public Task SubscribeLiveTrendbarAsync(long ctidTraderAccountId, long symbolId, ProtoOATrendbarPeriod period) =>
+        RequestAsync<ProtoOASubscribeLiveTrendbarRes>(new ProtoOASubscribeLiveTrendbarReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            SymbolId = symbolId,
+            Period = period,
+        });
 
     /// <summary>Exchanges the refresh token for a new token pair. The old refresh token stops working.</summary>
     public async Task<TokenPair> RefreshTokenAsync(string refreshToken)
@@ -172,7 +206,7 @@ public sealed class CTraderSession : IAsyncDisposable
     /// <summary>Diagnostic only: drops the connection as if the network failed.</summary>
     public void SimulateDrop()
     {
-        _log.Warning("Simulating a connection drop (test flag)");
+        _log.Event("TestDrop").Warning("Simulating a connection drop (test flag)");
         Close(new IOException("Simulated connection drop"));
         _client.Dispose();
     }
@@ -184,16 +218,26 @@ public sealed class CTraderSession : IAsyncDisposable
         {
             Interlocked.Exchange(ref _lastReceivedTicks, DateTime.UtcNow.Ticks);
 
-            // Messages with a clientMsgId arrive twice: first as the raw envelope, then decoded.
-            // The envelope completes the matching request; the decoded copy goes to listeners.
+            // The library delivers a raw envelope for messages with a clientMsgId, and for messages it cannot
+            // decode; it then delivers the decoded copy only if it could decode it. The envelope completes the
+            // matching request; listeners get the decoded copy — from us when the library has none.
             if (message is ProtoMessage envelope)
             {
-                if (envelope.HasClientMsgId && _pending.TryGetValue(envelope.ClientMsgId, out var reply) &&
-                    MessageFactory.GetMessage(envelope) is { } decoded)
+                var libraryCannotDecode = PayloadDecoder.LibraryCannotDecode(envelope);
+                var decoded = PayloadDecoder.Decode(envelope);
+                if (decoded is null)
+                {
+                    _log.Debug("← unknown payload type {PayloadType}", envelope.PayloadType);
+                    return;
+                }
+
+                if (envelope.HasClientMsgId && _pending.TryGetValue(envelope.ClientMsgId, out var reply))
                 {
                     _log.Debug("← {Response} {ClientMsgId}", decoded.GetType().Name, envelope.ClientMsgId);
                     reply.TrySetResult(decoded);
                 }
+                if (libraryCannotDecode)
+                    MessageReceived?.Invoke(decoded);
                 return;
             }
 
@@ -201,7 +245,7 @@ public sealed class CTraderSession : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "Error while handling {Message}", message.GetType().Name);
+            _log.Event("HandlerError").Error(ex, "Error while handling {Message}", message.GetType().Name);
         }
     }
 
@@ -226,7 +270,7 @@ public sealed class CTraderSession : IAsyncDisposable
         _subscription.Dispose();
         _client.Dispose();
         Close(null);
-        _log.Information("Disconnected");
+        _log.Event("Disconnected").Information("Disconnected");
         return ValueTask.CompletedTask;
     }
 }

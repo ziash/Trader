@@ -7,10 +7,13 @@ using Trader.Core.OpenApi;
 namespace Trader.Core.Hosting;
 
 /// <summary>What a bot gets from <see cref="BotRunner"/>: its identity, a logger, and a ready-to-run connection.</summary>
-public sealed class BotContext(BotIdentity identity, ILogger log, ConnectionManager connection, string secretsPath, IReadOnlyList<string> args)
+public sealed class BotContext(BotIdentity identity, ILogger log, LogTap logTap, ConnectionManager connection, string secretsPath, IReadOnlyList<string> args)
 {
     public BotIdentity Identity { get; } = identity;
     public ILogger Log { get; } = log;
+
+    /// <summary>Add sinks here to send log events to the bot's own files (e.g. <see cref="CsvEventSink"/> for events.csv).</summary>
+    public LogTap LogTap { get; } = logTap;
 
     /// <summary>Set <see cref="ConnectionManager.OnReady"/> / subscribe to <see cref="ConnectionManager.MessageReceived"/>,
     /// then await <see cref="ConnectionManager.RunAsync"/>.</summary>
@@ -75,7 +78,8 @@ public static class BotRunner
             return ExitOk;
         }
 
-        var log = BotLogging.Create(identity, parsed.Verbose);
+        var tap = new LogTap();
+        var log = BotLogging.Create(identity, parsed.Verbose, tap);
         Log.Logger = log;
 
         using var stop = new CancellationTokenSource();
@@ -106,7 +110,7 @@ public static class BotRunner
                 SimulateDropAfter = parsed.TestDropAfter,
             });
 
-            await run(new BotContext(identity, log, connection, path, parsed.Rest), stop.Token);
+            await run(new BotContext(identity, log, tap, connection, path, parsed.Rest), stop.Token);
             log.Information("{BotName} stopped", botName);
             return ExitOk;
         }
