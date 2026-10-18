@@ -185,3 +185,11 @@ public class PayloadDecoderTests
         Assert.True(Trader.Core.OpenApi.PayloadDecoder.KnownPayloadTypes >= 80); // 84 message classes in the 2022 library
     }
 }
+
+public class OrderCommentTests
+{
+    [Fact]
+    public void Sent_comment_has_utc_time_with_milliseconds() =>
+        Assert.Equal("sent 2026-10-19 08:00:01.234Z",
+            Trader.Core.OpenApi.CTraderSession.SentComment(new DateTime(2026, 10, 19, 8, 0, 1, 234, DateTimeKind.Utc)));
+}

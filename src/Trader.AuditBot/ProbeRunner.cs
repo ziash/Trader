@@ -185,7 +185,7 @@ public sealed class ProbeRunner(
         try
         {
             open = await session.PlaceMarketOrderAsync(c.AccountId, symbol.SymbolId, side, volume, label, NewClientOrderId(),
-                Backstop(symbol, requested), OrderTimeout);
+                Backstop(symbol, requested), OrderTimeout, CTraderSession.SentComment(sent));
         }
         catch (CTraderApiException ex)
         {

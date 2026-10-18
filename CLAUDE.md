@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 1 in progress (plan v1.13, steps in Section 8.1): steps 1–5 done (connect, stay connected, price feed to disk, instance registry, probe orders on demo); framework reusable for many bots (plan 5.3); step 6 (daily report) next.
+- **Current state:** Phase 1 in progress (plan v1.13, steps in Section 8.1): steps 1–5 done (connect, stay connected, price feed to disk, instance registry, probe orders on demo); framework reusable for many bots (plan 5.3); step 6 (daily report) next. **Phase 2 audit run started 18-Oct-2026**: the Audit Bot runs as the systemd user service `trader-auditbot` from `~/tradebot/bin/AuditBot` — do not stop or restart it, or delete anything in `~/tradebot/logs`, without the owner's OK. Deploy code changes with `scripts/deploy-auditbot.sh` (it does not restart the bot).
 
 ## Working rules
 

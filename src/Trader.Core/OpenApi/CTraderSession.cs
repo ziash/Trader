@@ -196,8 +196,10 @@ public sealed class CTraderSession : IAsyncDisposable
     /// </summary>
     /// <param name="volume">In Open API units: hundredths of a unit (0.01 lot EURUSD = 1,000 units = 100,000).</param>
     /// <param name="relativeStopLoss">Optional server-side stop-loss distance in 1/100,000 of the price.</param>
+    /// <param name="comment">Optional order comment (max 512 characters), shown in cTrader next to the label;
+    /// use <see cref="SentComment"/> to record the send time.</param>
     public Task<OrderFill> PlaceMarketOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOATradeSide side, long volume,
-        string label, string clientOrderId, long? relativeStopLoss = null, TimeSpan? timeout = null)
+        string label, string clientOrderId, long? relativeStopLoss = null, TimeSpan? timeout = null, string? comment = null)
     {
         var req = new ProtoOANewOrderReq
         {
@@ -211,8 +213,14 @@ public sealed class CTraderSession : IAsyncDisposable
         };
         if (relativeStopLoss is { } sl)
             req.RelativeStopLoss = sl;
+        if (!string.IsNullOrEmpty(comment))
+            req.Comment = comment.Length <= 512 ? comment : comment[..512];
         return ExecuteAsync(req, timeout);
     }
+
+    /// <summary>Order comment with the send time (plan 5.3): "sent 2026-10-19 08:00:01.234Z" (UTC, milliseconds).</summary>
+    public static string SentComment(DateTime utc) =>
+        "sent " + utc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture) + "Z";
 
     /// <summary>Closes (part of) a position by its ID and waits for the fill. Never closes anything else.</summary>
     public Task<OrderFill> ClosePositionAsync(long ctidTraderAccountId, long positionId, long volume, TimeSpan? timeout = null) =>

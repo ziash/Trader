@@ -19,6 +19,16 @@ dotnet run --project src/Trader.AuditBot -- --test-probe-now   # one probe windo
 dotnet run --project src/Trader.SampleBot -- --account 49123893
 ```
 
+Running the Audit Bot for real (background service, survives closing the terminal):
+
+```bash
+scripts/deploy-auditbot.sh                          # publish to ~/tradebot/bin/AuditBot + install the service
+systemctl --user enable --now trader-auditbot       # start now and at every login
+systemctl --user status trader-auditbot             # running?
+journalctl --user -u trader-auditbot -f             # live output
+systemctl --user stop trader-auditbot               # stop
+```
+
 Every change to the plan: update the version and change log in `docs/plan.md`, then commit with a message like `plan v1.4: define Scenario 2`.
 
 Secrets (API client secret, tokens) are never committed — see `.gitignore`.

@@ -1,0 +1,28 @@
+# systemd user service for the Audit Bot (plan Section 7: "systemd service, one unit per instance").
+# Installed by scripts/deploy-auditbot.sh into ~/.config/systemd/user/. Runs the published build in
+# ~/tradebot/bin/AuditBot (not the repo build), so code changes do not affect the running bot.
+#
+#   systemctl --user enable --now trader-auditbot   start now and at every login
+#   systemctl --user status trader-auditbot         is it running?
+#   journalctl --user -u trader-auditbot -f         live console output
+#   systemctl --user stop trader-auditbot           stop (clean: closes the connection, removes status files)
+
+[Unit]
+Description=Trader Audit Bot (cTrader demo accounts)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dotnet %h/tradebot/bin/AuditBot/Trader.AuditBot.dll
+WorkingDirectory=%h/tradebot
+# Restart after a crash or an unexpected stop, but not after a fatal problem the bot reported itself
+# (exit 1: e.g. refresh token rejected or bad config; exit 2: bad options) — those need a human.
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=1 2
+# Ctrl+C equivalent: the bot finishes cleanly within a few seconds.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+[Install]
+WantedBy=default.target

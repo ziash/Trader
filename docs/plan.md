@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.13** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.14** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.13):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.14):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -124,6 +124,7 @@ The owner may run up to ~10 bots at the same time. The functions of Section 5.2 
 - **Accounts per bot:** each bot chooses its accounts (`--account <ctid>`, or a default in code); default is all demo accounts the token grants.
 - **Identity:** each running bot gets an instance ID = bot name + 6 hex characters, e.g. `AuditBot-3f9a1c`, shown on every log line.
 - **Order labels:** instance ID, optionally followed by the leg name (10.8.2), e.g. `TrendBot-3f9a1c-T1-S1`; at most 100 characters (Spotware limit). The instance ID changes on every restart but positions do not, so after a restart a bot recognises its own positions by **bot name** (plus account and leg) and uses the instance ID only to attribute fills and log lines.
+- **Send time in the order comment** *(v1.14, owner's choice)*: every bot order carries `sent <yyyy-MM-dd HH:mm:ss.fff>Z` (UTC, milliseconds) in its `comment` field, shown in cTrader next to the label and kept by the server, next to the server's own open time (ms). The label stays the identity for ownership. Considered and not chosen: `BotName-YYYYMMDD-HHMMSS` as the label (not unique when several orders go out in the same second, e.g. a 4-leg trade; loses the instance ID).
 - **Connections:** each bot has its own connection (own 50 req/s budget). One secrets file serves all bots; when one refreshes the tokens, the others pick up the new ones (Section 5.1).
 - **Tested 17-Oct-2026:** 10 bots at once on separate connections, all authenticating the same two demo accounts, ran without errors or dropped sessions. Spotware does not publish a limit on simultaneous connections (Section 12).
 - **Order ownership rule** *(v1.12)* — how a bot tells its own orders from the owner's manual trades and anything else on the account:
@@ -288,11 +289,12 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | OS | Ubuntu 26.04 LTS (current machine: HP laptop) *(v1.7)* |
 | Runtime / SDK | .NET 10 LTS SDK from Ubuntu's archive (`dotnet-sdk-10.0`); runtime only on the VPS later *(v1.4)* |
 | Editor | VS Code + C# Dev Kit (AI-assisted coding) |
-| Running the bot | systemd service (one unit per instance) → later Docker container |
+| Running the bot | systemd service (one unit per instance) → later Docker container. *(v1.14)* Audit Bot: **systemd user service** `trader-auditbot` (`deploy/trader-auditbot.service`), running a **published Release build** in `~/tradebot/bin/AuditBot/` so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs. Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal (`journalctl --user -u trader-auditbot`). |
 | Secrets | API client secret and tokens in `~/.config/trader/secrets.env` (permissions 600) — never in Git |
 | Setup check | `scripts/check-env.sh` — read-only check of OS, .NET, Git, VS Code, clock, port 5035, folders, secrets *(v1.4)* |
 | Version control | Private Git repository (this repo — holds the plan and the code) |
 | Clock | NTP sync enabled; all logs in UTC |
+| Laptop during the audit *(v1.14)* | Automatic suspend off (Settings → Power), lid closing must not suspend, mains power; a sleeping laptop records nothing and probe windows are logged as missed. User services start at login; to run without anyone logged in: `loginctl enable-linger` (owner's choice). |
 | Later | Small Linux VPS near broker servers (London / New York); same container |
 
 > **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server. Before 1R this is the leg's hedge buy-stop; from 1R onward it is the leg's server-side trailing stop-loss (Section 10.8). *(v1.13)* Audit Bot probes (open for about a second) carry a wide server-side backup stop-loss instead (6.2.2).
@@ -303,7 +305,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 |---|---|---|---|
 | 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Complete 16-Oct-2026: Git repo, IC Markets demo (Broker A), Pepperstone demo (Broker B), Ubuntu toolchain, Open API app approved, tokens in secrets file; `check-env.sh` 0 warnings.* | Week 1 |
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry | Weeks 2–3 |
-| 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker | Weeks 4–5 |
+| 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker. *Started 18-Oct-2026 (v1.14), before Phase 1 step 6, by the owner's decision; covers the UK and US clock changes (25-Oct, 1-Nov) and the NFP (6-Nov) and CPI (10-Nov) releases if run to mid-November.* | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
 | 4 | Trend bot + human link | Semi-auto execution, hedge-and-recover exit logic, 4-leg structure, trailing and pyramiding, dashboard/config, then TradingView webhook | Weeks 9–12 |
 | 5 | Go-live (small) | VPS deployment, small live account, strict risk limits, review after 1 month | After Phase 4 |
@@ -498,6 +500,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.11 | 18-Oct-2026 | **Phase 1 step 3 done** (price feed to disk), 18-Oct-2026: per-broker config files (`config/audit.brokerA.json`, `audit.brokerB.json` → `~/tradebot/config/`); symbol lookup with name map; spot and M5 trendbar subscriptions renewed after every reconnect; `spreads.csv` and `events.csv` per broker/account/instance/day. Rules added to 6.2.3 (server timestamps, closed-market rows skipped by broker schedule, stale re-sent prices ignored) and 6.3.1 (lot size from symbol data, conversion symbols found automatically, median/p95 definitions). Crypto lot = 1 coin confirmed (open item closed). Second library finding (5.1): `PayloadDecoder` fallback for messages the library cannot decode. Shared parts in `Trader.Core` (MarketData, Csv, events.csv sink). |
 | v1.12 | 18-Oct-2026 | **Order ownership rule** added (5.3): bot touches only orders/positions with its own label, closes by `positionId`, records its fills; foreign positions never modified but counted for risk; relies on Hedging accounts. **Phase 1 step 4 done** (instance registry, 6.4): owner chose **lock-file Primary** instead of promotion after the 30 s heartbeat timeout — instant takeover, never two Primaries on one machine; roles per account; slots for staggering; dead instances also detected by PID; registry in `Trader.Core` for all bots. |
 | v1.13 | 18-Oct-2026 | **Phase 1 step 5 done** (probe orders, 6.2.2): owner accepted the recommendations — news windows 2 min before / 5 s after / 5 min after (NFP/CPI dates from BLS to Feb 2027 in `news-releases.json`); **open and close each a row** in `probes.csv` with new columns `action`, `commission_usd`, `position_id` (6.3.1); **backup stop-loss** on every probe (50 pips forex, 2 % crypto; note under the protection rule, Section 7). Probe procedure, left-over clean-up and first results recorded in 6.2.2. Order functions (market order, close by positionId, reconcile) in `Trader.Core`. Open item closed (news offsets); new one: dates after Feb 2027. |
+| v1.14 | 18-Oct-2026 | **Send time in the order comment** (5.3, owner's choice; label unchanged). **Deployment** (Section 7): systemd user service running a published Release build from `~/tradebot/bin/AuditBot`, deploy script, laptop-sleep note. **Phase 2 audit run started** (Section 8) before step 6, by the owner's decision; Phase 1 test logs deleted first. Monitoring script deferred (open items). |
 
 ## 12. Open items / decisions pending
 
@@ -512,6 +515,8 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
 - ~~*(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD.~~ Done v1.11: confirmed from both brokers' symbol data.
 - ~~*(v1.8)* News probes: confirm the offsets and fill in the NFP/CPI dates.~~ Done v1.13: 2 min before, 5 s after, 5 min after (owner accepted); dates to Feb 2027 in `news-releases.json`.
+- *(v1.14)* Monitoring while the bot runs: a status script (`scripts/audit-status.sh`) with a systemd timer and desktop alerts, Claude only on alerts — deferred by the owner on 18-Oct-2026.
+- *(v1.14)* Test data: logs from Phase 1 testing were deleted before the audit run started (18-Oct-2026 ~17:10 UTC); everything in `~/tradebot/logs` from then on is real audit data.
 - *(v1.13)* Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
 - Price-action entry rules (to be written as a spec in Phase 3).
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.
