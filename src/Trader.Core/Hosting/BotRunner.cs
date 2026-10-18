@@ -58,6 +58,49 @@ public static class BotRunner
         "  --test-drop-after <sec>    diagnostic: drop the connection <sec> seconds after each connect\n" +
         "  --help, -h                 show this help";
 
+    /// <summary>
+    /// Runs several long-lived jobs side by side (e.g. the connection, a file writer, the instance registry).
+    /// When any one ends — Ctrl+C/SIGTERM or an error — the others are stopped, all are awaited, and the
+    /// first error (if any) is rethrown so the bot exits with it.
+    /// </summary>
+    public static async Task RunTogetherAsync(CancellationToken ct, params Func<CancellationToken, Task>[] jobs)
+    {
+        using var stopAll = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var tasks = jobs.Select(job => Task.Run(() => job(stopAll.Token), CancellationToken.None)).ToArray();
+        Exception? error = null;
+        try
+        {
+            await await Task.WhenAny(tasks);
+        }
+        catch (OperationCanceledException) when (stopAll.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+        }
+
+        stopAll.Cancel();
+        foreach (var task in tasks)
+        {
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                error ??= ex;
+            }
+        }
+
+        if (error is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(error);
+        ct.ThrowIfCancellationRequested();
+    }
+
     public static async Task<int> RunAsync(string botName, string[] args, Func<BotContext, CancellationToken, Task> run, BotOptions? options = null)
     {
         var identity = BotIdentity.Create(botName);

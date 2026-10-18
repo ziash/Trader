@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.11** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.12** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.11):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; step 3 (price feed to disk) done 18-Oct-2026; steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.12):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; step 3 (price feed to disk) and step 4 (instance registry) done 18-Oct-2026; order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -126,6 +126,13 @@ The owner may run up to ~10 bots at the same time. The functions of Section 5.2 
 - **Order labels:** instance ID, optionally followed by the leg name (10.8.2), e.g. `TrendBot-3f9a1c-T1-S1`; at most 100 characters (Spotware limit). The instance ID changes on every restart but positions do not, so after a restart a bot recognises its own positions by **bot name** (plus account and leg) and uses the instance ID only to attribute fills and log lines.
 - **Connections:** each bot has its own connection (own 50 req/s budget). One secrets file serves all bots; when one refreshes the tokens, the others pick up the new ones (Section 5.1).
 - **Tested 17-Oct-2026:** 10 bots at once on separate connections, all authenticating the same two demo accounts, ran without errors or dropped sessions. Spotware does not publish a limit on simultaneous connections (Section 12).
+- **Order ownership rule** *(v1.12)* — how a bot tells its own orders from the owner's manual trades and anything else on the account:
+  - Every bot order carries its label (above) in the order's `label` field; the server keeps it on the order and the position and returns it in every execution event and reconcile. Manual trades normally have no label.
+  - The bot also records the `positionId` of every fill it receives, as a second, independent check during a run. After a restart it recognises its positions by **bot name** in the label.
+  - A bot **only modifies or closes positions and orders that carry its own label**, and always closes **by `positionId`**, never "close all on a symbol".
+  - Everything else is **foreign** — the owner's manual trades, other apps with access to the account, broker actions such as a stop-out: never modified, logged to `events.csv` when seen, but **counted for risk** (margin, exposure; Section 9), because it uses the same account money.
+  - This works because the accounts are **Hedging** (decision 8): every order is its own position, so a manual trade and a bot trade on the same pair and side never merge. Other clients of the same broker are other accounts, which the bot cannot see at all.
+  - Limit: the label is plain text, so someone with access to the account could type a bot-style label on a manual order. The recorded `positionId`s catch this during a run; if manual labels are ever used, the post-restart rule becomes "label matches **and** `positionId` is in the bot's saved list".
 - **Outside this repo:** pack `Trader.Core` as a versioned NuGet package in `~/tradebot/packages` and reference a fixed version, rather than copying the folder.
 
 ## 6. First bot: the Audit Bot
@@ -246,15 +253,16 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 Each instance must know how many copies of the Audit Bot are running and behave sensibly.
 
 - **Identity:** on start, an instance creates an ID = bot name + short random ID (e.g. `AuditBot-3f9a1c`, Section 5.3) and writes it into its log path; broker and account are already in that path and in the registry file name. *(v1.10; was broker + account + short GUID)*
-- **Registry:** it writes a heartbeat file in `run/instances/` every 10 seconds (a status file overwritten in place, not a log) (PID, broker, account, symbols, role, last-seen time). Files older than 30 seconds are treated as dead and cleaned up.
+- **Registry:** it writes a heartbeat file in `run/instances/` every 10 seconds (a status file overwritten in place, not a log) (PID, broker, account, symbols, role, last-seen time). Files older than 30 seconds are treated as dead and cleaned up. *(v1.12)* One file per account: `<broker>-<ctidTraderAccountId>-<instanceId>.json`, written to a temp file then renamed. A file is also removed at once when its PID is no longer running on this machine (e.g. after `kill -9`).
 - **Discovery:** each instance reads the registry to know the total count, and the count per broker/account.
 - **Tactful behaviour:**
   - Different brokers → instances run fully independently.
-  - Same broker + same account → the first instance is Primary (may send probe orders); later ones become Passive (log ticks only) to avoid duplicate trades.
-  - Probe schedules are staggered by a few seconds between instances so they never fire together.
+  - Same broker + same account → the first instance is Primary (may send probe orders); later ones become Passive (log ticks only) to avoid duplicate trades. *(v1.12)* **Primary = the instance holding the exclusive lock file** `<BotName>-<ctidTraderAccountId>.primary.lock` in `run/instances/`. Roles are **per account**: one process can be Primary on IC Markets and Passive on Pepperstone. Passive instances still write `spreads.csv` in their own instance folder.
+  - Probe schedules are staggered by a few seconds between instances so they never fire together. *(v1.12)* Each instance gets a **slot** = its position among live instances of the same bot on the account, oldest first.
   - Every order carries a label with the instance ID, so fills are attributed to the correct instance.
-  - If the Primary dies, the oldest live Passive instance promotes itself after the heartbeat timeout.
-- **Visibility:** each instance logs the current sibling count on start, on change, and hourly.
+  - ~~If the Primary dies, the oldest live Passive instance promotes itself after the heartbeat timeout.~~ *(v1.12, owner's choice)* If the Primary stops, Linux releases its lock at once — even on `kill -9` or a crash — and the first Passive instance to take the lock (checked every 2 s) becomes Primary. There can never be two Primaries on one machine. Tested 18-Oct-2026: Primary killed with `kill -9`, takeover within 1 s.
+- **Visibility:** each instance logs the current sibling count on start, on change, and hourly. *(v1.12)* Event `Siblings` in `events.csv` (list of instances with roles, own role and slot); `Promoted` when an instance becomes Primary; `InstanceGone` when a dead instance's file is removed.
+- *(v1.12)* The registry is in `Trader.Core` (`InstanceRegistry`), so every bot gets the same "one Primary per bot per account" rule — a trend bot and the Audit Bot each have their own Primary on the same account. Limit: it coordinates instances on **one machine**; an account must be run from one machine only.
 
 ### 6.5 Output
 
@@ -297,8 +305,8 @@ Each step is built only when the owner says so.
 | 1 | Connect and list accounts | TLS connect to the demo host, app auth, account list, account auth, trader info (`src/Trader.ListAccounts`) | **Done 16-Oct-2026** — both demo accounts Hedged; `ctidTraderAccountId` 49123893 (IC Markets), 49124666 (Pepperstone) |
 | 2 | Stay connected | Event stream, heartbeat watch, auto-reconnect with re-auth, access-token refresh with atomic save of the new token pair (`src/Trader.AuditBot`, `ConnectionManager`) | **Done 17-Oct-2026** — reconnects tested with simulated drops (back up within ~3 s); first token refresh done |
 | 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | **Done 18-Oct-2026** — live on both demos (Sunday: crypto rows every 5 min, forex skipped while closed; resubscribe after forced drops) |
-| 4 | Instance registry | Section 6.4 | Next |
-| 5 | Probe orders | Windows of Section 6.2.2; `probes.csv` | |
+| 4 | Instance registry | Section 6.4 (lock-file Primary, per-account roles, slots) | **Done 18-Oct-2026** — 3 copies live; Primary killed with `kill -9`, takeover within 1 s |
+| 5 | Probe orders | Windows of Section 6.2.2; `probes.csv`; ownership rule (5.3) | Next |
 | 6 | Daily report | Section 6.5 | |
 
 *Between steps 2 and 3 (17-Oct-2026, v1.10):* framework made reusable for many bots — `BotRunner`, per-bot accounts, instance ID and order labels, usage guide, `src/Trader.SampleBot` (Section 5.3).
@@ -476,6 +484,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.9 | 17-Oct-2026 | **Phase 1 step 2 done** (stay connected): event stream, dead-line detection by ping, auto-reconnect with backoff and re-auth, token refresh with atomic save and lock (Section 5.1, 8.1). Token expiry now stored in `secrets.env` as `CTRADER_ACCESS_TOKEN_EXPIRES_UTC`. Server heartbeat behaviour recorded. `events.csv` moved into step 3. Open item added: lost refresh reply. |
 | v1.10 | 17-Oct-2026 | **Framework reusable for many bots** (new Section 5.3, decision 14): shared library `src/Trader.Core` with `BotRunner` (common options, logging, secrets, Ctrl+C/SIGTERM, exit codes), per-bot account choice, bot instance ID (`<BotName>-<6 hex>`) on every log line and in order labels (max 100 characters), usage guide `src/Trader.Core/README.md`, template `src/Trader.SampleBot`. Instance identity changed from broker + account + GUID to bot name + short ID (6.4); label format added to 10.8.2. 10 simultaneous bots tested. Open items and glossary updated. |
 | v1.11 | 18-Oct-2026 | **Phase 1 step 3 done** (price feed to disk), 18-Oct-2026: per-broker config files (`config/audit.brokerA.json`, `audit.brokerB.json` → `~/tradebot/config/`); symbol lookup with name map; spot and M5 trendbar subscriptions renewed after every reconnect; `spreads.csv` and `events.csv` per broker/account/instance/day. Rules added to 6.2.3 (server timestamps, closed-market rows skipped by broker schedule, stale re-sent prices ignored) and 6.3.1 (lot size from symbol data, conversion symbols found automatically, median/p95 definitions). Crypto lot = 1 coin confirmed (open item closed). Second library finding (5.1): `PayloadDecoder` fallback for messages the library cannot decode. Shared parts in `Trader.Core` (MarketData, Csv, events.csv sink). |
+| v1.12 | 18-Oct-2026 | **Order ownership rule** added (5.3): bot touches only orders/positions with its own label, closes by `positionId`, records its fills; foreign positions never modified but counted for risk; relies on Hedging accounts. **Phase 1 step 4 done** (instance registry, 6.4): owner chose **lock-file Primary** instead of promotion after the 30 s heartbeat timeout — instant takeover, never two Primaries on one machine; roles per account; slots for staggering; dead instances also detected by PID; registry in `Trader.Core` for all bots. |
 
 ## 12. Open items / decisions pending
 
@@ -543,6 +552,9 @@ Every change is recorded here, the version number in the header table is increas
 | Library / project reference | A library is shared code with no program of its own (`Trader.Core`); a bot uses it through a project reference — one line in the bot's project file. |
 | NuGet package | A versioned zip of compiled .NET code that projects can install; the way to share a library across repos. |
 | Instance ID | The name of one running copy of a bot, e.g. `AuditBot-3f9a1c`; new on every start. |
+| Lock file | A file one process holds exclusively open; Linux releases it automatically when that process ends, however it ends. Used to make exactly one instance Primary. |
+| PID | Process ID: the number Linux gives each running program. |
+| Foreign position | A position or order on the account without this bot's label — e.g. the owner's manual trade; never modified by the bot. |
 | SIGTERM / SIGINT | Linux stop signals: SIGTERM is what systemd sends to stop a service; SIGINT is Ctrl+C. Bots stop cleanly on both. |
 | Main hours / off-peak | Main hours: Mon–Fri from London open to New York close; off-peak: all other times. |
 | Median / 95th percentile | The middle value / the value that 95 % of readings are at or below — shows typical and near-worst cases while ignoring rare extremes. |

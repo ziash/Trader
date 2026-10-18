@@ -8,7 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
-- **Current state:** Phase 1 in progress (plan v1.11, steps in Section 8.1): steps 1–3 done (connect, stay connected, price feed to disk: `spreads.csv`/`events.csv`); framework reusable for many bots (plan 5.3); step 4 (instance registry) next.
+- **Current state:** Phase 1 in progress (plan v1.12, steps in Section 8.1): steps 1–4 done (connect, stay connected, price feed to disk, instance registry); framework reusable for many bots (plan 5.3); step 5 (probe orders) next.
 
 ## Working rules
 
@@ -58,6 +58,8 @@ Account numbers above are broker login numbers. The API uses `ctidTraderAccountI
 - Runtime data lives outside the repo, under `~/tradebot/` (`config/`, `run/instances/`, `logs/`, `reports/`) — plan Section 6.3. Reference copies of the config files are in the repo's `config/`; the bot reads `~/tradebot/config/`. Keep both in step when a config changes.
 - Testing bots by hand: stop a background bot by its exact PID (`pgrep -f '^dotnet src/Trader.<Bot>'`); a `pkill -f` pattern can match the shell running it.
 - Every order carries a label from `BotIdentity.Label()`: instance ID + optional leg, e.g. `TrendBot-3f9a1c-T1-S1` (plan 5.3, 10.8.2); max 100 characters. Reconcile positions after a restart by bot name, not instance ID.
+- **Ownership rule (plan 5.3):** a bot only modifies/closes orders and positions with its own label, always by `positionId` (never "close all on a symbol"); everything else (the owner's manual trades) is foreign — never touched, but counted for risk.
+- **Orders only from the Primary:** a bot may place orders on an account only while `InstanceRegistry.RoleOn(account)` is Primary (plan 6.4).
 - Every live position must always have a server-side protective order (hedge buy-stop before 1R, stop-loss after) — plan Section 7 protection rule.
 
 ## Before finishing a task

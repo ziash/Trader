@@ -5,7 +5,7 @@ logging and start-up/shut-down live here **once**; bots do not copy them (plan d
 
 | Folder | What it gives a bot |
 |---|---|
-| `Hosting/` | `BotRunner` (start-up, options, Ctrl+C/SIGTERM, exit codes), `BotIdentity` (instance ID, order labels) |
+| `Hosting/` | `BotRunner` (start-up, options, Ctrl+C/SIGTERM, exit codes, `RunTogetherAsync`), `BotIdentity` (instance ID, order labels), `InstanceRegistry` (status files, one Primary per bot per account) |
 | `OpenApi/` | `ConnectionManager` (stay connected: reconnect, dead-line ping, token refresh, account auth), `CTraderSession` (requests/replies on one connection) |
 | `Config/` | `SecretsFile` (reads `~/.config/trader/secrets.env`, demo only), `TokenRefresher` (refresh + atomic save under a lock) |
 | `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line), `LogTap` + `CsvEventSink` (events.csv), `log.Event("Name")` |
@@ -71,6 +71,21 @@ bot.Connection.OnReady = async (session, accounts, ct) =>
 - CSV files: `new DailyCsvWriter(day => path, header)`; format values with `CsvFormat.Time/Num/Int`.
 - events.csv: `var events = new CsvEventSink(); events.AddAccount(ctid, writer); bot.LogTap.Add(events);`
   then `log.Event("Name").Information(...)`; add `.ForAccount(ctid)` to write to one account's file only.
+
+## Several copies of a bot: the registry
+
+```csharp
+var registry = new InstanceRegistry(TradebotPaths.Instances, bot.Identity, bot.Log);
+registry.Register("brokerA", ctid, ["EURUSD"]);
+registry.RoleChanged += (account, role) => { /* start/stop placing orders */ };
+
+await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync);
+// anywhere: if (registry.RoleOn(ctid) == InstanceRole.Primary) { place orders }
+```
+
+- Primary = holder of `run/instances/<BotName>-<account>.primary.lock`; released by Linux the moment the process ends, so a Passive copy takes over within 2 s.
+- `registry.View(ctid)` gives the siblings, this copy's role and its **slot** (0 = oldest) for staggering orders.
+- **Place orders only while Primary**, and follow the ownership rule: only touch orders/positions with your own label, close by `positionId` (plan 5.3).
 
 ## Common options (every bot)
 

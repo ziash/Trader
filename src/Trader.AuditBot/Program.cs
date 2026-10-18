@@ -1,11 +1,13 @@
-// Audit Bot (plan Section 6). Phase 1 step 3: price feed to disk.
+// Audit Bot (plan Section 6). Phase 1 steps 3–4: price feed to disk, instance registry.
 // - Reads ~/tradebot/config/audit.*.json (one per broker).
 // - Stays connected (heartbeat, reconnect, token refresh — Trader.Core).
 // - Subscribes to bid/ask and M5 trendbars for the configured symbols, plus the symbols needed to
 //   convert JPY/GBP costs into USD.
 // - Writes spreads.csv (one row per symbol every 2 min main hours / 5 min off-peak) and events.csv to
 //   ~/tradebot/logs/<broker>/<ctidTraderAccountId>/<instanceId>/<yyyy-MM-dd>/.
-// Registry and probe orders follow in steps 4–5 (plan 8.1). Places no orders.
+// - Registers in ~/tradebot/run/instances/ (plan 6.4): per account, one instance is Primary (may send
+//   probe orders from step 5), the others Passive; a Passive takes over at once if the Primary stops.
+// Probe orders follow in step 5 (plan 8.1). Places no orders.
 //
 // Options: --config-dir <dir> (default ~/tradebot/config), plus the common ones (--help).
 
@@ -56,6 +58,10 @@ return await BotRunner.RunAsync("AuditBot", args, async (bot, ct) =>
             c.Broker, c.BrokerName, c.AccountId, c.Symbols.Count, Folder(c));
     }
     bot.LogTap.Add(events);
+
+    var registry = new InstanceRegistry(TradebotPaths.Instances, bot.Identity, bot.Log);
+    foreach (var c in configs)
+        registry.Register(c.Broker, c.AccountId, c.Symbols);
 
     // Log once per connection and account that M5 trendbars are arriving (they are used from Phase 4).
     var trendbarSeen = new ConcurrentDictionary<long, bool>();
@@ -121,20 +127,13 @@ return await BotRunner.RunAsync("AuditBot", args, async (bot, ct) =>
                 c.Broker, s.Name, s.SymbolId, s.PipSize, s.LotUnits, s.QuoteAsset);
     }
 
-    // Run the connection and the spread logger side by side. When either ends (Ctrl+C/SIGTERM, or an
-    // error), stop the other, wait for both, and let any error through so the bot exits with it.
-    using var stopAll = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    var recording = recorder.RunAsync(stopAll.Token);
-    var connection = bot.Connection.RunAsync(stopAll.Token);
     try
     {
-        await await Task.WhenAny(connection, recording);
+        await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync, recorder.RunAsync);
     }
     finally
     {
-        stopAll.Cancel();
-        try { await connection; } catch (OperationCanceledException) { }
-        try { await recording; } catch (OperationCanceledException) { }
+        registry.Dispose();
         events.Dispose();
     }
 }, new BotOptions { AccountIds = configs.Select(c => c.AccountId).ToList() });
