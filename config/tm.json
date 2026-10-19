@@ -1,0 +1,25 @@
+{
+  // TM — Trade Manually (plan 10.9, docs/bots/tm.md). Live copy: ~/tradebot/config/tm.json
+  // Mains (your unlabelled positions) on these symbols are taken over; everything else stays yours.
+  "accounts": [
+    { "broker": "brokerA", "accountId": 49123893, "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"] },
+    { "broker": "brokerB", "accountId": 49124666, "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"] }
+  ],
+
+  // Hedge level when your order has no stop-loss: this % of the average daily range of the last N days,
+  // but at least spreadFloor × the current spread (10.9.3).
+  "rangePercent": 15,
+  "rangeDays": 3,
+  "spreadFloor": 5,
+
+  // In R = distance from a leg's entry to the hedge level (10.9.4, 10.9.5).
+  "armR": 1,          // A: hedge exit armed once the hedge is this far in profit
+  "hedgeStopR": 0.5,  // B: hedge stop this far behind its fill until armed
+  "warnR": 2,         // pop-up warning
+  "closeR": 3,        // leg and its hedge closed
+
+  "mirrorWithinSeconds": 60,   // a position older than this when TM first sees it: hedges only, no mirror
+
+  // Used only if the broker's daily candles cannot be fetched; in price.
+  "fallbackDistance": { "AUDJPY": 0.12, "EURGBP": 0.0006, "EURUSD": 0.0010, "GBPJPY": 0.22, "BTCUSD": 375, "ETHUSD": 15 }
+}

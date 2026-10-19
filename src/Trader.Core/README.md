@@ -97,9 +97,15 @@ var fill = await session.PlaceMarketOrderAsync(ctid, symbol.SymbolId, ProtoOATra
 // fill.Price, fill.PositionId, fill.Latency, fill.Commission
 await session.ClosePositionAsync(ctid, fill.PositionId, fill.FilledVolume); // always by positionId
 var open = await session.ReconcileAsync(ctid);                              // all open positions and orders
+var stop = await session.PlaceStopOrderAsync(ctid, symbolId, ProtoOATradeSide.Buy, volume, 1.16100, label, clientOrderId);
+await session.AmendStopOrderAsync(ctid, stop.OrderId, 1.16150);            // move a pending stop order
+await session.CancelOrderAsync(ctid, stop.OrderId);
+await session.AmendPositionProtectionAsync(ctid, positionId, stopLoss: 1.16, takeProfit: null); // null removes it
+var days = await session.GetTrendbarsAsync(ctid, symbolId, ProtoOATrendbarPeriod.D1, from, to); // List<Candle>
+var atr = Candle.AverageTrueRange(days, 3);                                 // average daily range incl. gaps
 ```
 
-- Order calls wait for the fill (several replies come back per order) and throw `CTraderApiException` with the broker's code on rejection (e.g. `TRADING_BAD_VOLUME`).
+- Market orders and closes wait for the fill; pending-order and SL/TP calls wait for the server's confirmation (several replies come back per order). All throw `CTraderApiException` with the broker's code on rejection (e.g. `TRADING_BAD_VOLUME`).
 - Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`.
 - Place orders only while Primary on the account, and follow the ownership rule (plan 5.3).
 

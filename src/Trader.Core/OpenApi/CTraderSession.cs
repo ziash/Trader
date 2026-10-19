@@ -6,6 +6,7 @@ using OpenAPI.Net.Helpers;
 using Serilog;
 using Trader.Core.Config;
 using Trader.Core.Logging;
+using Trader.Core.MarketData;
 
 namespace Trader.Core.OpenApi;
 
@@ -226,6 +227,65 @@ public sealed class CTraderSession : IAsyncDisposable
     public Task<OrderFill> ClosePositionAsync(long ctidTraderAccountId, long positionId, long volume, TimeSpan? timeout = null) =>
         ExecuteAsync(new ProtoOAClosePositionReq { CtidTraderAccountId = ctidTraderAccountId, PositionId = positionId, Volume = volume }, timeout);
 
+    /// <summary>
+    /// Places a pending STOP order (a buy-stop above the price or a sell-stop below it) and waits until the server
+    /// accepts it. Returns the accepted order (its <c>OrderId</c> is used to move or cancel it).
+    /// </summary>
+    public Task<ProtoOAOrder> PlaceStopOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOATradeSide side, long volume,
+        double stopPrice, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null)
+    {
+        var req = new ProtoOANewOrderReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            SymbolId = symbolId,
+            OrderType = ProtoOAOrderType.Stop,
+            TradeSide = side,
+            Volume = volume,
+            StopPrice = stopPrice,
+            Label = label,
+            ClientOrderId = clientOrderId,
+        };
+        if (!string.IsNullOrEmpty(comment))
+            req.Comment = comment.Length <= 512 ? comment : comment[..512];
+        return AcknowledgeAsync(req, timeout);
+    }
+
+    /// <summary>Moves a pending stop order to <paramref name="stopPrice"/>; waits for the server's confirmation.</summary>
+    public Task<ProtoOAOrder> AmendStopOrderAsync(long ctidTraderAccountId, long orderId, double stopPrice, TimeSpan? timeout = null) =>
+        AcknowledgeAsync(new ProtoOAAmendOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId, StopPrice = stopPrice }, timeout);
+
+    /// <summary>Cancels a pending order; waits for the server's confirmation.</summary>
+    public Task<ProtoOAOrder> CancelOrderAsync(long ctidTraderAccountId, long orderId, TimeSpan? timeout = null) =>
+        AcknowledgeAsync(new ProtoOACancelOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId }, timeout);
+
+    /// <summary>
+    /// Sets a position's server-side stop-loss and take-profit (absolute prices). The request replaces both:
+    /// null removes that one, so pass the current take-profit to keep it when changing only the stop-loss.
+    /// </summary>
+    public Task<ProtoOAOrder> AmendPositionProtectionAsync(long ctidTraderAccountId, long positionId, double? stopLoss, double? takeProfit, TimeSpan? timeout = null)
+    {
+        var req = new ProtoOAAmendPositionSLTPReq { CtidTraderAccountId = ctidTraderAccountId, PositionId = positionId };
+        if (stopLoss is { } sl)
+            req.StopLoss = sl;
+        if (takeProfit is { } tp)
+            req.TakeProfit = tp;
+        return AcknowledgeAsync(req, timeout);
+    }
+
+    /// <summary>Historical candles from the broker (5 requests/s limit), oldest first.</summary>
+    public async Task<IReadOnlyList<Candle>> GetTrendbarsAsync(long ctidTraderAccountId, long symbolId, ProtoOATrendbarPeriod period, DateTime fromUtc, DateTime toUtc)
+    {
+        var res = await RequestAsync<ProtoOAGetTrendbarsRes>(new ProtoOAGetTrendbarsReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            SymbolId = symbolId,
+            Period = period,
+            FromTimestamp = new DateTimeOffset(fromUtc).ToUnixTimeMilliseconds(),
+            ToTimestamp = new DateTimeOffset(toUtc).ToUnixTimeMilliseconds(),
+        });
+        return res.Trendbar.Select(Candle.From).OrderBy(c => c.OpenUtc).ToList();
+    }
+
     /// <summary>All open positions and pending orders of the account (used to find left-overs after a crash).</summary>
     public Task<ProtoOAReconcileRes> ReconcileAsync(long ctidTraderAccountId) =>
         RequestAsync<ProtoOAReconcileRes>(new ProtoOAReconcileReq { CtidTraderAccountId = ctidTraderAccountId });
@@ -266,6 +326,33 @@ public sealed class CTraderSession : IAsyncDisposable
             }
         }, timeout);
     }
+
+    // Pending-order and SL/TP requests: the first execution event under our clientMsgId is the answer
+    // (ORDER_ACCEPTED, ORDER_REPLACED or ORDER_CANCELLED), or an error / ORDER_REJECTED / ORDER_CANCEL_REJECTED.
+    private Task<ProtoOAOrder> AcknowledgeAsync(IMessage request, TimeSpan? timeout) =>
+        SendAsync<ProtoOAOrder>(request, (message, done) =>
+        {
+            switch (message)
+            {
+                case ProtoOAExecutionEvent { ExecutionType: ProtoOAExecutionType.OrderRejected or ProtoOAExecutionType.OrderCancelRejected } e:
+                    done.TrySetException(new CTraderApiException(string.IsNullOrEmpty(e.ErrorCode) ? e.ExecutionType.ToString() : e.ErrorCode, "request rejected"));
+                    return true;
+                case ProtoOAExecutionEvent e:
+                    done.TrySetResult(e.Order ?? new ProtoOAOrder());
+                    return true;
+                case ProtoOAOrderErrorEvent err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                case ProtoOAErrorRes err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                case ProtoErrorRes err:
+                    done.TrySetException(new CTraderApiException(err.ErrorCode, err.Description));
+                    return true;
+                default:
+                    return false;
+            }
+        }, timeout);
 
     /// <summary>Sends a request with a new clientMsgId and feeds every reply with that ID to <paramref name="onReply"/>
     /// until it returns true; the result is whatever <paramref name="onReply"/> puts into the completion source.</summary>

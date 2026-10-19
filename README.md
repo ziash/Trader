@@ -11,7 +11,7 @@ Semi-automated trend-trading bot for cTrader (C# / .NET, Ubuntu).
 | Bot | What it does | Status | Details |
 |---|---|---|---|
 | **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Running (Phase 2 audit, since 18-Oct-2026) | [docs/bots/audit-bot.md](docs/bots/audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Building: step 1 of 6 done | [docs/bots/tm.md](docs/bots/tm.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Working on demo (steps 1–5 of 6); service next | [docs/bots/tm.md](docs/bots/tm.md) |
 
 New bots get a page from [docs/bots/_template.md](docs/bots/_template.md) and a row here.
 
@@ -30,6 +30,7 @@ dotnet run --project src/Trader.ListAccounts          # add --verbose to see eac
 dotnet run --project src/Trader.AuditBot              # runs until Ctrl+C; --help lists the options
 dotnet run --project src/Trader.AuditBot -- --test-probe-now   # one probe window at once (demo orders)
 dotnet run --project src/Trader.SampleBot -- --account 49123893
+dotnet run --project src/Trader.TM                    # TM: mirrors and hedges your manual cTrader positions (demo)
 dotnet run --project src/Trader.AuditReport -- --date 2026-10-19      # one day's report → ~/tradebot/reports/
 dotnet run --project src/Trader.AuditReport -- --from 2026-10-18 --to 2026-11-01   # summary over a range
 ```

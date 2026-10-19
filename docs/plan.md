@@ -3,7 +3,7 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.20** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.21** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
 | Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
@@ -221,7 +221,9 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
     audit.brokerB.json
     news-releases.json            # NFP/CPI dates (v1.13)
     notifications.json            # which notifications go to which channel, all bots (10.9.7, v1.20)
+    tm.json                       # TM: accounts, symbols, rule values (10.9, v1.21)
   run/instances/                  # live instance registry (heartbeat files)
+  run/tm/<broker>-<ctid>.json     # TM's remembered trades (10.9.9, v1.21)
     brokerA-<accountId>-<instanceId>.json
   logs/
     brokerA/<accountId>/<instanceId>/2026-10-12/
@@ -608,7 +610,7 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 #### 10.9.7 Labels, logs and notifications (Q17)
 
 - **Labels** (Section 5.3): `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN` (hedge of the main), `-HMIR` (hedge of the mirror), e.g. `TM-3f9a1c-P123456789-HMAIN`. The main's `positionId` in the label links every order to its trade across restarts; reconcile by bot name, as for every bot.
-- **Logs:** per account and instance as for the Audit Bot (6.3): `events.csv`, plus `actions.csv` — one row per order TM sends or changes (time, trade, leg, action, side, volume, requested and filled price, slippage, latency, result).
+- **Logs:** per account and instance as for the Audit Bot (6.3): `events.csv`, plus `actions.csv` — one row per order TM sends or changes. *(v1.21)* Columns: `time_utc`, `trade` (P + main's positionId), `symbol`, `role` (MAIN, MIR, HMAIN, HMIR), `action` (OpenMirror, PlaceHedge, MoveOrder, CancelOrder, SetProtection, ClosePosition), `side`, `lots`, `price_req`, `price_fill`, `latency_ms`, `result` (`ok` or the broker's code), `detail`.
 - **Notifications:** a **reusable module in `Trader.Core`** (decision 15): one call for every bot; channels plug in behind it — **desktop pop-ups** on Ubuntu now (`notify-send`), Telegram or others later as one new class; a config file routes events to channels. Logs (journal, `events.csv`) always get everything. Pop-ups for: 2R warning, 3R close, mirror skipped or rejected, hedge rejected, TM stopped or disconnected, news / Friday warnings.
 
 - *(v1.20)* **Built (step 1):** `Trader.Core/Notifications` — `bot.Notify.Info/Warning/Critical(event, title, message, account)`; every call is logged (journal and `events.csv`), then queued to the channels whose filter in `~/tradebot/config/notifications.json` accepts it (`minLevel`, `bots`, `events`, `excludeEvents`, `enabled`; no file = desktop pop-ups from Warning). The same message within 60 s is sent once; a failing channel is logged once and never blocks the bot. Desktop = `notify-send`; Critical stays on screen. Any bot can test with `--test-notification`.
@@ -624,16 +626,22 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 | Mirror entry differs from the main's | A fraction of a pip | Logged in `actions.csv` |
 #### 10.9.9 Build steps *(v1.20)*
 
+*(v1.21)* **How TM is built:** one loop per account, every second (at once after an order event). Each run reads the account's positions and orders (a reconcile, refreshed after every order event and at least every 30 s), and a rule function (`Planner`) compares them with the rules of 10.9.3–10.9.5 and lists what to change: open the mirror, place / move / cancel a hedge, set or remove a stop-loss / take-profit, close a position, notify. Anything that did not work is simply planned again next second, so missed messages, reconnects and restarts heal themselves. What only TM knows — H, each leg's R, hedge results so far, steps done, warnings sent — is saved in `~/tradebot/run/tm/<broker>-<ctid>.json` after every change; TM orders found without a saved trade are rebuilt from the server. Config: `~/tradebot/config/tm.json` (accounts, symbols, rule values, fallback distances). Every order: a row in `actions.csv`.
+
+*(v1.21)* **Found while testing live:**
+- The API **can** change the stop-loss and take-profit of a manual position on both brokers (open item closed).
+- In a fast market the price can pass a hedge's stop (Fh − B) before the stop is set; the broker refuses it (`TRADING_BAD_STOPS`). TM then closes the hedge at market — what the rule intends.
+- A hedge level only a few spreads from the entry makes every hedge cycle cost about 1R (test: BTCUSD with 1R = $10 against a ~$5 spread reached −2R in a minute). TM warns (`TightHedge`) when 1R is under 5 × the spread.
+- TM recognises the orders of an earlier TM copy (labels carry the bot name; reconcile by bot name, 5.3).
+
+
 Each step only on the owner's go; each tested on the demo accounts before the next.
 
 | Step | Content | Status |
 |---|---|---|
 | 1 | Notifications module in `Trader.Core` (10.9.7) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service; both seen on screen by the owner |
-| 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it would do, no orders | Next |
-| 3 | Trade start: mirror, hedges, stop-loss removal, TP copy, ATR distance (10.9.3) | |
-| 4 | Hedge management (10.9.4) | |
-| 5 | Break-even, 2R/3R limits, clean-up when the owner closes (10.9.5) | |
-| 6 | Start-up and news (10.9.6); systemd service | |
+| 2–5 | *(v1.21, owner: "just implement it — we are on demo")* Watcher, trade start, hedge management, break-even, 2R/3R limits, clean-up — built together as one engine (`src/Trader.TM`) | **Done 20-Oct-2026** — 22 scenario tests on a simulated broker; live on both demos: take-over with and without stop-loss (ATR distance), long and short, TP copy, hedge level moved by a new stop-loss, owner closing one leg, restart with saved state, hedge fill → hedge stop → re-hedge → 2R warning (BTCUSD); both accounts flat afterwards |
+| 6 | News and Friday pop-ups, disconnect pop-ups (10.9.6); systemd service and deploy script | Next |
 
 ## 11. Change log
 
@@ -662,6 +670,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.18 | 19-Oct-2026 | **First trading bot = TM (Trade Manually)** (new Section 10.9, decision 15), agreed question by question with the owner: owner opens positions by hand in cTrader; TM mirrors each and hedges both legs; hedge level from the owner's stop-loss or 15 % of the 3-day daily range (min 5 × spread); A = 1R, B = ½R, re-hedge rules; break-even at 1R; trailing off at first; 2R warning / 3R close; owner closes; TP copied; hedge level movable from the chart; both directions, both demos, six symbols; no risk-limit blocking (warnings only); hedges only for mains found after a restart; pop-ups before news / Friday close; reusable notifications module in `Trader.Core`. Ownership-rule exception for TM (5.3); Scenarios 2–5 answered for TM (10.7); Section 9 TM exception; roadmap Phase 4 starts with TM; open items and glossary. Audit Bot unchanged. |
 | v1.19 | 20-Oct-2026 | **One page per bot** (owner's request): `docs/bots/` with an index, a template and pages for the Audit Bot and TM; Bots table in the README; short README in each bot's code folder; rule in 5.3 and CLAUDE.md. The plan stays authoritative for the rules. |
 | v1.20 | 20-Oct-2026 | **TM step 1 done:** reusable notifications module in `Trader.Core` (10.9.7), `notifications.json` (6.3 layout, which now also lists `news-releases.json`), common option `--test-notification`. TM build steps listed (new 10.9.9). |
+| v1.21 | 20-Oct-2026 | **TM steps 2–5 done** in one go (owner: no dry-run stage on demo): engine of 10.9.9 (per-account loop, rule function, saved state, `tm.json`, `actions.csv` columns), tested on a simulated broker and live on both demos. Live findings recorded (10.9.9): SL/TP of manual positions can be changed (open item closed); hedge stop passed in a fast market → close at market; `TightHedge` warning under 5 × spread. New order functions in `Trader.Core` (stop orders, amend, cancel, SL/TP, daily candles, ATR). Disk layout (6.3). Step 6 (news / Friday / disconnect pop-ups, service) next. |
 
 ## 12. Open items / decisions pending
 
@@ -679,7 +688,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.14)* Monitoring while the bot runs: a status script (`scripts/audit-status.sh`) with a systemd timer and desktop alerts, Claude only on alerts — deferred by the owner on 18-Oct-2026. *(v1.15)* The bot now logs `SpreadWide` / `SlippageHigh` warnings (6.2.4), which such a script can look for in `events.csv`.
 - *(v1.14)* Test data: logs from Phase 1 testing were deleted before the audit run started (18-Oct-2026 ~17:10 UTC); everything in `~/tradebot/logs` from then on is real audit data.
 - *(v1.13)* Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
-- *(v1.18)* **TM build:** spec agreed (10.9); code starts when the owner says go. To check while building: the API can amend the stop-loss / take-profit of a manual position (`ProtoOAAmendPositionSLTPReq`) and of a filled hedge, on both brokers.
+- ~~*(v1.18)* **TM build:** to check while building: the API can amend the stop-loss / take-profit of a manual position and of a filled hedge, on both brokers.~~ Done v1.21: works on both (10.9.9).
 - *(v1.18)* TM parameters to tune in the backtest (Phase 3): 15 % of the 3-day range, spread floor 5×, A = 1R, B = ½R, 2R / 3R limits.
 - Price-action entry rules (to be written as a spec in Phase 3). *(v1.18: not needed for TM — the owner chooses the entries.)*
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.

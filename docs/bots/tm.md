@@ -4,9 +4,12 @@ The first trading bot. **You open every position by hand in cTrader; TM mirrors 
 
 | Item | Value |
 |---|---|
-| Status | **Building** — step 1 (notifications) done 20-Oct-2026; step 2 next on the owner's go. Spec: plan v1.18 |
+| Status | **Working on demo** (not yet a service) — steps 1–5 done 20-Oct-2026; step 6 (news / Friday / disconnect pop-ups, systemd service) next. Spec: plan v1.18 |
 | Spec (authoritative) | [plan Section 10.9](../plan.md#109-tm--trade-manually-bot-v118) (decision 15; ownership exception in [5.3](../plan.md#53-one-framework-many-bots-v110)) |
-| Code | `src/Trader.TM` (to be created), shared framework [`src/Trader.Core`](../../src/Trader.Core) |
+| Code | [`src/Trader.TM`](../../src/Trader.TM), shared framework [`src/Trader.Core`](../../src/Trader.Core) |
+| Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
+| Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values) — live copy `~/tradebot/config/tm.json`; notifications: `notifications.json` |
+| Memory | `~/tradebot/run/tm/<broker>-<ctid>.json` (trades TM is managing; survives restarts) |
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only until Phase 5 |
 | Symbols | Per account in TM's config; at first AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD |
 | Bot name / labels | `TM` — `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN`, `-HMIR` (hedges) |
@@ -39,15 +42,28 @@ Through a reusable module in `Trader.Core` ([usage](../../src/Trader.Core/README
 | Step | Content | Status |
 |---|---|---|
 | 1 | Notifications module in `Trader.Core` (desktop pop-ups, routing config) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service; both seen on screen by the owner |
-| 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it *would* do, no orders | Next |
-| 3 | Trade start: mirror, hedges, stop-loss removal, TP copy, ATR distance | — |
-| 4 | Hedge management: B stop, armed exit, re-hedge, hedge level from the chart | — |
-| 5 | Break-even at 1R, 2R/3R limits, clean-up when you close | — |
-| 6 | Start-up and news: mains found late, news / Friday pop-ups; systemd service | — |
+| 2–5 | Watcher, trade start, hedge management, break-even, 2R/3R limits, clean-up — one engine | **Done 20-Oct-2026** — 22 scenario tests; live on both demos |
+| 6 | News / Friday / disconnect pop-ups; systemd service | Next |
 
-## Outputs (planned)
+## Run and operate
 
-Per account and instance, as for the Audit Bot: `events.csv` and `actions.csv` (one row per order TM sends or changes: trade, leg, action, prices, slippage, latency, result).
+Until step 6 makes it a service, run it in a terminal (Ctrl+C stops it; positions keep their hedges and stops on the server):
+
+```bash
+dotnet run --project src/Trader.TM             # from ~/code/Trader
+dotnet run --project src/Trader.TM -- --help
+```
+
+Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnings (2R, mirror skipped, refused orders, tight hedge); everything is in the console and the logs.
+
+## Outputs
+
+```
+~/tradebot/logs/<broker>/<ctid>/<instanceId>/<yyyy-MM-dd>/
+  events.csv    take-overs, hedge fills, arming, break-even, warnings, errors
+  actions.csv   one row per order TM sends or changes: trade, role, action, side, lots, prices, latency, result
+~/tradebot/run/tm/<broker>-<ctid>.json   trades being managed
+```
 
 ## History
 
@@ -55,3 +71,4 @@ Per account and instance, as for the Audit Bot: `events.csv` and `actions.csv` (
 |---|---|---|
 | v1.18 | 19 Oct 2026 | Spec agreed with the owner (20 questions) |
 | v1.20 | 20 Oct 2026 | Step 1 done: notifications module |
+| v1.21 | 20 Oct 2026 | Steps 2–5 done: the trading engine, tested live on both demos |
