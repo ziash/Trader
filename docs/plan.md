@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.17** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.18** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -18,7 +18,7 @@
 7. [Execution environment: Ubuntu](#7-execution-environment-ubuntu)
 8. [Phased roadmap](#8-phased-roadmap)
 9. [Risk guardrails](#9-risk-guardrails-apply-from-phase-4)
-10. [Exit logic: hedge-and-recover](#10-exit-logic-hedge-and-recover-no-stop-loss-for-risk)
+10. [Exit logic: hedge-and-recover](#10-exit-logic-hedge-and-recover-no-stop-loss-for-risk) — including [10.9 TM, the first trading bot](#109-tm--trade-manually-bot-v118)
 11. [Change log](#11-change-log)
 12. [Open items / decisions pending](#12-open-items--decisions-pending)
 13. [Glossary](#13-glossary)
@@ -41,12 +41,13 @@ Resume short-to-mid-term trend trading with a semi-automated setup. The human re
 | 6 | Plan document | Markdown in the private GitHub repo (`docs/plan.md`); Word/PDF exported when needed | Single source of truth next to the code; full change history *(changed v1.3; was .docx in Google Drive)* |
 | 7 | Change control | All future changes go into this document | Version table + change log (Section 11) + Git commits |
 | 8 | Broker candidates | Two of: Pepperstone, IC Markets, FP Markets, Fusion. **Broker A = IC Markets** (cTrader demo created 11-Oct-2026, Hedging, Raw Spread) *(v1.4, v1.5)*; **Broker B = Pepperstone** (cTrader demo created 11-Oct-2026, Hedging) *(v1.6)* | Raw spreads, cTrader, crypto CFDs, regulated groups |
-| 9 | Trading style | Naked price action; real trades are shorts | Trader's own method (ex-Chris Capre student) |
+| 9 | Trading style | Naked price action; real trades are shorts *(v1.18: TM handles longs and shorts, 10.9)* | Trader's own method (ex-Chris Capre student) |
 | 10 | Loss control | Opposite-side hedge order instead of a stop-loss (Section 10) | Trader's design; specified scenario by scenario |
 | 11 | Position structure | Every trade = 2 half-size shorts + 2 half-size hedges, with numbered legs (Section 10.8) *(new v1.3)* | Clean scale-out; each pair has its own exit |
 | 12 | Trade management | Runner leg trails on M5; rotating leg closes when the next pyramid add opens; unlimited adds within an exposure cap *(new v1.3)* | Ride the trend while bounding total exposure |
 | 13 | Audit Bot logs | CSV files that open directly in Google Sheets / Excel; spreads written as one summary row per symbol every 2 min (main hours) or 5 min (off-peak), in pips and USD per lot (Section 6.3) *(new v1.8)* | Easy to export and analyse elsewhere; small files without losing spikes or feed gaps |
 | 14 | Bot framework | All bots share one library, `src/Trader.Core` (connection, tokens, logging, start-up); each bot is its own small project referencing it. No copied connection code (Section 5.3) *(new v1.10)* | A fix reaches every bot at once; all bots must refresh tokens the same way because they share one secrets file |
+| 15 | First trading bot *(new v1.18)* | **TM (Trade Manually):** the owner opens every position by hand in cTrader; TM mirrors it and hedges both legs, manages the hedges, protects at 1R, and cleans up when the owner closes. Longs and shorts. Reusable notifications module in `Trader.Core` (Section 10.9) | The owner keeps every trading decision; the bot does the hedge bookkeeping that is impossible by hand across many positions |
 
 ## 3. How the pieces fit
 
@@ -81,7 +82,7 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 | Stage | Method | Notes |
 |---|---|---|
 | Phase 1–3 | None needed | Audit Bot and backtests run on their own |
-| Phase 4a | Bot config file / small local dashboard | Human sets symbol, direction, risk %; bot executes |
+| Phase 4a | Bot config file / small local dashboard | Human sets symbol, direction, risk %; bot executes. *(v1.18)* **First: TM** — the human opens each position in the cTrader app; TM mirrors and hedges it (Section 10.9). |
 | Phase 4b | TradingView alert → webhook → bot | Needs a paid TradingView plan with webhooks and a secure public HTTPS endpoint (e.g. Cloudflare Tunnel). Bot validates a shared secret before acting. |
 
 > **Guardrail:** a TradingView alert can only request an action. The bot re-checks risk limits, spread and account state before placing any order.
@@ -133,6 +134,7 @@ The owner may run up to ~10 bots at the same time. The functions of Section 5.2 
   - A bot **only modifies or closes positions and orders that carry its own label**, and always closes **by `positionId`**, never "close all on a symbol".
   - Everything else is **foreign** — the owner's manual trades, other apps with access to the account, broker actions such as a stop-out: never modified, logged to `events.csv` when seen, but **counted for risk** (margin, exposure; Section 9), because it uses the same account money.
   - This works because the accounts are **Hedging** (decision 8): every order is its own position, so a manual trade and a bot trade on the same pair and side never merge. Other clients of the same broker are other accounts, which the bot cannot see at all.
+  - **Exception — TM** *(v1.18, owner's decision)*: TM takes over unlabelled positions on the symbols listed in its config (the owner's manual trades meant for TM): it removes or copies their stop-loss and take-profit, and closes one only under its 3R loss limit (10.9.5). Unlisted symbols and other bots' positions stay foreign to TM.
   - Limit: the label is plain text, so someone with access to the account could type a bot-style label on a manual order. The recorded `positionId`s catch this during a run; if manual labels are ever used, the post-restart rule becomes "label matches **and** `positionId` is in the bot's saved list".
 - **Outside this repo:** pack `Trader.Core` as a versioned NuGet package in `~/tradebot/packages` and reference a fixed version, rather than copying the folder.
 
@@ -347,7 +349,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry. *Complete 19-Oct-2026 (v1.16): all 6 steps of Section 8.1.* | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker. *Started 18-Oct-2026 (v1.14), before Phase 1 step 6, by the owner's decision; covers the UK and US clock changes (25-Oct, 1-Nov) and the NFP (6-Nov) and CPI (10-Nov) releases if run to mid-November.* | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
-| 4 | Trend bot + human link | Semi-auto execution, hedge-and-recover exit logic, 4-leg structure, trailing and pyramiding, dashboard/config, then TradingView webhook | Weeks 9–12 |
+| 4 | Trend bot + human link | *(v1.18)* **First: TM** (Trade Manually, Section 10.9) on both demos — built when the owner says go, alongside the Phase 2 audit run; Phase 3 later tunes its parameters (15 %, A, B, 2R/3R). Then: semi-auto execution, hedge-and-recover exit logic, 4-leg structure, trailing and pyramiding, dashboard/config, then TradingView webhook | Weeks 9–12 |
 | 5 | Go-live (small) | VPS deployment, small live account, strict risk limits, review after 1 month | After Phase 4 |
 
 ### 8.1 Phase 1 steps *(v1.8)*
@@ -374,6 +376,7 @@ Each step is built only when the owner says so.
 - No trade if spread exceeds a per-symbol threshold.
 - Effective leverage typically under 1:10 even if the account allows 1:500.
 - **Kill switch:** one command closes all bot positions (including hedges) and stops the service.
+- *(v1.18)* **TM exception:** TM does not block on these limits; when one is broken it warns and still mirrors and hedges (owner's decision, 10.9.3). TM's own limits are per leg: warning at 2R loss, close at 3R (10.9.5).
 
 ## 10. Exit logic: hedge-and-recover (no stop-loss for risk)
 
@@ -445,6 +448,8 @@ Economically, Scenario 1 is the same as: close the short at H, then re-open the 
 - Pip size, spread and slippage are taken from the broker's symbol data, not hard-coded.
 
 ### 10.7 Scenarios still to be defined
+
+*(v1.18)* For **TM**, Scenarios 2–5 are answered in Section 10.9: Scenario 2 → hedge stop ½R below its fill, then re-hedge at H (10.9.4); Scenario 3 → each cycle's cost known, bounded by 2R/3R (10.9.5); Scenario 4 → 3R loss limit closes the leg (10.9.5); Scenario 5 → pop-up before news and the Friday close (10.9.6). The list below stays open for a fully automatic trend bot.
 
 - **Scenario 2** — hedge fills, then price falls back before the hedge exit is armed (price never reaches Fh + A).
 - **Scenario 3** — chop around H (whipsaw): hedge opens and closes repeatedly; each cycle costs spread.
@@ -520,6 +525,95 @@ Effect: the position pyramids by half a trade per add. Older runners sit on stop
 | M5 trailing exits early in a healthy pullback | Runner closes before the trend ends | Accepted; next retracement add re-enters the trend |
 | Whipsaw / hedge exit not arming (Scenarios 2–3) | Small loss or locked position on a trade | Accepted by trader; rules to follow in Scenarios 2–3 |
 
+### 10.9 TM — Trade Manually bot *(v1.18)*
+
+*Agreed with the owner on 19-Oct-2026 (20 questions, one at a time). TM is the **first trading bot**. The Audit Bot (Section 6) is unchanged and keeps running.*
+
+#### 10.9.1 Idea
+
+The owner opens every position **by hand in the cTrader app** (desktop, web or mobile). **TM** (`src/Trader.TM`, bot name `TM`) listens to the account; as soon as a new manual position appears on a listed symbol, TM **mirrors** it (opens a second position of the same side and size) and **hedges both**, then manages the hedges by the rules below. Closing trades is the owner's job; TM cleans up around whatever the owner closes. TM uses the shared framework (`Trader.Core`, Section 5.3): connection, reconnect, tokens, orders, logging, instance registry. **Demo accounts only** until Phase 5.
+
+| Term | Meaning |
+|---|---|
+| Main | The owner's manual position (no label) |
+| Mirror | TM's copy: same symbol, side and volume, opened at market just after the main is seen |
+| Hedge | A pending stop order on the opposite side, one per short/long leg (main and mirror each have their own), same volume as its leg; becomes a position when it fills |
+| E | A leg's own entry price (main and mirror differ by the fill difference) |
+| H | Hedge level — the price of both hedge orders |
+| 1R | Per leg: \|H − E\| |
+| Fh | Price a hedge actually filled at |
+| A | Arming distance = **1R** (Q8) |
+| B | Hedge stop distance before arming = **½R** (Q10) |
+
+Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for a **long** a **sell-stop below** (Q2). Below, "up/above" is written for a short.
+
+#### 10.9.2 Scope (Q1, Q16, Q18)
+
+- Accounts: **both demos**, IC Markets 49123893 and Pepperstone 49124666, each managed separately with its own symbol list in TM's config.
+- Symbols: per account in the config; at first the Audit Bot's six (AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD).
+- TM takes over **positions without a label on a listed symbol**. Positions on unlisted symbols stay fully the owner's. Positions with another bot's label (e.g. Audit Bot probes) are never touched.
+- **Exception to the ownership rule (5.3), owner's decision:** TM modifies the main (removes or copies its stop-loss and take-profit) — the only case in which a bot touches a position it did not open. TM never closes the main except under the 3R rule (10.9.5).
+
+#### 10.9.3 Trade start (Q3, Q4, Q7)
+
+| Step | Event | TM action |
+|---|---|---|
+| 1 | Owner opens a main, e.g. 0.5 lot short, with or without a stop-loss | Seen from the account's execution events (within about a second) |
+| 2 | | **H:** the main's stop-loss if set; otherwise E + D, where **D = 15 % of the average daily range of the last 3 completed daily candles** (ATR(3) on D1 from the broker's own candles), at least **5 × the current spread**; if the history cannot be fetched, a fixed per-symbol fallback from the config (and a warning) |
+| 3 | | Opens the **mirror** at market: same side and volume, with a server-side stop-loss at H so it is never unprotected |
+| 4 | | Places **two hedge stop orders at H**, one per leg, each of that leg's volume |
+| 5 | Both hedges confirmed by the server | Removes the stop-loss from the main and from the mirror |
+
+- If the main has a **take-profit**, TM copies it to the mirror and follows later changes (Q14).
+- If the mirror is rejected, the main still gets its hedge (and a warning). Risk limits (Section 9) do **not** block TM: it always mirrors and hedges; when a limit is broken it only warns (Q12, owner's decision: "Trade Manually — if I am opening, just follow the rules").
+- Every further manual position is a **separate trade** with its own mirror and hedges; TM never opens adds of its own and never rotates (rules R4, R5 of 10.8 are not used by TM) (Q6).
+
+#### 10.9.4 Hedge management (Q8, Q9, Q10)
+
+| Situation | TM action |
+|---|---|
+| A hedge fills at Fh | Puts a stop on the hedge at **Fh − B** (½R below its fill). The leg's loss is now frozen |
+| Price reaches **Fh + A** (1R beyond the fill) | Moves the hedge's stop up to **X = Fh + 1 pip** (the hedge exit is armed; Scenario 1) |
+| Hedge closed by its **B stop** (price fell back before arming; Scenario 2) | Places a new hedge stop order at the original **H**. Cost of the cycle ≈ B + spread |
+| Hedge closed at **X** (the wick reversed) | Places a new hedge stop order **1R above the current price** (a buy-stop cannot sit below the price); as soon as price is back below the original H, moves it down to **H** |
+| Owner sets a **new stop-loss** on the main, or **drags a hedge order** | Moves both legs' pending hedges to that level (and removes the stop-loss again). Accepted only on the protective side of the entry; ignored while a hedge of that trade is filled (Q15) |
+
+Every leg always has a protective order on the server: the hedge order (pending), the hedge's own stop (filled), or a stop-loss (after 1R).
+
+#### 10.9.5 Protection, limits and closing (Q4, Q5, Q11, Q19)
+
+| Rule | Trigger | TM action |
+|---|---|---|
+| Break-even (R2) | A leg is **1R in profit** from its own entry | **First** a server-side stop-loss at its entry on that leg, **then** cancels its hedge order. The leg can no longer lose |
+| Trailing (R3) | Per-symbol switch, **off at first** | When switched on: 10.8.3 R3 (M5 lower highs). Needs the swing definition (open item) |
+| Loss warning | A leg's loss (its own open P/L plus its hedges' realised and open P/L) reaches **2R** | Warning and pop-up |
+| Loss limit | It reaches **3R** | Closes that leg and its hedge (cancels a pending one), accepting the loss; pop-up |
+| Owner closes a leg (or its stop-loss / take-profit closes it) | | Removes that leg's hedge (cancel if pending, close if filled) and stop; the **other leg carries on**, still managed. Closing both = full exit; closing one = half off |
+
+The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned by the backtest (Phase 3).
+
+#### 10.9.6 Start-up, restarts and news (Q13, Q20)
+
+- **TM's own orders** (mirrors, hedges) are found again after a restart from their labels and linked to their main by its `positionId` (labels below).
+- **A main TM did not see opened** (TM was down): **hedges only, no mirror**, plus a warning; if price is already beyond H, the hedge opens at market at once.
+- **News and weekend:** a pop-up **10 minutes before each NFP/CPI release** (`news-releases.json`, shared with the Audit Bot) and **10 minutes before the Friday close** (17:00 New York), listing the open TM trades. No automatic action; hedge fills beyond H are logged with their slippage (Scenario 5).
+
+#### 10.9.7 Labels, logs and notifications (Q17)
+
+- **Labels** (Section 5.3): `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN` (hedge of the main), `-HMIR` (hedge of the mirror), e.g. `TM-3f9a1c-P123456789-HMAIN`. The main's `positionId` in the label links every order to its trade across restarts; reconcile by bot name, as for every bot.
+- **Logs:** per account and instance as for the Audit Bot (6.3): `events.csv`, plus `actions.csv` — one row per order TM sends or changes (time, trade, leg, action, side, volume, requested and filled price, slippage, latency, result).
+- **Notifications:** a **reusable module in `Trader.Core`** (decision 15): one call for every bot; channels plug in behind it — **desktop pop-ups** on Ubuntu now (`notify-send`), Telegram or others later as one new class; a config file routes events to channels. Logs (journal, `events.csv`) always get everything. Pop-ups for: 2R warning, 3R close, mirror skipped or rejected, hedge rejected, TM stopped or disconnected, news / Friday warnings.
+
+#### 10.9.8 Accepted risks
+
+| Risk | Effect | Bounded by |
+|---|---|---|
+| Price jumps past H (news, gaps) | Hedge fills far beyond H; one jump can pass 3R | Pop-up before news / Friday close; slippage logged |
+| Chop around H | Each hedge cycle costs ≈ B + spread, or adds up to 1R after an armed exit | 2R warning, 3R limit |
+| TM down when the owner opens a trade without a stop-loss | Main unprotected until TM is back | Set a stop-loss on manual orders; TM hedges at once on start |
+| Risk limits not enforced | Many mirrored trades can exceed leverage 1:10 / margin level 300 % | Warning only (owner's choice) |
+| Mirror entry differs from the main's | A fraction of a pip | Logged in `actions.csv` |
+
 ## 11. Change log
 
 Every change is recorded here, the version number in the header table is increased, and the change is committed to Git with a matching message.
@@ -544,6 +638,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.15 | 19-Oct-2026 | **Alerts and clearer probe summary** (new 6.2.4), owner's request after the first audit day: `SpreadWide`/`SpreadNormal` and `SlippageHigh` warnings with limits per broker in `audit.<broker>.json` (forex pips, crypto USD per lot, per-symbol overrides); probe summary per asset class with the worst fill named, replacing the single slippage average that mixed forex and crypto pips. First audit day: all 3 windows × 24 orders filled on both brokers; one connection drop (44 s, reconnected automatically). |
 | v1.16 | 19-Oct-2026 | **Phase 1 step 6 done; Phase 1 complete.** Daily report tool `src/Trader.AuditReport` (new 6.5.1), owner accepted the recommendations: separate read-only program; systemd timer daily at 00:15 UTC making any missing reports (Section 7); UTC calendar days; one row per broker × symbol × period with both brokers on adjacent lines; `--from/--to` for the final summary; 18-Oct report built at once. Instance folders of one day merged. Disk layout (6.3) shows `summary-*.csv` and `bin/`. |
 | v1.17 | 19-Oct-2026 | Pepperstone demo account type confirmed **Razor** (raw spread + commission) by the owner; open item closed. Both audited accounts are the raw-spread type. |
+| v1.18 | 19-Oct-2026 | **First trading bot = TM (Trade Manually)** (new Section 10.9, decision 15), agreed question by question with the owner: owner opens positions by hand in cTrader; TM mirrors each and hedges both legs; hedge level from the owner's stop-loss or 15 % of the 3-day daily range (min 5 × spread); A = 1R, B = ½R, re-hedge rules; break-even at 1R; trailing off at first; 2R warning / 3R close; owner closes; TP copied; hedge level movable from the chart; both directions, both demos, six symbols; no risk-limit blocking (warnings only); hedges only for mains found after a restart; pop-ups before news / Friday close; reusable notifications module in `Trader.Core`. Ownership-rule exception for TM (5.3); Scenarios 2–5 answered for TM (10.7); Section 9 TM exception; roadmap Phase 4 starts with TM; open items and glossary. Audit Bot unchanged. |
 
 ## 12. Open items / decisions pending
 
@@ -561,10 +656,12 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.14)* Monitoring while the bot runs: a status script (`scripts/audit-status.sh`) with a systemd timer and desktop alerts, Claude only on alerts — deferred by the owner on 18-Oct-2026. *(v1.15)* The bot now logs `SpreadWide` / `SlippageHigh` warnings (6.2.4), which such a script can look for in `events.csv`.
 - *(v1.14)* Test data: logs from Phase 1 testing were deleted before the audit run started (18-Oct-2026 ~17:10 UTC); everything in `~/tradebot/logs` from then on is real audit data.
 - *(v1.13)* Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
-- Price-action entry rules (to be written as a spec in Phase 3).
+- *(v1.18)* **TM build:** spec agreed (10.9); code starts when the owner says go. To check while building: the API can amend the stop-loss / take-profit of a manual position (`ProtoOAAmendPositionSLTPReq`) and of a filled hedge, on both brokers.
+- *(v1.18)* TM parameters to tune in the backtest (Phase 3): 15 % of the 3-day range, spread floor 5×, A = 1R, B = ½R, 2R / 3R limits.
+- Price-action entry rules (to be written as a spec in Phase 3). *(v1.18: not needed for TM — the owner chooses the entries.)*
 - Hedge design: test H = E + ~10 pips as the working assumption; choose the arming distance A (must be smaller than typical wick extensions beyond Fh). Full-size hedge per pair: confirmed v1.3.
 - Hedge design: define Scenarios 2–5 (Section 10.7).
-- *(v1.3)* Fix the exact M5 swing definition for "last lower high" and the stop buffer (pips above the high).
+- *(v1.3)* Fix the exact M5 swing definition for "last lower high" and the stop buffer (pips above the high). *(v1.18: also needed before TM's trailing switch is turned on.)*
 - *(v1.3)* Confirm the 21 EMA retracement trigger: candle close at/above the EMA vs. a touch of the EMA.
 - *(v1.3)* Confirm exposure-cap values (effective leverage 1:10, margin level 300%) after the Audit Bot shows real margin requirements.
 - Account type: zero-commission (Standard, spread-only) vs raw-spread + commission for the hedge design — compare using Audit Bot data. *(v1.5: Broker A demo is Raw Spread.)* *(v1.17: Broker B demo is Razor — both raw spread + commission; a Standard account is not being audited.)*
@@ -581,6 +678,8 @@ Every change is recorded here, the version number in the header table is increas
 | Protobuf | Compact binary message format (Google Protocol Buffers). |
 | OAuth | Token-based authorisation; the bot never stores your account password. |
 | Slippage | Difference between requested price and actual fill price. |
+| ATR (Average True Range) | The average size of a candle's range (high to low, including any gap from the previous close) over recent candles. TM uses the last 3 daily candles to size its default hedge distance. *(v1.18)* |
+| TM, main, mirror | TM = Trade Manually bot (10.9). Main = the owner's manual position; mirror = TM's same-size copy of it. Each has its own hedge. *(v1.18)* |
 | Trendbar | A candle (open, high, low, close) for a given timeframe. |
 | Webhook | An HTTP POST sent automatically by one system (e.g. TradingView) to a URL when an event fires. |
 | systemd service | Linux mechanism that keeps a program running in the background and restarts it on failure. |

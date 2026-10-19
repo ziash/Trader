@@ -8,6 +8,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 
 - **Single source of truth:** `docs/plan.md`. If code and plan disagree, stop and ask; do not silently pick one.
 - **Environment setup record:** `docs/setup.md`; check with `bash scripts/check-env.sh`.
+- **Next bot: TM (Trade Manually)** — spec agreed in plan v1.18, Section 10.9 (owner opens positions in cTrader; TM mirrors and hedges them). Not built yet: code only on the owner's go. TM is the one exception to the ownership rule (plan 5.3): it modifies the owner's unlabelled positions on its listed symbols.
 - **Current state:** Phase 1 complete (plan v1.16, steps in Section 8.1): connect, stay connected, price feed to disk, instance registry, probe orders, alerts (6.2.4), daily report (6.5.1); framework reusable for many bots (plan 5.3). **Phase 2 audit run in progress since 18-Oct-2026**: the Audit Bot runs as the systemd user service `trader-auditbot` from `~/tradebot/bin/AuditBot` — do not stop or restart it, or delete anything in `~/tradebot/logs`, without the owner's OK. Deploy code changes with `scripts/deploy-auditbot.sh` (it does not restart the bot). The daily report runs from the timer `trader-auditreport.timer` (00:15 UTC, `~/tradebot/bin/AuditReport`, deploy with `scripts/deploy-auditreport.sh`); it only reads the logs, so redeploying it needs no OK. Don't overwrite reports in `~/tradebot/reports/` with partial ones (a day is complete only after 00:00 UTC); preview into a scratch folder with `--reports <dir>`.
 
 ## Working rules
