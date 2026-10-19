@@ -628,7 +628,7 @@ Each step only on the owner's go; each tested on the demo accounts before the ne
 
 | Step | Content | Status |
 |---|---|---|
-| 1 | Notifications module in `Trader.Core` (10.9.7) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service |
+| 1 | Notifications module in `Trader.Core` (10.9.7) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service; both seen on screen by the owner |
 | 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it would do, no orders | Next |
 | 3 | Trade start: mirror, hedges, stop-loss removal, TP copy, ATR distance (10.9.3) | |
 | 4 | Hedge management (10.9.4) | |
