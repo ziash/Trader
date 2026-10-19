@@ -66,7 +66,7 @@ bot.Connection.OnReady = async (session, accounts, ct) =>
 };
 ```
 
-- `SymbolInfo` gives `PipSize`, `LotUnits` (100,000 for forex, 1 coin for crypto), `Digits`, `QuoteAsset`, `Schedule`.
+- `SymbolInfo` gives `PipSize`, `LotUnits` (100,000 for forex, 1 coin for crypto), `IsForex`, `Digits`, `QuoteAsset`, `Schedule`.
 - `catalog.FindConversion("JPY", "USD")` → the symbol to subscribe for converting costs (e.g. USDJPY, divide).
 - CSV files: `new DailyCsvWriter(day => path, header)`; format values with `CsvFormat.Time/Num/Int`.
 - events.csv: `var events = new CsvEventSink(); events.AddAccount(ctid, writer); bot.LogTap.Add(events);`

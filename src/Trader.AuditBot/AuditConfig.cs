@@ -12,7 +12,8 @@ namespace Trader.AuditBot;
 ///   "brokerName": "IC Markets",
 ///   "accountId": 49123893,               // ctidTraderAccountId
 ///   "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"],
-///   "symbolNames": { "AVAXUSD": "AVXUSD" }   // only where the broker's name differs
+///   "symbolNames": { "AVAXUSD": "AVXUSD" },  // only where the broker's name differs
+///   "alerts": { "forexSpreadPips": 2 }       // optional, see AlertLimits
 /// }
 /// </code>
 /// </summary>
@@ -21,8 +22,12 @@ public sealed partial record AuditConfig(
     string BrokerName,
     long AccountId,
     IReadOnlyList<string> Symbols,
-    IReadOnlyDictionary<string, string>? SymbolNames = null)
+    IReadOnlyDictionary<string, string>? SymbolNames = null,
+    AlertLimits? Alerts = null)
 {
+    /// <summary>The alert limits, with defaults for anything not in the file.</summary>
+    public AlertLimits Limits => Alerts ?? AlertLimits.Default;
+
     /// <summary>Our symbol name → the broker's name for it.</summary>
     public IReadOnlyDictionary<string, string> BrokerSymbolNames =>
         Symbols.ToDictionary(s => s, s => SymbolNames?.GetValueOrDefault(s) ?? s);
@@ -76,6 +81,7 @@ public sealed partial record AuditConfig(
             throw new AuditConfigException($"{file}: \"symbols\" must list at least one symbol");
         if (Symbols.Distinct(StringComparer.OrdinalIgnoreCase).Count() != Symbols.Count)
             throw new AuditConfigException($"{file}: \"symbols\" contains a duplicate");
+        Alerts?.Validate(file, Symbols);
         return this;
     }
 

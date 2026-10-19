@@ -160,12 +160,39 @@ public sealed class ProbeRunner(
 
         var filled = results.Where(r => r.Result == "filled").ToList();
         alog.Event("ProbeWindowDone").Information(
-            "{Broker} {Window}: {Filled} filled, {Failed} not filled; latency avg {Latency:0} ms; slippage avg {Slip:0.00} pips",
+            "{Broker} {Window}: {Filled} filled, {Failed} not filled; latency avg {Latency:0} ms, max {MaxLatency:0} ms",
             c.Broker, window.Name, filled.Count, results.Count - filled.Count,
-            filled.Count > 0 ? filled.Average(r => r.LatencyMs) : 0, filled.Count > 0 ? filled.Average(r => r.SlipPips ?? 0) : 0);
+            filled.Count > 0 ? filled.Average(r => r.LatencyMs) : 0, filled.Count > 0 ? filled.Max(r => r.LatencyMs) : 0);
+        foreach (var line in SlippageSummary(filled))
+            alog.Event("ProbeSlippage").Information("{Broker} {Window} {Line}", c.Broker, window.Name, line);
     }
 
-    private sealed record ProbeResult(string Result, double LatencyMs, double? SlipPips);
+    /// <summary>
+    /// One result per order sent. <see cref="Slip"/> is in the symbol's alert unit: pips for forex, USD per lot
+    /// for crypto (a crypto "pip" differs by broker, so pips cannot be compared or averaged across symbols).
+    /// </summary>
+    internal sealed record ProbeResult(string Result, double LatencyMs, string Symbol, string Action, string Side, Limit Limit, double? Slip)
+    {
+        public bool OverLimit => Slip < -Limit.Slip;
+    }
+
+    /// <summary>
+    /// One line per asset class (forex in pips, crypto in USD per lot): average, the worst fill by name,
+    /// and how many fills were worse than their alert limit. Averages alone would hide one bad fill.
+    /// </summary>
+    internal static IEnumerable<string> SlippageSummary(IReadOnlyList<ProbeResult> filled)
+    {
+        foreach (var group in filled.Where(r => r.Slip is not null).GroupBy(r => r.Limit.InPips).OrderByDescending(g => g.Key))
+        {
+            var unit = group.First().Limit;
+            var worst = group.MinBy(r => r.Slip!.Value)!;
+            var worstText = worst.Slip < 0
+                ? $"worst {unit.ShowSigned(worst.Slip!.Value)} ({worst.Symbol} {worst.Action} {worst.Side})"
+                : "no fill worse than requested";
+            yield return $"{(group.Key ? "forex" : "crypto")}: slippage avg {unit.ShowSigned(group.Average(r => r.Slip!.Value))}, {worstText}; " +
+                         $"{group.Count(r => r.OverLimit)} of {group.Count()} fills over the alert limit";
+        }
+    }
 
     /// <summary>One probe: open at market, then close by positionId. Returns one result per order sent.</summary>
     private async Task<List<ProbeResult>> ProbeOnceAsync(CTraderSession session, AuditConfig c, SymbolInfo symbol, ProtoOATradeSide side, ProbeWindow window)
@@ -272,10 +299,11 @@ public sealed class ProbeRunner(
         double? slipPrice = fill is null ? null : Slippage(side, requested, fill.Price);
         var usd = market.UsdPerPriceUnit(c.AccountId, symbol) * symbol.LotUnits;
         var result = fill is not null ? "filled" : error is "TIMEOUT" or "DISCONNECTED" ? "error" : "rejected";
+        var sideText = side == ProtoOATradeSide.Buy ? "buy" : "sell";
 
         writers[c.AccountId].Write(sent,
         [
-            CsvFormat.Time(sent), window.Name, action, symbol.Name, side == ProtoOATradeSide.Buy ? "buy" : "sell",
+            CsvFormat.Time(sent), window.Name, action, symbol.Name, sideText,
             CsvFormat.Num(symbol.LotsForVolume(volume), 2),
             CsvFormat.Num(requested, symbol.Digits), CsvFormat.Num(fill?.Price, symbol.Digits),
             CsvFormat.Num(slipPrice / symbol.PipSize, 2), CsvFormat.Num(slipPrice * usd, 2),
@@ -283,7 +311,16 @@ public sealed class ProbeRunner(
             result, error ?? "", fill is null ? (positionId is { } p ? CsvFormat.Int(p) : "") : CsvFormat.Int(fill.PositionId),
             fill?.Label ?? label ?? identity.Label(),
         ]);
-        return new ProbeResult(result, fill?.Latency.TotalMilliseconds ?? 0, slipPrice / symbol.PipSize);
+
+        var limit = c.Limits.For(symbol);
+        var probe = new ProbeResult(result, fill?.Latency.TotalMilliseconds ?? 0, symbol.Name, action, sideText, limit,
+            limit.InPips ? slipPrice / symbol.PipSize : slipPrice * usd);
+        if (probe.OverLimit)
+            log.ForAccount(c.AccountId).Event("SlippageHigh").Warning(
+                "{Broker} {Window}: {Symbol} {Action} {Side} filled {Slip} worse than requested (limit {Limit}); requested {Requested}, filled {Filled}",
+                c.Broker, window.Name, symbol.Name, action, sideText, limit.Show(-probe.Slip!.Value), limit.Show(limit.Slip),
+                CsvFormat.Num(requested, symbol.Digits), CsvFormat.Num(fill!.Price, symbol.Digits));
+        return probe;
     }
 
     /// <summary>Requested minus filled price, signed so that positive = better for us, negative = worse.</summary>
@@ -292,7 +329,7 @@ public sealed class ProbeRunner(
 
     /// <summary>Backup stop-loss distance (1/100,000 price units): 50 pips for forex, 2 % of the price otherwise.</summary>
     public static long Backstop(SymbolInfo symbol, double price) =>
-        symbol.RelativeDistance(symbol.LotUnits == 100_000
+        symbol.RelativeDistance(symbol.IsForex
             ? BackstopForexPips * symbol.PipSize
             : price * BackstopOtherPercent / 100);
 

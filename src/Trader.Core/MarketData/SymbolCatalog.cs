@@ -28,6 +28,9 @@ public sealed record SymbolInfo(
 
     public bool IsTradable => Enabled && TradingMode == ProtoOATradingMode.Enabled;
 
+    /// <summary>Forex pairs have 100,000 units per lot; crypto (1 coin per lot) and others do not.</summary>
+    public bool IsForex => LotUnits == 100_000;
+
     /// <summary>Order volume in Open API units for <paramref name="lots"/>, rounded down to the step; at least the minimum.</summary>
     public long VolumeForLots(double lots)
     {

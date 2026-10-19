@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.14** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.15** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.14):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.15):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -191,6 +191,19 @@ Per window, each symbol gets one buy probe and one sell probe, a few seconds apa
 | Off-peak | All other times, including weekends (crypto only — forex is closed from Fri 17:00 to Sun 17:00 New York) | **5 min** |
 
 Each row summarises all ticks in its interval (min / average / median / 95th-percentile / max spread, tick count, longest gap), so short spikes and gaps between rows are not lost. *(v1.11)* Ticks are placed in intervals by the **server's timestamp**. A row is skipped only when there were no ticks **and** the market was closed during the interval, per the broker's own trading schedule for the symbol (weekend, and the daily break around 17:00 New York: ~2 min for forex, up to 6 min for crypto). No ticks while the market is open gives a row with `ticks` = 0 — a feed gap (including time the bot itself was disconnected; `events.csv` shows which). The last price the server re-sends on every subscribe carries its old timestamp and is ignored. Events (connect, reconnect, errors, rejections) are written when they happen, not on a timer. The 10-second Open API heartbeat (a Spotware protocol requirement) and the 10-second registry status file (Section 6.4, overwritten in place) are not logs and stay at 10 s.
+
+#### 6.2.4 Alerts and probe summary *(v1.15)*
+
+Wide spreads and bad fills are **reported as warnings** (journal and `events.csv`), not only kept in the CSV rows. Limits are per broker in `audit.<broker>.json` (`"alerts"`, optional; defaults below). Forex in **pips**; crypto in **USD per lot**, because a crypto "pip" differs by broker (IC BTCUSD pip = $0.01, Pepperstone $0.10) and cannot be compared or averaged across symbols.
+
+| Alert | Event | Fires when | Default limit |
+|---|---|---|---|
+| Spread wide | `SpreadWide` (warning), then `SpreadNormal` (info) | A `spreads.csv` row's **average** spread is above the limit. Raised once; cleared once when back under the limit, with duration and peak (like an alarm raise/clear) | Forex 2 pips; crypto $50/lot; ETHUSD $10/lot |
+| Slippage high | `SlippageHigh` (warning) | One probe fill (open or close) **worse** than requested by more than the limit. Better-than-requested fills are not alerted | Forex 1 pip; crypto $10/lot; ETHUSD $3/lot |
+
+Defaults chosen from the first day of data (19-Oct-2026): forex averages under 1 pip on both brokers, BTCUSD $5–15, ETHUSD $2–3 per lot. Spreads above 2 pips were seen only around the Sunday reopen; the daily break around 17:00 New York will also raise `SpreadWide` — this is real and is reported.
+
+**Probe window summary** (`ProbeWindowDone`, `ProbeSlippage`): fills, latency average and maximum; then one line per asset class with average slippage, the **worst fill by name**, and how many fills were over the limit, e.g. `forex: slippage avg +0.06 pips, worst -0.30 pips (AUDJPY close buy); 0 of 16 fills over the alert limit`. A single average over all symbols is not used: it mixed units and let good and bad fills cancel out.
 
 ### 6.3 Per-broker logging on disk
 
@@ -501,6 +514,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.12 | 18-Oct-2026 | **Order ownership rule** added (5.3): bot touches only orders/positions with its own label, closes by `positionId`, records its fills; foreign positions never modified but counted for risk; relies on Hedging accounts. **Phase 1 step 4 done** (instance registry, 6.4): owner chose **lock-file Primary** instead of promotion after the 30 s heartbeat timeout — instant takeover, never two Primaries on one machine; roles per account; slots for staggering; dead instances also detected by PID; registry in `Trader.Core` for all bots. |
 | v1.13 | 18-Oct-2026 | **Phase 1 step 5 done** (probe orders, 6.2.2): owner accepted the recommendations — news windows 2 min before / 5 s after / 5 min after (NFP/CPI dates from BLS to Feb 2027 in `news-releases.json`); **open and close each a row** in `probes.csv` with new columns `action`, `commission_usd`, `position_id` (6.3.1); **backup stop-loss** on every probe (50 pips forex, 2 % crypto; note under the protection rule, Section 7). Probe procedure, left-over clean-up and first results recorded in 6.2.2. Order functions (market order, close by positionId, reconcile) in `Trader.Core`. Open item closed (news offsets); new one: dates after Feb 2027. |
 | v1.14 | 18-Oct-2026 | **Send time in the order comment** (5.3, owner's choice; label unchanged). **Deployment** (Section 7): systemd user service running a published Release build from `~/tradebot/bin/AuditBot`, deploy script, laptop-sleep note. **Phase 2 audit run started** (Section 8) before step 6, by the owner's decision; Phase 1 test logs deleted first. Monitoring script deferred (open items). |
+| v1.15 | 19-Oct-2026 | **Alerts and clearer probe summary** (new 6.2.4), owner's request after the first audit day: `SpreadWide`/`SpreadNormal` and `SlippageHigh` warnings with limits per broker in `audit.<broker>.json` (forex pips, crypto USD per lot, per-symbol overrides); probe summary per asset class with the worst fill named, replacing the single slippage average that mixed forex and crypto pips. First audit day: all 3 windows × 24 orders filled on both brokers; one connection drop (44 s, reconnected automatically). |
 
 ## 12. Open items / decisions pending
 
@@ -515,7 +529,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.9)* Accepted risk: if the connection drops after the server has refreshed the tokens but before the reply arrives, the new pair is lost and the old refresh token no longer works. The bot then stops with a clear message; fix by getting new tokens in the Open API Playground. Rare (refresh about once a month).
 - ~~*(v1.8)* Crypto lot for USD figures: confirm "1 lot = 1 coin" for BTCUSD/ETHUSD.~~ Done v1.11: confirmed from both brokers' symbol data.
 - ~~*(v1.8)* News probes: confirm the offsets and fill in the NFP/CPI dates.~~ Done v1.13: 2 min before, 5 s after, 5 min after (owner accepted); dates to Feb 2027 in `news-releases.json`.
-- *(v1.14)* Monitoring while the bot runs: a status script (`scripts/audit-status.sh`) with a systemd timer and desktop alerts, Claude only on alerts — deferred by the owner on 18-Oct-2026.
+- *(v1.14)* Monitoring while the bot runs: a status script (`scripts/audit-status.sh`) with a systemd timer and desktop alerts, Claude only on alerts — deferred by the owner on 18-Oct-2026. *(v1.15)* The bot now logs `SpreadWide` / `SlippageHigh` warnings (6.2.4), which such a script can look for in `events.csv`.
 - *(v1.14)* Test data: logs from Phase 1 testing were deleted before the audit run started (18-Oct-2026 ~17:10 UTC); everything in `~/tradebot/logs` from then on is real audit data.
 - *(v1.13)* Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
 - Price-action entry rules (to be written as a spec in Phase 3).

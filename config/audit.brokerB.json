@@ -5,5 +5,16 @@
   "accountId": 49124666,
   "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"],
   // Only where the broker's symbol name differs from ours, e.g. "AVAXUSD": "AVAXUSD"
-  "symbolNames": {}
+  "symbolNames": {},
+  // Alert limits (plan 6.2.4): a warning in the journal and events.csv when crossed.
+  // Spread = average over one spreads.csv row; slippage = one probe fill worse than requested.
+  // Forex in pips; crypto in USD per lot (1 coin). Normal on 19-Oct: forex under 1 pip,
+  // BTCUSD $5-15, ETHUSD $2-3, hence the ETHUSD override.
+  "alerts": {
+    "forexSpreadPips": 2,
+    "forexSlipPips": 1,
+    "cryptoSpreadUsd": 50,
+    "cryptoSlipUsd": 10,
+    "symbols": { "ETHUSD": { "spreadUsd": 10, "slipUsd": 3 } }
+  }
 }

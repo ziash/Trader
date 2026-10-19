@@ -17,6 +17,10 @@ public sealed record ConversionSymbol(SymbolInfo Symbol, bool Invert);
 /// Ticks are placed in intervals by the server's timestamp; each interval is written 1 s after it ends
 /// so that late messages still count. Ticks stamped before the interval (the stale last price the server
 /// sends on each subscribe) are ignored.
+///
+/// Alerts (plan 6.2.4): when a row's average spread is above the symbol's limit, one "SpreadWide" warning is
+/// logged; while it stays wide nothing more; when it is back under the limit, one "SpreadNormal" line with
+/// how long it lasted and the peak. Like an alarm raise / clear.
 /// </summary>
 public sealed class SpreadRecorder(ILogger log, PriceFeed feed, Func<DateTime>? utcNow = null)
 {
@@ -42,6 +46,13 @@ public sealed class SpreadRecorder(ILogger log, PriceFeed feed, Func<DateTime>? 
         public Dictionary<long, SymbolInfo> Symbols { get; set; } = new();
         public Dictionary<string, ConversionSymbol> Conversions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<long, List<Tick>> Ticks { get; } = new();
+        public Dictionary<long, WideSpread> Wide { get; } = new();
+    }
+
+    private sealed class WideSpread(DateTime since, double peak)
+    {
+        public DateTime Since { get; } = since;
+        public double Peak { get; set; } = peak;
     }
 
     public void AddAccount(AuditConfig config, DailyCsvWriter writer)
@@ -132,11 +143,45 @@ public sealed class SpreadRecorder(ILogger log, PriceFeed feed, Func<DateTime>? 
                 CsvFormat.Num(s.MaxGapSeconds, 1),
             ]);
             written++;
+
+            if (s.Avg is { } avg)
+                CheckSpread(acc, symbol, start, end, session, avg, s.Max ?? avg, usdPerLot);
         }
 
         Interlocked.Add(ref _rowsWritten, written);
         return written;
     }
+
+    private void CheckSpread(Account acc, SymbolInfo symbol, DateTime start, DateTime end, string session, double avg, double max, double? usdPerLot)
+    {
+        var limit = acc.Config.Limits.For(symbol);
+        double? Value(double price) => limit.InPips ? price / symbol.PipSize : price * usdPerLot;
+        if (Value(avg) is not { } value)
+            return; // USD rate not known yet
+
+        var alog = log.ForAccount(acc.Config.AccountId);
+        var wide = acc.Wide.GetValueOrDefault(symbol.SymbolId);
+        if (value > limit.Spread)
+        {
+            if (wide is not null)
+            {
+                wide.Peak = Math.Max(wide.Peak, value);
+                return;
+            }
+            acc.Wide[symbol.SymbolId] = new WideSpread(start, value);
+            alog.Event("SpreadWide").Warning("{Broker} {Symbol}: spread wide, avg {Avg} in {Start:HH:mm}-{End:HH:mm}Z, max {Max} (limit {Limit}, {Session})",
+                acc.Config.Broker, symbol.Name, limit.Show(value), start, end, limit.Show(Value(max) ?? value), limit.Show(limit.Spread), session);
+        }
+        else if (wide is not null)
+        {
+            acc.Wide.Remove(symbol.SymbolId);
+            alog.Event("SpreadNormal").Information("{Broker} {Symbol}: spread back to normal (avg {Avg}) after {Duration} wide since {Since:HH:mm}Z; peak avg {Peak}",
+                acc.Config.Broker, symbol.Name, limit.Show(value), Duration(start - wide.Since), wide.Since, limit.Show(wide.Peak));
+        }
+    }
+
+    private static string Duration(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes}m" : $"{(int)t.TotalMinutes} min";
 
     /// <summary>The account's symbols in config order (after the last Configure); empty before that.</summary>
     public IReadOnlyList<SymbolInfo> SymbolsOf(long ctid)
