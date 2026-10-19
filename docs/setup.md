@@ -2,7 +2,7 @@
 
 Goal of Phase 0 (plan Section 8): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
 
-Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warnings. Open API app approved; Client ID, secret and tokens (scope `trading`, both demo accounts) in the secrets file. Still open (not blocking Phase 1): confirm Pepperstone demo account type (Razor).
+Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warnings. Open API app approved; Client ID, secret and tokens (scope `trading`, both demo accounts) in the secrets file. Pepperstone demo account type confirmed **Razor** by the owner on 19-Oct-2026.
 
 ---
 
@@ -17,7 +17,7 @@ Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warn
 ## Step 2 — Second broker demo (done: Pepperstone)
 
 - [x] Open a cTrader demo at the second broker (Pepperstone, FP Markets or Fusion Markets) **with the same cTrader ID email**, so one access token covers both accounts. *Done 11-Oct-2026: **Pepperstone** demo **5357135** (server cTrader DEMO), listed under the same cTrader ID as IC Markets.*
-- [ ] Same checks as Step 1 (Hedging, account type). *Hedging confirmed; USD, 1:200, demo balance USD 5,000 (entity: Pepperstone). Demo account number: **5357135**. Account type still to confirm — should be **Razor** (Pepperstone's raw spread + commission) to match IC Markets.*
+- [x] Same checks as Step 1 (Hedging, account type). *Hedging confirmed; USD, 1:200, demo balance USD 5,000 (entity: Pepperstone). Demo account number: **5357135**. Account type **Razor** (Pepperstone's raw spread + commission, like IC Markets Raw Spread) — confirmed 19-Oct-2026.*
 
 Notes:
 - `pepperstone.com` is blocked on this home network (TLS connection reset); sign-up works through `https://secure.pepperstone.com/register`.

@@ -3,7 +3,7 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.16** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.17** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
 | Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
@@ -543,10 +543,11 @@ Every change is recorded here, the version number in the header table is increas
 | v1.14 | 18-Oct-2026 | **Send time in the order comment** (5.3, owner's choice; label unchanged). **Deployment** (Section 7): systemd user service running a published Release build from `~/tradebot/bin/AuditBot`, deploy script, laptop-sleep note. **Phase 2 audit run started** (Section 8) before step 6, by the owner's decision; Phase 1 test logs deleted first. Monitoring script deferred (open items). |
 | v1.15 | 19-Oct-2026 | **Alerts and clearer probe summary** (new 6.2.4), owner's request after the first audit day: `SpreadWide`/`SpreadNormal` and `SlippageHigh` warnings with limits per broker in `audit.<broker>.json` (forex pips, crypto USD per lot, per-symbol overrides); probe summary per asset class with the worst fill named, replacing the single slippage average that mixed forex and crypto pips. First audit day: all 3 windows × 24 orders filled on both brokers; one connection drop (44 s, reconnected automatically). |
 | v1.16 | 19-Oct-2026 | **Phase 1 step 6 done; Phase 1 complete.** Daily report tool `src/Trader.AuditReport` (new 6.5.1), owner accepted the recommendations: separate read-only program; systemd timer daily at 00:15 UTC making any missing reports (Section 7); UTC calendar days; one row per broker × symbol × period with both brokers on adjacent lines; `--from/--to` for the final summary; 18-Oct report built at once. Instance folders of one day merged. Disk layout (6.3) shows `summary-*.csv` and `bin/`. |
+| v1.17 | 19-Oct-2026 | Pepperstone demo account type confirmed **Razor** (raw spread + commission) by the owner; open item closed. Both audited accounts are the raw-spread type. |
 
 ## 12. Open items / decisions pending
 
-- ~~Which two brokers to audit~~: **IC Markets = Broker A** (v1.4), **Pepperstone = Broker B** (v1.6), both under the same cTrader ID. Still to confirm: Pepperstone demo account type is Razor (raw spread + commission).
+- ~~Which two brokers to audit~~: **IC Markets = Broker A** (v1.4), **Pepperstone = Broker B** (v1.6), both under the same cTrader ID. ~~Still to confirm: Pepperstone demo account type is Razor (raw spread + commission).~~ Done v1.17: **Razor** (owner, 19-Oct-2026) — both demos are raw spread + commission, so the audit compares like with like.
 - ~~*(v1.4)* IC Markets demo: confirm Hedging mode and account type (Raw Spread vs Standard).~~ Done v1.5: Hedging, Raw Spread, USD, 1:500.
 - ~~*(v1.4)* Open API application: submit, await Spotware approval, obtain tokens.~~ Done v1.7: approved, tokens for both demo accounts in the secrets file.
 - *(v1.7)* Client secret was shared in a chat on 16-Oct-2026: regenerate it in the Open API portal (if offered) before any live account is granted (Phase 5).
@@ -566,7 +567,7 @@ Every change is recorded here, the version number in the header table is increas
 - *(v1.3)* Fix the exact M5 swing definition for "last lower high" and the stop buffer (pips above the high).
 - *(v1.3)* Confirm the 21 EMA retracement trigger: candle close at/above the EMA vs. a touch of the EMA.
 - *(v1.3)* Confirm exposure-cap values (effective leverage 1:10, margin level 300%) after the Audit Bot shows real margin requirements.
-- Account type: zero-commission (Standard, spread-only) vs raw-spread + commission for the hedge design — compare using Audit Bot data. *(v1.5: Broker A demo is Raw Spread.)*
+- Account type: zero-commission (Standard, spread-only) vs raw-spread + commission for the hedge design — compare using Audit Bot data. *(v1.5: Broker A demo is Raw Spread.)* *(v1.17: Broker B demo is Razor — both raw spread + commission; a Standard account is not being audited.)*
 - Protection if power/internet drops: confirm the server-side hedge order (before 1R) and stop-loss (after 1R) are sufficient, or add a wide emergency stop-loss as a last-resort backstop.
 - Short-only approach: confirm instruments, and check swap direction for shorts on each one.
 

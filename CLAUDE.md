@@ -38,7 +38,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 |---|---|
 | Open API app | "Trend Audit Bot", ID 43770, scope `trading` |
 | Broker A | IC Markets (Raw Trading Ltd) demo **10124393** — Hedging, Raw Spread, USD, 1:500 — `ctidTraderAccountId` 49123893 |
-| Broker B | Pepperstone demo **5357135** — Hedging, USD, 1:200 — `ctidTraderAccountId` 49124666 |
+| Broker B | Pepperstone demo **5357135** — Hedging, Razor, USD, 1:200 — `ctidTraderAccountId` 49124666 |
 | Demo endpoint | `demo.ctraderapi.com:5035` (Protobuf over TLS) |
 | Live endpoint | `live.ctraderapi.com:5035` — **do not use** before Phase 5 |
 | Rate limits | 50 req/s, 5 req/s for historical data (per connection) |
