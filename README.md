@@ -4,6 +4,19 @@ Trading | Spec Driven Development
 Semi-automated trend-trading bot for cTrader (C# / .NET, Ubuntu).
 
 - **Plan (single source of truth):** [docs/plan.md](docs/plan.md)
+- **Bots — one page each:** [docs/bots/](docs/bots/README.md)
+
+## Bots
+
+| Bot | What it does | Status | Details |
+|---|---|---|---|
+| **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Running (Phase 2 audit, since 18-Oct-2026) | [docs/bots/audit-bot.md](docs/bots/audit-bot.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Specified (plan v1.18), not built yet | [docs/bots/tm.md](docs/bots/tm.md) |
+
+New bots get a page from [docs/bots/_template.md](docs/bots/_template.md) and a row here.
+
+## Repository
+
 - **Instructions for Claude Code:** [CLAUDE.md](CLAUDE.md)
 - **Environment setup (Phase 0):** [docs/setup.md](docs/setup.md) — check with `bash scripts/check-env.sh`
 - **Images used by the plan:** [docs/images/](docs/images/)

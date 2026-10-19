@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.18** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.19** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -136,9 +136,12 @@ The owner may run up to ~10 bots at the same time. The functions of Section 5.2 
   - This works because the accounts are **Hedging** (decision 8): every order is its own position, so a manual trade and a bot trade on the same pair and side never merge. Other clients of the same broker are other accounts, which the bot cannot see at all.
   - **Exception — TM** *(v1.18, owner's decision)*: TM takes over unlabelled positions on the symbols listed in its config (the owner's manual trades meant for TM): it removes or copies their stop-loss and take-profit, and closes one only under its 3R loss limit (10.9.5). Unlisted symbols and other bots' positions stay foreign to TM.
   - Limit: the label is plain text, so someone with access to the account could type a bot-style label on a manual order. The recorded `positionId`s catch this during a run; if manual labels are ever used, the post-restart rule becomes "label matches **and** `positionId` is in the bot's saved list".
+- **Bot pages** *(v1.19)*: every bot has its own details page in [`docs/bots/`](bots/README.md) — status, links to its plan sections, code, config, how to run it, history — and a row in the README's Bots table. Pages summarise; this plan stays authoritative for the rules. Pages so far: [Audit Bot](bots/audit-bot.md), [TM](bots/tm.md).
 - **Outside this repo:** pack `Trader.Core` as a versioned NuGet package in `~/tradebot/packages` and reference a fixed version, rather than copying the folder.
 
 ## 6. First bot: the Audit Bot
+
+*Details page: [docs/bots/audit-bot.md](bots/audit-bot.md) (v1.19).*
 
 ### 6.1 Goal
 
@@ -527,6 +530,8 @@ Effect: the position pyramids by half a trade per add. Older runners sit on stop
 
 ### 10.9 TM — Trade Manually bot *(v1.18)*
 
+*Details page: [docs/bots/tm.md](bots/tm.md) (v1.19).*
+
 *Agreed with the owner on 19-Oct-2026 (20 questions, one at a time). TM is the **first trading bot**. The Audit Bot (Section 6) is unchanged and keeps running.*
 
 #### 10.9.1 Idea
@@ -639,6 +644,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.16 | 19-Oct-2026 | **Phase 1 step 6 done; Phase 1 complete.** Daily report tool `src/Trader.AuditReport` (new 6.5.1), owner accepted the recommendations: separate read-only program; systemd timer daily at 00:15 UTC making any missing reports (Section 7); UTC calendar days; one row per broker × symbol × period with both brokers on adjacent lines; `--from/--to` for the final summary; 18-Oct report built at once. Instance folders of one day merged. Disk layout (6.3) shows `summary-*.csv` and `bin/`. |
 | v1.17 | 19-Oct-2026 | Pepperstone demo account type confirmed **Razor** (raw spread + commission) by the owner; open item closed. Both audited accounts are the raw-spread type. |
 | v1.18 | 19-Oct-2026 | **First trading bot = TM (Trade Manually)** (new Section 10.9, decision 15), agreed question by question with the owner: owner opens positions by hand in cTrader; TM mirrors each and hedges both legs; hedge level from the owner's stop-loss or 15 % of the 3-day daily range (min 5 × spread); A = 1R, B = ½R, re-hedge rules; break-even at 1R; trailing off at first; 2R warning / 3R close; owner closes; TP copied; hedge level movable from the chart; both directions, both demos, six symbols; no risk-limit blocking (warnings only); hedges only for mains found after a restart; pop-ups before news / Friday close; reusable notifications module in `Trader.Core`. Ownership-rule exception for TM (5.3); Scenarios 2–5 answered for TM (10.7); Section 9 TM exception; roadmap Phase 4 starts with TM; open items and glossary. Audit Bot unchanged. |
+| v1.19 | 20-Oct-2026 | **One page per bot** (owner's request): `docs/bots/` with an index, a template and pages for the Audit Bot and TM; Bots table in the README; short README in each bot's code folder; rule in 5.3 and CLAUDE.md. The plan stays authoritative for the rules. |
 
 ## 12. Open items / decisions pending
 
