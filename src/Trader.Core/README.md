@@ -10,7 +10,7 @@ logging and start-up/shut-down live here **once**; bots do not copy them (plan d
 | `Config/` | `SecretsFile` (reads `~/.config/trader/secrets.env`, demo only), `TokenRefresher` (refresh + atomic save under a lock) |
 | `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line), `LogTap` + `CsvEventSink` (events.csv), `log.Event("Name")` |
 | `MarketData/` | `SymbolCatalog` (names → IDs, details, currency conversion symbols), `PriceFeed` (spot events → bid/ask quotes, live trendbars), `TradingSchedule` (is the market open?), `MarketHours` (main hours / off-peak, 2/5-min boundaries) |
-| `Csv/` | `DailyCsvWriter` (one file per UTC day, header, flushed per row), `CsvFormat` (time and number formats for Google Sheets) |
+| `Csv/` | `DailyCsvWriter` (one file per UTC day, header, flushed per row), `CsvFormat` (time and number formats for Google Sheets), `CsvTable` (read our CSV files back, columns by name) |
 | `Hosting/TradebotPaths` | `~/tradebot/{config,logs,run/instances,reports}` (`TRADEBOT_HOME` overrides) |
 
 ## Add a new bot (about 5 minutes)
@@ -68,7 +68,7 @@ bot.Connection.OnReady = async (session, accounts, ct) =>
 
 - `SymbolInfo` gives `PipSize`, `LotUnits` (100,000 for forex, 1 coin for crypto), `IsForex`, `Digits`, `QuoteAsset`, `Schedule`.
 - `catalog.FindConversion("JPY", "USD")` → the symbol to subscribe for converting costs (e.g. USDJPY, divide).
-- CSV files: `new DailyCsvWriter(day => path, header)`; format values with `CsvFormat.Time/Num/Int`.
+- CSV files: `new DailyCsvWriter(day => path, header)`; format values with `CsvFormat.Time/Num/Int`. Read one back with `CsvTable.Read(path)`, then `row["symbol"]`, `row.Num("ticks")`, `row.Time("time_utc")`.
 - events.csv: `var events = new CsvEventSink(); events.AddAccount(ctid, writer); bot.LogTap.Add(events);`
   then `log.Event("Name").Information(...)`; add `.ForAccount(ctid)` to write to one account's file only.
 

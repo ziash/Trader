@@ -3,9 +3,9 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.15** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.16** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 in progress (v1.15):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots)); steps in [Section 8.1](#81-phase-1-steps). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -223,7 +223,9 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
       events.csv   # connect, reconnect, errors, rejections (v1.8; was events.log)
     brokerB/<accountId>/<instanceId>/2026-10-12/ ...
   reports/
-    daily-compare-2026-10-12.csv
+    daily-compare-2026-10-12.csv  # one UTC day, both brokers (6.5); made daily at 00:15 UTC
+    summary-2026-10-18_2026-11-01.csv  # a range of days (final 2-week summary, v1.16)
+  bin/AuditBot/, bin/AuditReport/  # published builds that the services run (Section 7, v1.14/v1.16)
 ```
 
 #### 6.3.1 File format *(v1.8)*
@@ -295,6 +297,31 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 - Daily comparison CSV per broker, built from `spreads.csv` and `probes.csv` in the format of Section 6.3.1: median/95th-percentile spread (pips and USD per lot), average slippage, latency, rejection count — per symbol and per probe window.
 - Final 2-week summary → broker choice recorded in this document.
 
+#### 6.5.1 The report tool *(v1.16)*
+
+`src/Trader.AuditReport` — a separate program that **only reads** the CSV logs (never connects to cTrader), so it cannot disturb the running bot. Both brokers in one file:
+
+| Run | Output |
+|---|---|
+| Daily, automatically (systemd timer, 00:15 UTC; `--missing`) | `reports/daily-compare-<date>.csv` for every complete UTC day that has none yet — also catches up after the laptop was off |
+| `--date 2026-10-19` | That day, rebuilt |
+| `--from 2026-10-18 --to 2026-11-01` | `reports/summary-<from>_<to>.csv` — same columns over the whole range (the final summary) |
+
+- **Merging:** a day may be spread over several instance folders (every restart starts a new one). They are merged; if two instances logged the same interval (Primary and Passive), it is counted once (the row with more ticks).
+- **Rows:** one per broker × symbol × period, sorted by symbol, then period, then broker, so IC Markets and Pepperstone are on adjacent lines. Periods: `day` (all), `main` and `offpeak` (spreads, 6.2.3), and each probe window (`QuietHour`, `LondonOpen`, …; probes only). Then one `ALL` row per broker with order totals, latency and reliability.
+- **Columns:**
+
+| Group | Columns |
+|---|---|
+| Identity | `date_from`, `date_to`, `broker`, `broker_name`, `symbol`, `period` |
+| Coverage | `spread_rows`, `logged_min` (minutes covered by rows), `ticks`, `gap_rows` (rows with no ticks while open) |
+| Spread | `spread_median_pips`, `spread_p95_pips`, `spread_max_pips`, and the same in `_usd` (per lot) |
+| Probes | `orders`, `filled`, `rejected`, `order_errors`; `slip_avg_pips`, `slip_worst_pips`, `slip_avg_usd`, `slip_worst_usd` (negative = worse for us); `latency_avg_ms`, `latency_median_ms`, `latency_max_ms`; `commission_usd` |
+| Reliability (`ALL` row) | `instances`, `connection_drops`, `spread_alerts`, `slippage_alerts`, `missed_windows`, `log_warnings`, `log_errors` |
+
+- **Spread figures** come from the interval rows: median and p95 of the rows' average spread, each row weighted by its length (half / 95 % of the time the spread averaged at or below it); max = largest single spread seen. **Crypto: compare by the USD columns** — pips differ by broker (6.2.4). The `ALL` row leaves slippage out, because averaging it over forex and crypto would mix units.
+- **Connection drops** are counted per broker, but both brokers share one connection, so a drop shows on both.
+
 ## 7. Execution environment: Ubuntu
 
 | Component | Choice |
@@ -302,7 +329,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | OS | Ubuntu 26.04 LTS (current machine: HP laptop) *(v1.7)* |
 | Runtime / SDK | .NET 10 LTS SDK from Ubuntu's archive (`dotnet-sdk-10.0`); runtime only on the VPS later *(v1.4)* |
 | Editor | VS Code + C# Dev Kit (AI-assisted coding) |
-| Running the bot | systemd service (one unit per instance) → later Docker container. *(v1.14)* Audit Bot: **systemd user service** `trader-auditbot` (`deploy/trader-auditbot.service`), running a **published Release build** in `~/tradebot/bin/AuditBot/` so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs. Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal (`journalctl --user -u trader-auditbot`). |
+| Running the bot | systemd service (one unit per instance) → later Docker container. *(v1.14)* Audit Bot: **systemd user service** `trader-auditbot` (`deploy/trader-auditbot.service`), running a **published Release build** in `~/tradebot/bin/AuditBot/` so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs. Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal (`journalctl --user -u trader-auditbot`). *(v1.16)* Daily report: **systemd user timer** `trader-auditreport.timer` (00:15 UTC, catches up after the laptop was off) starting `trader-auditreport.service`, which runs the published build in `~/tradebot/bin/AuditReport/`; `scripts/deploy-auditreport.sh` publishes, installs and enables it. |
 | Secrets | API client secret and tokens in `~/.config/trader/secrets.env` (permissions 600) — never in Git |
 | Setup check | `scripts/check-env.sh` — read-only check of OS, .NET, Git, VS Code, clock, port 5035, folders, secrets *(v1.4)* |
 | Version control | Private Git repository (this repo — holds the plan and the code) |
@@ -317,7 +344,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | Phase | Name | Deliverable | Target |
 |---|---|---|---|
 | 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Complete 16-Oct-2026: Git repo, IC Markets demo (Broker A), Pepperstone demo (Broker B), Ubuntu toolchain, Open API app approved, tokens in secrets file; `check-env.sh` 0 warnings.* | Week 1 |
-| 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry | Weeks 2–3 |
+| 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry. *Complete 19-Oct-2026 (v1.16): all 6 steps of Section 8.1.* | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker. *Started 18-Oct-2026 (v1.14), before Phase 1 step 6, by the owner's decision; covers the UK and US clock changes (25-Oct, 1-Nov) and the NFP (6-Nov) and CPI (10-Nov) releases if run to mid-November.* | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
 | 4 | Trend bot + human link | Semi-auto execution, hedge-and-recover exit logic, 4-leg structure, trailing and pyramiding, dashboard/config, then TradingView webhook | Weeks 9–12 |
@@ -334,7 +361,7 @@ Each step is built only when the owner says so.
 | 3 | Price feed to disk | Config files `audit.brokerX.json`; symbol lookup and name map; spot subscription; `spreads.csv` summaries (Section 6.2.3, 6.3.1); feed gaps; M5 trendbar subscription; `events.csv` | **Done 18-Oct-2026** — live on both demos (Sunday: crypto rows every 5 min, forex skipped while closed; resubscribe after forced drops) |
 | 4 | Instance registry | Section 6.4 (lock-file Primary, per-account roles, slots) | **Done 18-Oct-2026** — 3 copies live; Primary killed with `kill -9`, takeover within 1 s |
 | 5 | Probe orders | Windows of Section 6.2.2; `probes.csv`; ownership rule (5.3) | **Done 18-Oct-2026** — probes on both demos (crypto, Sunday); left-over clean-up tested with `kill -9`; manual (unlabelled) position left untouched |
-| 6 | Daily report | Section 6.5 | Next |
+| 6 | Daily report | Section 6.5 | **Done 19-Oct-2026** — `src/Trader.AuditReport` (6.5.1), daily timer; report for 18-Oct built from the live logs |
 
 *Between steps 2 and 3 (17-Oct-2026, v1.10):* framework made reusable for many bots — `BotRunner`, per-bot accounts, instance ID and order labels, usage guide, `src/Trader.SampleBot` (Section 5.3).
 
@@ -515,6 +542,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.13 | 18-Oct-2026 | **Phase 1 step 5 done** (probe orders, 6.2.2): owner accepted the recommendations — news windows 2 min before / 5 s after / 5 min after (NFP/CPI dates from BLS to Feb 2027 in `news-releases.json`); **open and close each a row** in `probes.csv` with new columns `action`, `commission_usd`, `position_id` (6.3.1); **backup stop-loss** on every probe (50 pips forex, 2 % crypto; note under the protection rule, Section 7). Probe procedure, left-over clean-up and first results recorded in 6.2.2. Order functions (market order, close by positionId, reconcile) in `Trader.Core`. Open item closed (news offsets); new one: dates after Feb 2027. |
 | v1.14 | 18-Oct-2026 | **Send time in the order comment** (5.3, owner's choice; label unchanged). **Deployment** (Section 7): systemd user service running a published Release build from `~/tradebot/bin/AuditBot`, deploy script, laptop-sleep note. **Phase 2 audit run started** (Section 8) before step 6, by the owner's decision; Phase 1 test logs deleted first. Monitoring script deferred (open items). |
 | v1.15 | 19-Oct-2026 | **Alerts and clearer probe summary** (new 6.2.4), owner's request after the first audit day: `SpreadWide`/`SpreadNormal` and `SlippageHigh` warnings with limits per broker in `audit.<broker>.json` (forex pips, crypto USD per lot, per-symbol overrides); probe summary per asset class with the worst fill named, replacing the single slippage average that mixed forex and crypto pips. First audit day: all 3 windows × 24 orders filled on both brokers; one connection drop (44 s, reconnected automatically). |
+| v1.16 | 19-Oct-2026 | **Phase 1 step 6 done; Phase 1 complete.** Daily report tool `src/Trader.AuditReport` (new 6.5.1), owner accepted the recommendations: separate read-only program; systemd timer daily at 00:15 UTC making any missing reports (Section 7); UTC calendar days; one row per broker × symbol × period with both brokers on adjacent lines; `--from/--to` for the final summary; 18-Oct report built at once. Instance folders of one day merged. Disk layout (6.3) shows `summary-*.csv` and `bin/`. |
 
 ## 12. Open items / decisions pending
 

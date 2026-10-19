@@ -1,0 +1,15 @@
+# Daily audit report (plan 6.5): writes ~/tradebot/reports/daily-compare-<date>.csv for every complete UTC day
+# that has none yet. Started by trader-auditreport.timer; installed by scripts/deploy-auditreport.sh.
+# Read-only on the logs and never connects to cTrader, so it cannot disturb the running Audit Bot.
+#
+#   systemctl --user start trader-auditreport         make any missing reports now
+#   journalctl --user -u trader-auditreport           what it wrote
+
+[Unit]
+Description=Trader audit report (daily broker comparison CSV)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/dotnet %h/tradebot/bin/AuditReport/Trader.AuditReport.dll --missing
+WorkingDirectory=%h/tradebot
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1

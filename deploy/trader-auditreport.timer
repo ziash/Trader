@@ -1,0 +1,14 @@
+# Runs trader-auditreport.service every day at 00:15 UTC, when the previous UTC day is complete.
+# Persistent=true: if the laptop was off or asleep at 00:15, it runs at the next start or wake-up.
+#
+#   systemctl --user list-timers trader-auditreport   when it runs next
+
+[Unit]
+Description=Daily audit report at 00:15 UTC
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
