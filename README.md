@@ -11,7 +11,7 @@ Semi-automated trend-trading bot for cTrader (C# / .NET, Ubuntu).
 | Bot | What it does | Status | Details |
 |---|---|---|---|
 | **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Running (Phase 2 audit, since 18-Oct-2026) | [docs/bots/audit-bot.md](docs/bots/audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Specified (plan v1.18), not built yet | [docs/bots/tm.md](docs/bots/tm.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Building: step 1 of 6 done | [docs/bots/tm.md](docs/bots/tm.md) |
 
 New bots get a page from [docs/bots/_template.md](docs/bots/_template.md) and a row here.
 

@@ -3,7 +3,7 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.19** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.20** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
 | Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
@@ -219,6 +219,8 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
   config/
     audit.brokerA.json            # account id, symbols, probe schedule
     audit.brokerB.json
+    news-releases.json            # NFP/CPI dates (v1.13)
+    notifications.json            # which notifications go to which channel, all bots (10.9.7, v1.20)
   run/instances/                  # live instance registry (heartbeat files)
     brokerA-<accountId>-<instanceId>.json
   logs/
@@ -609,6 +611,8 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 - **Logs:** per account and instance as for the Audit Bot (6.3): `events.csv`, plus `actions.csv` — one row per order TM sends or changes (time, trade, leg, action, side, volume, requested and filled price, slippage, latency, result).
 - **Notifications:** a **reusable module in `Trader.Core`** (decision 15): one call for every bot; channels plug in behind it — **desktop pop-ups** on Ubuntu now (`notify-send`), Telegram or others later as one new class; a config file routes events to channels. Logs (journal, `events.csv`) always get everything. Pop-ups for: 2R warning, 3R close, mirror skipped or rejected, hedge rejected, TM stopped or disconnected, news / Friday warnings.
 
+- *(v1.20)* **Built (step 1):** `Trader.Core/Notifications` — `bot.Notify.Info/Warning/Critical(event, title, message, account)`; every call is logged (journal and `events.csv`), then queued to the channels whose filter in `~/tradebot/config/notifications.json` accepts it (`minLevel`, `bots`, `events`, `excludeEvents`, `enabled`; no file = desktop pop-ups from Warning). The same message within 60 s is sent once; a failing channel is logged once and never blocks the bot. Desktop = `notify-send`; Critical stays on screen. Any bot can test with `--test-notification`.
+
 #### 10.9.8 Accepted risks
 
 | Risk | Effect | Bounded by |
@@ -618,6 +622,18 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 | TM down when the owner opens a trade without a stop-loss | Main unprotected until TM is back | Set a stop-loss on manual orders; TM hedges at once on start |
 | Risk limits not enforced | Many mirrored trades can exceed leverage 1:10 / margin level 300 % | Warning only (owner's choice) |
 | Mirror entry differs from the main's | A fraction of a pip | Logged in `actions.csv` |
+#### 10.9.9 Build steps *(v1.20)*
+
+Each step only on the owner's go; each tested on the demo accounts before the next.
+
+| Step | Content | Status |
+|---|---|---|
+| 1 | Notifications module in `Trader.Core` (10.9.7) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service |
+| 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it would do, no orders | Next |
+| 3 | Trade start: mirror, hedges, stop-loss removal, TP copy, ATR distance (10.9.3) | |
+| 4 | Hedge management (10.9.4) | |
+| 5 | Break-even, 2R/3R limits, clean-up when the owner closes (10.9.5) | |
+| 6 | Start-up and news (10.9.6); systemd service | |
 
 ## 11. Change log
 
@@ -645,6 +661,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.17 | 19-Oct-2026 | Pepperstone demo account type confirmed **Razor** (raw spread + commission) by the owner; open item closed. Both audited accounts are the raw-spread type. |
 | v1.18 | 19-Oct-2026 | **First trading bot = TM (Trade Manually)** (new Section 10.9, decision 15), agreed question by question with the owner: owner opens positions by hand in cTrader; TM mirrors each and hedges both legs; hedge level from the owner's stop-loss or 15 % of the 3-day daily range (min 5 × spread); A = 1R, B = ½R, re-hedge rules; break-even at 1R; trailing off at first; 2R warning / 3R close; owner closes; TP copied; hedge level movable from the chart; both directions, both demos, six symbols; no risk-limit blocking (warnings only); hedges only for mains found after a restart; pop-ups before news / Friday close; reusable notifications module in `Trader.Core`. Ownership-rule exception for TM (5.3); Scenarios 2–5 answered for TM (10.7); Section 9 TM exception; roadmap Phase 4 starts with TM; open items and glossary. Audit Bot unchanged. |
 | v1.19 | 20-Oct-2026 | **One page per bot** (owner's request): `docs/bots/` with an index, a template and pages for the Audit Bot and TM; Bots table in the README; short README in each bot's code folder; rule in 5.3 and CLAUDE.md. The plan stays authoritative for the rules. |
+| v1.20 | 20-Oct-2026 | **TM step 1 done:** reusable notifications module in `Trader.Core` (10.9.7), `notifications.json` (6.3 layout, which now also lists `news-releases.json`), common option `--test-notification`. TM build steps listed (new 10.9.9). |
 
 ## 12. Open items / decisions pending
 

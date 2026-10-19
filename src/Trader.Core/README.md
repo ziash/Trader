@@ -11,6 +11,7 @@ logging and start-up/shut-down live here **once**; bots do not copy them (plan d
 | `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line), `LogTap` + `CsvEventSink` (events.csv), `log.Event("Name")` |
 | `MarketData/` | `SymbolCatalog` (names → IDs, details, currency conversion symbols), `PriceFeed` (spot events → bid/ask quotes, live trendbars), `TradingSchedule` (is the market open?), `MarketHours` (main hours / off-peak, 2/5-min boundaries) |
 | `Csv/` | `DailyCsvWriter` (one file per UTC day, header, flushed per row), `CsvFormat` (time and number formats for Google Sheets), `CsvTable` (read our CSV files back, columns by name) |
+| `Notifications/` | `Notifier` (`bot.Notify`: messages to the owner, always logged, routed to channels), `DesktopChannel` (Ubuntu pop-ups), `NotificationConfig` (`notifications.json`) |
 | `Hosting/TradebotPaths` | `~/tradebot/{config,logs,run/instances,reports}` (`TRADEBOT_HOME` overrides) |
 
 ## Add a new bot (about 5 minutes)
@@ -102,6 +103,21 @@ var open = await session.ReconcileAsync(ctid);                              // a
 - Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`.
 - Place orders only while Primary on the account, and follow the ownership rule (plan 5.3).
 
+## Notifications to the owner
+
+```csharp
+bot.Notify.Warning("LossWarning", "AUDJPY short at -2R", "Trade P123456789, leg MIR", accountId);
+bot.Notify.Critical("LossLimit", "AUDJPY short closed at 3R");
+bot.Notify.Info("TradeTakenOver", "AUDJPY short 0.5 taken over");
+```
+
+- **Always logged** (journal and `events.csv`, event name = first argument; Info → information, Warning → warning, Critical → error), so a notification needs no separate log line.
+- **Then delivered in the background** to every channel in `~/tradebot/config/notifications.json` whose filter accepts it (`minLevel`, `bots`, `events`, `excludeEvents`, `enabled`). No file → desktop pop-ups for Warning and Critical. Reference copy: `config/notifications.json`.
+- The same notification again within `repeatSeconds` (60) is logged but not sent again; a failing channel is logged once and never holds up the bot.
+- `bot.Notify` is created on first use, so a bot that never notifies is not affected by the file. On shut-down, queued messages are still delivered (up to 15 s).
+- **New channel** (e.g. Telegram): a class implementing `INotificationChannel` + one line in `NotificationChannels.Create` and `Known`. No bot changes.
+- Desktop pop-ups use `notify-send` and work from a terminal and from a systemd user service while the owner is logged in to the desktop. Critical ones stay on screen until dismissed.
+
 ## Common options (every bot)
 
 | Option | Meaning |
@@ -109,6 +125,7 @@ var open = await session.ReconcileAsync(ctid);                              // a
 | `--account <ctid>` | Use only this account; repeat for more. Default: all demo accounts the token grants. A bot can also set a default with `new BotOptions { AccountIds = [...] }`. |
 | `--verbose`, `-v` | Debug logging: every request and reply. |
 | `--test-drop-after <sec>` | Diagnostic: drop the connection after each connect, to test reconnecting. |
+| `--test-notification` | Send one test notification through `notifications.json`, then exit (no connection). |
 | `--help`, `-h` | List the options. |
 
 Anything else on the command line is passed to the bot in `bot.Args`.

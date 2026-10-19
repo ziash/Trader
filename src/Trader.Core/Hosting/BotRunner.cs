@@ -2,13 +2,17 @@ using System.Runtime.InteropServices;
 using Serilog;
 using Trader.Core.Config;
 using Trader.Core.Logging;
+using Trader.Core.Notifications;
 using Trader.Core.OpenApi;
 
 namespace Trader.Core.Hosting;
 
 /// <summary>What a bot gets from <see cref="BotRunner"/>: its identity, a logger, and a ready-to-run connection.</summary>
-public sealed class BotContext(BotIdentity identity, ILogger log, LogTap logTap, ConnectionManager connection, string secretsPath, IReadOnlyList<string> args)
+public sealed class BotContext(BotIdentity identity, ILogger log, LogTap logTap, ConnectionManager connection, string secretsPath, IReadOnlyList<string> args,
+    Lazy<Notifier>? notify = null)
 {
+    private readonly Lazy<Notifier> _notify = notify ?? new Lazy<Notifier>(() => Notifier.FromConfigDir(log, identity.BotName, TradebotPaths.Config));
+
     public BotIdentity Identity { get; } = identity;
     public ILogger Log { get; } = log;
 
@@ -23,6 +27,12 @@ public sealed class BotContext(BotIdentity identity, ILogger log, LogTap logTap,
 
     /// <summary>Command-line arguments not used by BotRunner, for the bot's own options.</summary>
     public IReadOnlyList<string> Args { get; } = args;
+
+    /// <summary>
+    /// Messages to the owner (desktop pop-ups, later more channels), routed by ~/tradebot/config/notifications.json;
+    /// always logged too. Created on first use, so bots that never notify are not affected by that file.
+    /// </summary>
+    public Notifier Notify => _notify.Value;
 }
 
 /// <summary>Defaults a bot passes to <see cref="BotRunner.RunAsync"/>. Command-line options override them.</summary>
@@ -56,6 +66,7 @@ public static class BotRunner
         "  --verbose, -v              debug logging (every request/response)\n" +
         "  --account <ctid>           use only this account (repeat for more); default: all demo accounts\n" +
         "  --test-drop-after <sec>    diagnostic: drop the connection <sec> seconds after each connect\n" +
+        "  --test-notification        send one test notification through notifications.json, then exit\n" +
         "  --help, -h                 show this help";
 
     /// <summary>
@@ -125,6 +136,15 @@ public static class BotRunner
         var log = BotLogging.Create(identity, parsed.Verbose, tap);
         Log.Logger = log;
 
+        var notify = new Lazy<Notifier>(() =>
+        {
+            var n = Notifier.FromConfigDir(log, botName, TradebotPaths.Config);
+            log.Information("Notifications: {Channels}", n.ChannelNames.Count > 0 ? string.Join(", ", n.ChannelNames) : "logs only");
+            return n;
+        });
+        if (parsed.TestNotification)
+            return await TestNotificationAsync(botName, log, notify);
+
         using var stop = new CancellationTokenSource();
         void RequestStop(PosixSignalContext ctx)
         {
@@ -153,7 +173,7 @@ public static class BotRunner
                 SimulateDropAfter = parsed.TestDropAfter,
             });
 
-            await run(new BotContext(identity, log, tap, connection, path, parsed.Rest), stop.Token);
+            await run(new BotContext(identity, log, tap, connection, path, parsed.Rest, notify), stop.Token);
             log.Information("{BotName} stopped", botName);
             return ExitOk;
         }
@@ -165,6 +185,11 @@ public static class BotRunner
         catch (SecretsException ex)
         {
             log.Error("{Message}", ex.Message);
+            return ExitFatal;
+        }
+        catch (NotificationConfigException ex)
+        {
+            log.Error("Notification config problem: {Message}", ex.Message);
             return ExitFatal;
         }
         catch (FatalConnectionException ex)
@@ -179,17 +204,39 @@ public static class BotRunner
         }
         finally
         {
+            if (notify.IsValueCreated)
+                await notify.Value.DisposeAsync(); // deliver what is still queued, e.g. a "stopped" message
+            await Log.CloseAndFlushAsync();
+        }
+    }
+
+    private static async Task<int> TestNotificationAsync(string botName, ILogger log, Lazy<Notifier> notify)
+    {
+        try
+        {
+            notify.Value.Warning("TestNotification", "Test notification",
+                $"If you can read this, {botName}'s notifications work. Sent {DateTime.UtcNow:HH:mm:ss}Z.");
+            await notify.Value.DisposeAsync();
+            return ExitOk;
+        }
+        catch (NotificationConfigException ex)
+        {
+            log.Error("Notification config problem: {Message}", ex.Message);
+            return ExitFatal;
+        }
+        finally
+        {
             await Log.CloseAndFlushAsync();
         }
     }
 }
 
 /// <summary>Command-line options shared by all bots; anything else is left in <see cref="Rest"/> for the bot.</summary>
-internal sealed record BotArgs(bool Verbose, bool Help, IReadOnlyList<long> AccountIds, TimeSpan? TestDropAfter, IReadOnlyList<string> Rest)
+internal sealed record BotArgs(bool Verbose, bool Help, IReadOnlyList<long> AccountIds, TimeSpan? TestDropAfter, IReadOnlyList<string> Rest, bool TestNotification = false)
 {
     public static BotArgs Parse(IReadOnlyList<string> args)
     {
-        bool verbose = false, help = false;
+        bool verbose = false, help = false, testNotification = false;
         var accounts = new List<long>();
         TimeSpan? drop = null;
         var rest = new List<string>();
@@ -205,6 +252,9 @@ internal sealed record BotArgs(bool Verbose, bool Help, IReadOnlyList<long> Acco
                     break;
                 case "--help" or "-h":
                     help = true;
+                    break;
+                case "--test-notification":
+                    testNotification = true;
                     break;
                 case "--account":
                     accounts.Add(long.TryParse(Value(), out var id) && id > 0
@@ -222,6 +272,6 @@ internal sealed record BotArgs(bool Verbose, bool Help, IReadOnlyList<long> Acco
             }
         }
 
-        return new BotArgs(verbose, help, accounts.Distinct().ToList(), drop, rest);
+        return new BotArgs(verbose, help, accounts.Distinct().ToList(), drop, rest, testNotification);
     }
 }

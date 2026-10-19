@@ -4,7 +4,7 @@ The first trading bot. **You open every position by hand in cTrader; TM mirrors 
 
 | Item | Value |
 |---|---|
-| Status | **Specified** (plan v1.18, 19-Oct-2026) — not built yet; code starts on the owner's go |
+| Status | **Building** — step 1 (notifications) done 20-Oct-2026; step 2 next on the owner's go. Spec: plan v1.18 |
 | Spec (authoritative) | [plan Section 10.9](../plan.md#109-tm--trade-manually-bot-v118) (decision 15; ownership exception in [5.3](../plan.md#53-one-framework-many-bots-v110)) |
 | Code | `src/Trader.TM` (to be created), shared framework [`src/Trader.Core`](../../src/Trader.Core) |
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only until Phase 5 |
@@ -32,14 +32,14 @@ Risk limits (leverage 1:10, margin level 300 %) never block TM; it warns and fol
 
 ## Notifications
 
-Through a reusable module in `Trader.Core` (any bot can use it): desktop pop-ups on Ubuntu now, more channels (e.g. Telegram) later as one new class; a config file decides which events go where. Logs always get everything.
+Through a reusable module in `Trader.Core` ([usage](../../src/Trader.Core/README.md#notifications-to-the-owner); config [`config/notifications.json`](../../config/notifications.json), live copy `~/tradebot/config/notifications.json`; test with `--test-notification`), usable by any bot: desktop pop-ups on Ubuntu now, more channels (e.g. Telegram) later as one new class; a config file decides which events go where. Logs always get everything.
 
 ## Build steps (proposed)
 
 | Step | Content | Status |
 |---|---|---|
-| 1 | Notifications module in `Trader.Core` (desktop pop-ups, routing config) | Waiting for go |
-| 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it *would* do, no orders | — |
+| 1 | Notifications module in `Trader.Core` (desktop pop-ups, routing config) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service |
+| 2 | Watcher: detect mains and TM's own legs; reconnect and reconcile; log what it *would* do, no orders | Next |
 | 3 | Trade start: mirror, hedges, stop-loss removal, TP copy, ATR distance | — |
 | 4 | Hedge management: B stop, armed exit, re-hedge, hedge level from the chart | — |
 | 5 | Break-even at 1R, 2R/3R limits, clean-up when you close | — |
@@ -54,3 +54,4 @@ Per account and instance, as for the Audit Bot: `events.csv` and `actions.csv` (
 | Plan | Date | Change |
 |---|---|---|
 | v1.18 | 19 Oct 2026 | Spec agreed with the owner (20 questions) |
+| v1.20 | 20 Oct 2026 | Step 1 done: notifications module |

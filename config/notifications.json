@@ -1,0 +1,13 @@
+{
+  // Notifications for every bot (plan 10.9.7). Live copy: ~/tradebot/config/notifications.json
+  // Logs (journal, events.csv) always get every notification; channels below get what passes their filter.
+  // Levels: Info < Warning < Critical. Desktop pop-ups: Critical stays on screen until dismissed.
+  // Filters per channel (all optional): "minLevel", "bots": ["TM"], "events": [...], "excludeEvents": [...], "enabled".
+  // Test: dotnet ~/tradebot/bin/<Bot>/Trader.<Bot>.dll --test-notification
+
+  "repeatSeconds": 60,   // the same notification again within 60 s is logged, not popped up again
+  "channels": [
+    { "type": "desktop", "minLevel": "Warning" }
+    // later, e.g.: { "type": "telegram", "minLevel": "Critical" }
+  ]
+}
