@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.0 (20-Oct-2026) — history in §10 |
+| Document version | v1.1 (20-Oct-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -62,8 +62,9 @@ Runtime data lives outside the repo:
 ```
 ~/tradebot/
   config/                          live config (reference copies in the repo's config/)
-    audit.brokerA.json, audit.brokerB.json, news-releases.json    Audit Bot
+    audit.brokerA.json, audit.brokerB.json                        Audit Bot
     tm.json                                                       TM
+    news-releases.json                                            Audit Bot, TM (US NFP/CPI dates)
     notifications.json                                            all bots (Open Code Pieces §7)
   run/instances/                   instance registry: <broker>-<ctid>-<instanceId>.json, <Bot>-<ctid>.primary.lock
   run/tm/<broker>-<ctid>.json      TM's remembered trades
@@ -174,3 +175,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 |---|---|---|
 | — | 08–20 Oct 2026 | Everything here was part of the old single plan (v1.0–v1.22): decisions, setup (Phase 0 complete 16-Oct-2026), environment, folders, file format, open items, glossary |
 | v1.0 | 20 Oct 2026 | Own document. The old plan was split into one project document per bot (Audit Bot, TM, Auto Bot), [Open Code Pieces](open-code-pieces.md) and this page (owner: "each bot is a project in itself"). Content unchanged |
+| v1.1 | 20 Oct 2026 | `news-releases.json` now shared by the Audit Bot and TM (§5) |

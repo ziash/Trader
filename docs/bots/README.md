@@ -5,7 +5,7 @@ Each bot is a **project of its own**: its document holds its goal, rules, decisi
 | Bot | What it does | Status | Document |
 |---|---|---|---|
 | **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Built and finished; running (audit run since 18-Oct-2026) | [audit-bot.md](audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Working on demo (steps 1–5 of 6); service next | [tm.md](tm.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`) | [tm.md](tm.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [auto-bot.md](auto-bot.md) |
 
 **Tools** (not bots): [`Trader.ListAccounts`](../../src/Trader.ListAccounts) lists the accounts a token can reach; [`Trader.AuditReport`](../../src/Trader.AuditReport) builds the Audit Bot's reports; [`Trader.SampleBot`](../../src/Trader.SampleBot) is the template a new bot starts from.

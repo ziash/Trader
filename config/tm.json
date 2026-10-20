@@ -20,6 +20,11 @@
 
   "mirrorWithinSeconds": 60,   // a position older than this when TM first sees it: hedges only, no mirror
 
+  // Pop-ups (tm.md §6): before each NFP/CPI release in news-releases.json and the Friday close (17:00 New York),
+  // and when the connection to cTrader has been down this long.
+  "alertMinutesBefore": 10,
+  "disconnectAlertSeconds": 60,
+
   // Used only if the broker's daily candles cannot be fetched; in price.
   "fallbackDistance": { "AUDJPY": 0.12, "EURGBP": 0.0006, "EURUSD": 0.0010, "GBPJPY": 0.22, "BTCUSD": 375, "ETHUSD": 15 }
 }

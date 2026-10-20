@@ -1,14 +1,9 @@
-using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Trader.Core.MarketData;
 
 namespace Trader.AuditBot;
 
 /// <summary>One probe window: its log name (probes.csv "window" column) and when it starts.</summary>
 public sealed record ProbeWindow(string Name, DateTime StartUtc, string? Detail = null);
-
-/// <summary>A scheduled US news release, in New York time (BLS publishes 08:30 ET).</summary>
-public sealed record NewsRelease(DateTime NewYorkTime, string Event);
 
 /// <summary>
 /// Probe windows of audit-bot.md §2.2, Monday–Friday in local market time (daylight saving handled by time-zone rules):
@@ -51,7 +46,7 @@ public sealed class ProbeSchedule(IReadOnlyList<NewsRelease> news)
 
         foreach (var release in News.Where(n => DateOnly.FromDateTime(n.NewYorkTime) == date))
         {
-            var at = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(release.NewYorkTime, DateTimeKind.Unspecified), NewYork);
+            var at = release.Utc;
             foreach (var (suffix, offset) in NewsOffsets)
                 yield return new ProbeWindow("NewsRelease" + suffix, at + offset, release.Event);
         }
@@ -60,47 +55,16 @@ public sealed class ProbeSchedule(IReadOnlyList<NewsRelease> news)
     private static DateTime Utc(DateOnly date, int hour, int minute, TimeZoneInfo zone) =>
         TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(hour, minute)), zone);
 
-    // ---- news-releases.json -------------------------------------------------------------------------
-
-    private sealed record NewsFile(IReadOnlyList<NewsEntry> Releases);
-    private sealed record NewsEntry(string Time, string Event);
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-    };
-
-    /// <summary>
-    /// Reads ~/tradebot/config/news-releases.json; a missing file means no news windows.
-    /// Format: { "releases": [ { "time": "2026-11-06 08:30", "event": "NFP" }, … ] } — times in New York local time.
-    /// </summary>
+    /// <summary>Reads ~/tradebot/config/news-releases.json (<see cref="NewsCalendar"/>); a missing file means no news windows.</summary>
     public static IReadOnlyList<NewsRelease> LoadNews(string path)
     {
-        if (!File.Exists(path))
-            return [];
-
-        NewsFile? file;
         try
         {
-            file = JsonSerializer.Deserialize<NewsFile>(File.ReadAllText(path), Json);
+            return NewsCalendar.Load(path);
         }
-        catch (JsonException ex)
+        catch (NewsCalendarException ex)
         {
-            throw new AuditConfigException($"{Path.GetFileName(path)}: {ex.Message}");
+            throw new AuditConfigException(ex.Message);
         }
-
-        var result = new List<NewsRelease>();
-        foreach (var entry in file?.Releases ?? [])
-        {
-            if (!DateTime.TryParseExact(entry.Time, "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
-                throw new AuditConfigException($"{Path.GetFileName(path)}: time \"{entry.Time}\" must look like 2026-11-06 08:30 (New York time)");
-            if (string.IsNullOrWhiteSpace(entry.Event))
-                throw new AuditConfigException($"{Path.GetFileName(path)}: every release needs an \"event\" name");
-            result.Add(new NewsRelease(time, entry.Event));
-        }
-        return result.OrderBy(r => r.NewYorkTime).ToList();
     }
 }

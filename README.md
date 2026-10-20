@@ -8,7 +8,7 @@ Trading bots for cTrader (C# / .NET 10, Ubuntu). **Each bot is a project of its 
 | Project | What it is | Status | Document |
 |---|---|---|---|
 | **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Built and finished; running (audit run since 18-Oct-2026) | [docs/bots/audit-bot.md](docs/bots/audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Working on demo (steps 1–5 of 6); service next | [docs/bots/tm.md](docs/bots/tm.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`) | [docs/bots/tm.md](docs/bots/tm.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [docs/bots/auto-bot.md](docs/bots/auto-bot.md) |
 | **Open Code Pieces** | The reusable code all bots are built from (`src/Trader.Core`) | In use by the Audit Bot and TM | [docs/open-code-pieces.md](docs/open-code-pieces.md) |
 
@@ -44,6 +44,13 @@ systemctl --user enable --now trader-auditbot       # start now and at every log
 systemctl --user status trader-auditbot             # running?
 journalctl --user -u trader-auditbot -f             # live output
 systemctl --user stop trader-auditbot               # stop
+```
+
+Running TM as a background service (same pattern; [tm.md §10](docs/bots/tm.md#10-run-and-operate)):
+
+```bash
+scripts/deploy-tm.sh                                # publish to ~/tradebot/bin/TM + install the service
+systemctl --user enable --now trader-tm             # start now and at every login
 ```
 
 Daily report (runs by itself every day at 00:15 UTC; reports in `~/tradebot/reports/`, open in Google Sheets):

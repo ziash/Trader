@@ -4,11 +4,11 @@
 
 | Item | Value |
 |---|---|
-| Status | **Working on demo** (run by hand) — steps 1–5 done 20-Oct-2026; step 6 (news / Friday / disconnect pop-ups, systemd service) next (§9) |
-| Document version | v1.0 (20-Oct-2026) — history in §13 |
-| Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory) |
+| Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
+| Document version | v1.1 (20-Oct-2026) — history in §13 |
+| Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
-| Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values) — live copy `~/tradebot/config/tm.json`; pop-ups: `notifications.json` |
+| Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
 | Memory | `~/tradebot/run/tm/<broker>-<ctid>.json` (trades TM is managing; survives restarts) |
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only |
 | Symbols | AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (per account in `tm.json`) |
@@ -102,7 +102,9 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 
 - **TM's own orders** (mirrors, hedges) are found again after a restart from their labels and linked to their main by its `positionId` (labels below).
 - **A main TM did not see opened** (TM was down): **hedges only, no mirror**, plus a warning; if price is already beyond H, the hedge opens at market at once.
-- **News and weekend:** a pop-up **10 minutes before each NFP/CPI release** (`news-releases.json`, shared with the Audit Bot) and **10 minutes before the Friday close** (17:00 New York), listing the open TM trades. No automatic action; hedge fills beyond H are logged with their slippage (Scenario 5).
+- **News and weekend:** a pop-up (Warning) **10 minutes before each NFP/CPI release** (`news-releases.json`, shared with the Audit Bot) and **10 minutes before the Friday close** (17:00 New York), listing the open TM trades ("No open TM trades" when there are none). Sent once each, also when TM starts inside the 10 minutes. No automatic action; hedge fills beyond H are logged with their slippage (Scenario 5). Lead time: `alertMinutesBefore` in `tm.json`.
+- **Connection down:** a pop-up (Critical, stays on screen) when TM has had no working connection to cTrader for **60 s** (`disconnectAlertSeconds`), and a pop-up "TM connected again" (Warning) when it is back. A normal reconnect takes about 7 s and gives no pop-up. While down, positions keep their hedges and stops on the server, but nothing is managed.
+- **News dates must be kept up to date:** TM logs a warning at start when `news-releases.json` has no future release.
 
 ## 7. Labels, logs and notifications (Q17)
 
@@ -138,18 +140,24 @@ Each step only on the owner's go; each tested on the demo accounts before the ne
 |---|---|---|
 | 1 | Notifications module in `Trader.Core` (§7) | **Done 20-Oct-2026** — pop-ups tested from a terminal and from a systemd user service; both seen on screen by the owner |
 | 2–5 | *(owner: "just implement it — we are on demo")* Watcher, trade start, hedge management, break-even, 2R/3R limits, clean-up — built together as one engine (`src/Trader.TM`) | **Done 20-Oct-2026** — 22 scenario tests on a simulated broker; live on both demos: take-over with and without stop-loss (ATR distance), long and short, TP copy, hedge level moved by a new stop-loss, owner closing one leg, restart with saved state, hedge fill → hedge stop → re-hedge → 2R warning (BTCUSD); both accounts flat afterwards |
-| 6 | News and Friday pop-ups, disconnect pop-ups (§6); systemd service and deploy script | Next |
+| 6 | News and Friday pop-ups, disconnect pop-ups (§6); systemd service and deploy script | **Done 20-Oct-2026** — 8 new tests (news lead time, start inside it, Friday close in summer and winter time, disconnect after 60 s and back, short drops silent); live on both demos: a test release popped up at T−10 min, forced drops gave "disconnected" and "connected again" pop-ups, clean stop; service started from the published build and stopped again; both accounts flat afterwards |
 
 ## 10. Run and operate
 
-Until step 6 makes it a service, run it in a terminal (Ctrl+C stops it; positions keep their hedges and stops on the server):
+As a background service (from `~/code/Trader`; runs the published build in `~/tradebot/bin/TM`, so code changes do not affect it until redeployed and restarted):
 
 ```bash
-dotnet run --project src/Trader.TM             # from ~/code/Trader
-dotnet run --project src/Trader.TM -- --help
+scripts/deploy-tm.sh                       # publish + install the service (does not start or restart it)
+systemctl --user enable --now trader-tm    # start now and at every login
+systemctl --user status trader-tm          # running?
+journalctl --user -u trader-tm -f          # live output
+systemctl --user restart trader-tm         # switch to a newly deployed build
+systemctl --user stop trader-tm            # stop (positions keep their hedges and stops on the server)
 ```
 
-Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnings (2R, mirror skipped, refused orders, tight hedge); everything is in the console and the logs.
+Run only one TM: stop the service before running it by hand in a terminal (`dotnet run --project src/Trader.TM`, Ctrl+C stops it). The service restarts TM 30 s after a crash, but not after a fatal problem it reported itself (token rejected, bad config). User services run while you are logged in (shared.md §3).
+
+Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnings (2R, mirror skipped, refused orders, tight hedge, news, Friday close, connection down); everything is in the console and the logs.
 
 ### Outputs
 
@@ -171,10 +179,11 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 5 | Trailing off at first; you close | "Trade Manually"; the swing definition is still open |
 | 6 | Built without a dry-run stage (owner: "we are on demo already") | Speed; demo money |
 | 7 | One loop per account that compares the server with the rules every second, plus a saved state file (§9) | Missed messages, reconnects and restarts heal themselves |
+| 8 | Connection-down pop-up only after 60 s, Critical; "connected again" as Warning. News / Friday pop-ups also when no TM trade is open | Routine reconnects (~7 s) would be noise; a long outage leaves trades unmanaged. A heads-up before news is useful before opening a trade too |
 
 ## 12. Open items
 
-- **Step 6:** pop-ups 10 min before NFP/CPI and the Friday close; a pop-up when the connection is down; systemd service and deploy script.
+- Keep `news-releases.json` up to date (it lists releases to Feb 2027; shared with the Audit Bot).
 - Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits.
 - Trailing (R3) needs the exact M5 swing definition ("last lower high") and the stop buffer — the same open question as [Auto Bot §9](auto-bot.md#9-open-questions).
 - A partial close of a main does not yet resize its pending hedge (the hedge keeps the original volume).
@@ -186,3 +195,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | — | 19 Oct 2026 | (as part of the old single plan, v1.18) Spec agreed with the owner, 20 questions one at a time |
 | — | 20 Oct 2026 | (old plan v1.20–v1.22) Step 1: notifications ([Open Code Pieces](../open-code-pieces.md)); steps 2–5: the trading engine, tested live on both demos |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Section 10.9) and the former TM page. Content unchanged |
+| v1.1 | 20 Oct 2026 | Step 6 done: news / Friday / disconnect pop-ups (§6, decision 8), systemd service `trader-tm` and `scripts/deploy-tm.sh` (§10). TM is built |

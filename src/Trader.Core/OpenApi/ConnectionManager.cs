@@ -44,6 +44,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
     private readonly Channel<Signal> _signals = Channel.CreateUnbounded<Signal>();
     private TraderSecrets _secrets = secrets;
     private IReadOnlyList<TradingAccount> _accounts = [];
+    private long _downSinceTicks = DateTime.UtcNow.Ticks; // 0 = connected and ready
 
     /// <summary>Called after every successful (re)connect, once all accounts are authenticated —
     /// the place to (re)subscribe to spots, trendbars etc. An exception here forces a reconnect.</summary>
@@ -58,6 +59,12 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
     public int Reconnects { get; private set; }
 
     public DateTime? AccessTokenExpiresUtc => _secrets.AccessTokenExpiresUtc;
+
+    /// <summary>Since when the bot has had no ready connection (lost, or not yet made after start); null while it has one.
+    /// Ready = connected, accounts authenticated and <see cref="OnReady"/> done. Safe to read from any thread.</summary>
+    public DateTime? DownSinceUtc => Interlocked.Read(ref _downSinceTicks) is var t and > 0 ? new DateTime(t, DateTimeKind.Utc) : null;
+
+    private void MarkDown() => Interlocked.CompareExchange(ref _downSinceTicks, DateTime.UtcNow.Ticks, 0);
 
     /// <summary>Runs until <paramref name="ct"/> is cancelled (returns normally) or a fatal problem occurs (throws).</summary>
     public async Task RunAsync(CancellationToken ct)
@@ -94,6 +101,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
                 wasReady = true;
                 if (OnReady is { } onReady)
                     await onReady(session, _accounts, ct);
+                Interlocked.Exchange(ref _downSinceTicks, 0);
 
                 reason = await MonitorAsync(session, ct);
             }
@@ -119,6 +127,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             }
             finally
             {
+                MarkDown();
                 if (session is not null)
                 {
                     session.MessageReceived -= OnSessionMessage;

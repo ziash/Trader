@@ -38,6 +38,25 @@ public sealed class MarketDataTests : IDisposable
     public void MainHours_follow_London_open_to_New_York_close(int y, int mo, int d, int h, int mi, bool main) =>
         Assert.Equal(main, MarketHours.IsMainHours(Utc(y, mo, d, h, mi)));
 
+    [Theory]
+    [InlineData(2026, 10, 30, 12)] // New York on summer time (EDT, UTC−4)
+    [InlineData(2026, 11, 6, 13)]  // winter time (EST, UTC−5) from 1-Nov-2026
+    public void News_release_time_converts_from_New_York(int y, int mo, int d, int utcHour) =>
+        Assert.Equal(Utc(y, mo, d, utcHour, 30), new NewsRelease(new DateTime(y, mo, d, 8, 30, 0), "NFP").Utc);
+
+    [Fact]
+    public void News_calendar_loads_sorted_and_reports_bad_entries()
+    {
+        Assert.Empty(NewsCalendar.Load(Path.Combine(_dir, "missing.json")));
+
+        var path = Path.Combine(_dir, NewsCalendar.FileName);
+        File.WriteAllText(path, """{ "releases": [ { "time": "2026-11-10 08:30", "event": "CPI" }, { "time": "2026-11-06 08:30", "event": "NFP" } ] }""");
+        Assert.Equal(["NFP", "CPI"], NewsCalendar.Load(path).Select(n => n.Event));
+
+        File.WriteAllText(path, """{ "releases": [ { "time": "2026-11-06 08:30", "event": "" } ] }""");
+        Assert.Throws<NewsCalendarException>(() => NewsCalendar.Load(path));
+    }
+
     [Fact]
     public void NextBoundary_uses_2_min_in_main_hours_and_5_min_off_peak()
     {

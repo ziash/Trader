@@ -17,6 +17,8 @@ public sealed record TmConfig(
     double WarnR = 2,                  // loss warning (tm.md §5)
     double CloseR = 3,                 // loss limit: leg and its hedge closed
     int MirrorWithinSeconds = 60,      // a main older than this when first seen gets hedges only, no mirror (tm.md §6)
+    int AlertMinutesBefore = 10,       // pop-up this long before each NFP/CPI release and the Friday close (tm.md §6)
+    int DisconnectAlertSeconds = 60,   // pop-up when the connection has been down this long (tm.md §6)
     IReadOnlyDictionary<string, double>? FallbackDistance = null) // per symbol, in price, when the candle history is unavailable
 {
     public const string FileName = "tm.json";
@@ -58,6 +60,8 @@ public sealed record TmConfig(
             throw new TmConfigException($"{FileName}: an account appears twice");
         if (RangePercent <= 0 || RangeDays < 1 || SpreadFloor < 0 || ArmR <= 0 || HedgeStopR <= 0 || WarnR <= 0 || CloseR <= WarnR)
             throw new TmConfigException($"{FileName}: rule values must be above 0, and closeR above warnR");
+        if (AlertMinutesBefore < 1 || DisconnectAlertSeconds < 1)
+            throw new TmConfigException($"{FileName}: alertMinutesBefore and disconnectAlertSeconds must be at least 1");
         return this;
     }
 

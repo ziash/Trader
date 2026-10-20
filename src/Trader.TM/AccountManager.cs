@@ -44,8 +44,17 @@ internal sealed class AccountManager(
     private volatile IReadOnlyDictionary<long, SymbolInfo> _symbols = new Dictionary<long, SymbolInfo>();
     private volatile bool _dirty = true;
     private DateTime _lastReconcile = DateTime.MinValue;
+    private volatile IReadOnlyList<string> _openTrades = Describe(book, account);
 
     public long AccountId => account.AccountId;
+
+    /// <summary>One line per trade TM is managing, for the news and Friday pop-ups (tm.md §6). Safe to read from any thread.</summary>
+    public IReadOnlyList<string> OpenTrades => _openTrades;
+
+    private static List<string> Describe(TradeBook book, TmAccount account) =>
+        book.Trades.Where(t => !t.Done)
+            .Select(t => $"{account.Broker} {t.Symbol} {(t.Dir > 0 ? "long" : "short")} P{t.MainId}")
+            .ToList();
 
     /// <summary>After every (re)connect, once the symbols are resolved and subscribed.</summary>
     public void SetSession(CTraderSession session, IReadOnlyList<SymbolInfo> symbols)
@@ -120,6 +129,7 @@ internal sealed class AccountManager(
         if (changed || actions.Count > MaxActionsPerCycle)
             _dirty = true;
         book.Save();
+        _openTrades = Describe(book, account);
     }
 
     /// <summary>Carries out one action. Returns true when it changed something on the server.</summary>

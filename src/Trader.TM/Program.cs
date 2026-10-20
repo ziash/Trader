@@ -1,7 +1,8 @@
 // TM — Trade Manually (docs/bots/tm.md). The owner opens positions by hand in cTrader; TM mirrors each
 // one and hedges both legs, manages the hedges, protects each leg at 1R, applies the 2R/3R loss rules and cleans
 // up when the owner closes. Demo accounts only.
-// - Reads ~/tradebot/config/tm.json (accounts, symbols, rule values) and notifications.json.
+// - Reads ~/tradebot/config/tm.json (accounts, symbols, rule values), news-releases.json and notifications.json.
+// - Pop-ups before each NFP/CPI release and the Friday close, and when the connection is down (tm.md §6).
 // - Remembers its trades in ~/tradebot/run/tm/<broker>-<ctid>.json.
 // - Logs to ~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/events.csv and actions.csv.
 // - Acts on an account only while it is Primary there (one TM copy acts; open-code-pieces.md §6).
@@ -26,11 +27,13 @@ if (Array.IndexOf(args, "--config-dir") is var dirIndex and >= 0)
 }
 
 TmConfig config;
+IReadOnlyList<NewsRelease> news;
 try
 {
     config = TmConfig.Load(Path.Combine(configDir, TmConfig.FileName));
+    news = NewsCalendar.Load(Path.Combine(configDir, NewsCalendar.FileName));
 }
-catch (TmConfigException ex)
+catch (Exception ex) when (ex is TmConfigException or NewsCalendarException)
 {
     Console.Error.WriteLine($"Config problem: {ex.Message}");
     return BotRunner.ExitFatal;
@@ -62,6 +65,14 @@ return await BotRunner.RunAsync("TM", args, async (bot, ct) =>
     bot.Log.Information("Rules: hedge {Pct} % of the {Days}-day range (min {Floor} × spread), arm {Arm}R, hedge stop {Stop}R, warn {Warn}R, close {Close}R",
         config.RangePercent, config.RangeDays, config.SpreadFloor, config.ArmR, config.HedgeStopR, config.WarnR, config.CloseR);
 
+    var upcoming = news.Where(n => n.Utc > DateTime.UtcNow).ToList();
+    if (upcoming.Count > 0)
+        bot.Log.Information("News pop-ups {Lead} min before {Count} release(s), next {Event} {Time:yyyy-MM-dd HH:mm} New York; Friday close pop-up; disconnect pop-up after {Down} s",
+            config.AlertMinutesBefore, upcoming.Count, upcoming[0].Event, upcoming[0].NewYorkTime, config.DisconnectAlertSeconds);
+    else
+        bot.Log.Event("NoNews").Warning("No upcoming releases in {File}: no news pop-ups until it is updated", Path.Combine(configDir, NewsCalendar.FileName));
+    var alerts = new Alerts(config, news, () => bot.Connection.DownSinceUtc, () => managers.SelectMany(m => m.OpenTrades).ToList());
+
     bot.Connection.MessageReceived += feed.Handle;
     bot.Connection.MessageReceived += m =>
     {
@@ -89,7 +100,7 @@ return await BotRunner.RunAsync("TM", args, async (bot, ct) =>
     bot.Notify.Info("Started", "TM started", $"Watching {string.Join(", ", config.Accounts.Select(a => a.Broker))}");
     try
     {
-        await BotRunner.RunTogetherAsync(ct, [registry.RunAsync, bot.Connection.RunAsync, .. managers.Select(m => (Func<CancellationToken, Task>)m.RunAsync)]);
+        await BotRunner.RunTogetherAsync(ct, [registry.RunAsync, bot.Connection.RunAsync, c => alerts.RunAsync(bot.Notify, c), .. managers.Select(m => (Func<CancellationToken, Task>)m.RunAsync)]);
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
