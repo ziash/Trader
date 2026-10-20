@@ -5,7 +5,7 @@ namespace Trader.Core.Hosting;
 /// <summary>
 /// Who is running: the bot's name (e.g. "AuditBot") and a per-process instance ID ("AuditBot-3f9a1c").
 /// The instance ID appears on every log line and in every order label, so with many bots running
-/// each log line and each fill can be traced to the process that caused it (plan 6.4, 10.8.2).
+/// each log line and each fill can be traced to the process that caused it (open-code-pieces.md §6, auto-bot.md §7.2).
 /// </summary>
 public sealed partial record BotIdentity(string BotName, string InstanceId)
 {

@@ -4,7 +4,7 @@ using System.Text;
 namespace Trader.Core.Csv;
 
 /// <summary>
-/// Appends rows to one CSV file per UTC day, in the format of plan 6.3.1: UTF-8, comma-separated,
+/// Appends rows to one CSV file per UTC day, in the format of shared.md §5: UTF-8, comma-separated,
 /// header row, one record per line, text quoted only when needed. Thread-safe; every row is flushed
 /// to disk at once, so a crash loses at most the row being written.
 /// </summary>
@@ -54,7 +54,7 @@ public sealed class DailyCsvWriter(Func<DateOnly, string> pathForDay, IReadOnlyL
     }
 }
 
-/// <summary>Formatting rules shared by all CSV files (plan 6.3.1).</summary>
+/// <summary>Formatting rules shared by all CSV files (shared.md §5).</summary>
 public static class CsvFormat
 {
     /// <summary>"2026-10-18 08:00:00" — Google Sheets reads this as a date-time. Always UTC.</summary>

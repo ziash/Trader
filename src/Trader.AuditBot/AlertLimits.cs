@@ -4,7 +4,7 @@ using Trader.Core.MarketData;
 namespace Trader.AuditBot;
 
 /// <summary>
-/// Alert limits (plan 6.2.4): a spread or a probe fill beyond these is logged as a warning (journal and events.csv).
+/// Alert limits (audit-bot.md §2.4): a spread or a probe fill beyond these is logged as a warning (journal and events.csv).
 /// Forex limits are in pips; crypto (everything that is not forex) in USD per lot, because a crypto "pip" differs by broker.
 /// Optional "alerts" section of audit.&lt;broker&gt;.json; anything left out keeps its default:
 /// <code>

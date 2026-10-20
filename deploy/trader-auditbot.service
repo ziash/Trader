@@ -1,4 +1,4 @@
-# systemd user service for the Audit Bot (plan Section 7: "systemd service, one unit per instance").
+# systemd user service for the Audit Bot (shared.md §3: one systemd user service per bot; audit-bot.md §6).
 # Installed by scripts/deploy-auditbot.sh into ~/.config/systemd/user/. Runs the published build in
 # ~/tradebot/bin/AuditBot (not the repo build), so code changes do not affect the running bot.
 #

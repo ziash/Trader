@@ -3,11 +3,11 @@ using Trader.Core.Csv;
 namespace Trader.AuditReport;
 
 /// <summary>
-/// The broker comparison report (plan 6.5): one row per broker × symbol × period, sorted so that the rows of
+/// The broker comparison report (audit-bot.md §5): one row per broker × symbol × period, sorted so that the rows of
 /// both brokers for the same symbol and period are next to each other. Periods:
 /// <list type="bullet">
 /// <item><c>day</c> — the whole range: spreads and all probes of the symbol;</item>
-/// <item><c>main</c>, <c>offpeak</c> — spreads in main hours / off-peak (plan 6.2.3);</item>
+/// <item><c>main</c>, <c>offpeak</c> — spreads in main hours / off-peak (audit-bot.md §2.3);</item>
 /// <item>each probe window (<c>QuietHour</c>, <c>LondonOpen</c>, …) — the probes of that window.</item>
 /// </list>
 /// Then one row per broker with symbol <c>ALL</c>: order totals, latency over all symbols, and reliability
@@ -164,7 +164,7 @@ public static class DailyReport
     private static double Median(IReadOnlyList<double> sorted) =>
         sorted.Count % 2 == 1 ? sorted[sorted.Count / 2] : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2;
 
-    /// <summary>Writes the report atomically (temp file, then rename), in the CSV format of plan 6.3.1.</summary>
+    /// <summary>Writes the report atomically (temp file, then rename), in the CSV format of audit-bot.md §3.1.</summary>
     public static void Write(string path, IEnumerable<string[]> rows)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

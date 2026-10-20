@@ -22,7 +22,7 @@ internal sealed class TradeState
 
     public DateTime StartedUtc { get; set; }
 
-    /// <summary>Found after it was opened (TM was down): hedges only, no mirror (10.9.6).</summary>
+    /// <summary>Found after it was opened (TM was down): hedges only, no mirror (tm.md §6).</summary>
     public bool NoMirror { get; set; }
 
     public bool MirrorRequested { get; set; }

@@ -50,7 +50,7 @@ public sealed class LogTap : ILogEventSink
 }
 
 /// <summary>
-/// Writes Information-and-above log events to events.csv files (plan 6.3.1): time_utc, level, event, detail.
+/// Writes Information-and-above log events to events.csv files (shared.md §5): time_utc, level, event, detail.
 /// An event carrying an Account property goes to that account's file only; others go to every account's file.
 /// </summary>
 public sealed class CsvEventSink : ILogEventSink, IDisposable

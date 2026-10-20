@@ -27,7 +27,7 @@ internal sealed record Snapshot(IReadOnlyList<Pos> Positions, IReadOnlyList<Ord>
 }
 
 /// <summary>
-/// TM's order labels (plan 10.9.7): instance ID + "P" + the main's positionId + the role, e.g.
+/// TM's order labels (tm.md §7): instance ID + "P" + the main's positionId + the role, e.g.
 /// <c>TM-3f9a1c-P123456789-MIR</c>. Roles: MIR (mirror), HMAIN (hedge of the main), HMIR (hedge of the mirror).
 /// </summary>
 internal static partial class TmLabel

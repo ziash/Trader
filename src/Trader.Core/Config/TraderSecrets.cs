@@ -1,6 +1,6 @@
 namespace Trader.Core.Config;
 
-/// <summary>Which cTrader Open API host to use. Only Demo exists until Phase 5 (plan Section 8).</summary>
+/// <summary>Which cTrader Open API host to use. Only Demo is used until a go-live is decided (shared.md §4).</summary>
 public enum ApiEnvironment
 {
     Demo,

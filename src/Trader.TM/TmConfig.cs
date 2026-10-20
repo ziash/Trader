@@ -4,19 +4,19 @@ using System.Text.Json.Serialization;
 namespace Trader.TM;
 
 /// <summary>
-/// ~/tradebot/config/tm.json (plan 10.9). Example and defaults: config/tm.json in the repo.
+/// ~/tradebot/config/tm.json (tm.md). Example and defaults: config/tm.json in the repo.
 /// Rule values are in R (the distance from a leg's entry to the hedge level H) unless stated otherwise.
 /// </summary>
 public sealed record TmConfig(
     IReadOnlyList<TmAccount> Accounts,
     double RangePercent = 15,          // default hedge distance = this % of the average daily range ...
-    int RangeDays = 3,                 // ... over the last N completed daily candles (10.9.3)
+    int RangeDays = 3,                 // ... over the last N completed daily candles (tm.md §3)
     double SpreadFloor = 5,            // ... but at least this many times the current spread
-    double ArmR = 1,                   // A: hedge exit armed this far beyond the hedge fill (10.9.4)
+    double ArmR = 1,                   // A: hedge exit armed this far beyond the hedge fill (tm.md §4)
     double HedgeStopR = 0.5,           // B: hedge stop this far behind its fill before arming
-    double WarnR = 2,                  // loss warning (10.9.5)
+    double WarnR = 2,                  // loss warning (tm.md §5)
     double CloseR = 3,                 // loss limit: leg and its hedge closed
-    int MirrorWithinSeconds = 60,      // a main older than this when first seen gets hedges only, no mirror (10.9.6)
+    int MirrorWithinSeconds = 60,      // a main older than this when first seen gets hedges only, no mirror (tm.md §6)
     IReadOnlyDictionary<string, double>? FallbackDistance = null) // per symbol, in price, when the candle history is unavailable
 {
     public const string FileName = "tm.json";

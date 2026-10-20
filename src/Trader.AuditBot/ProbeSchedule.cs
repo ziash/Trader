@@ -11,7 +11,7 @@ public sealed record ProbeWindow(string Name, DateTime StartUtc, string? Detail 
 public sealed record NewsRelease(DateTime NewYorkTime, string Event);
 
 /// <summary>
-/// Probe windows of plan 6.2.2, Monday–Friday in local market time (daylight saving handled by time-zone rules):
+/// Probe windows of audit-bot.md §2.2, Monday–Friday in local market time (daylight saving handled by time-zone rules):
 /// LondonOpen 08:00 London, NewYorkOpen 08:00 New York, QuietHour 03:00 London, and for each news release
 /// three windows: 2 min before, 5 s after and 5 min after (NewsRelease-2m, NewsRelease+5s, NewsRelease+5m).
 /// </summary>

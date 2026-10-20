@@ -10,7 +10,7 @@ public sealed record ConversionSymbol(SymbolInfo Symbol, bool Invert);
 
 /// <summary>
 /// Collects quotes per account and symbol and writes one spreads.csv row per symbol per interval
-/// (plan 6.2.3, 6.3.1): every 2 min in main hours, every 5 min off-peak.
+/// (audit-bot.md §2.3, §3.1): every 2 min in main hours, every 5 min off-peak.
 ///
 /// A row is skipped when there were no ticks and the market was closed during the interval (weekend,
 /// daily break). No ticks while the market was open is written as a row with ticks = 0 — a feed gap.
@@ -18,7 +18,7 @@ public sealed record ConversionSymbol(SymbolInfo Symbol, bool Invert);
 /// so that late messages still count. Ticks stamped before the interval (the stale last price the server
 /// sends on each subscribe) are ignored.
 ///
-/// Alerts (plan 6.2.4): when a row's average spread is above the symbol's limit, one "SpreadWide" warning is
+/// Alerts (audit-bot.md §2.4): when a row's average spread is above the symbol's limit, one "SpreadWide" warning is
 /// logged; while it stays wide nothing more; when it is back under the limit, one "SpreadNormal" line with
 /// how long it lasted and the peak. Like an alarm raise / clear.
 /// </summary>

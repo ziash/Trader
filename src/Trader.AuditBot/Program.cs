@@ -1,13 +1,13 @@
-// Audit Bot (plan Section 6). Phase 1 steps 3–5: price feed to disk, instance registry, probe orders.
+// Audit Bot (audit-bot.md). Build steps 3–5 (audit-bot.md §7): price feed to disk, instance registry, probe orders.
 // - Reads ~/tradebot/config/audit.*.json (one per broker).
 // - Stays connected (heartbeat, reconnect, token refresh — Trader.Core).
 // - Subscribes to bid/ask and M5 trendbars for the configured symbols, plus the symbols needed to
 //   convert JPY/GBP costs into USD.
 // - Writes spreads.csv (one row per symbol every 2 min main hours / 5 min off-peak) and events.csv to
 //   ~/tradebot/logs/<broker>/<ctidTraderAccountId>/<instanceId>/<yyyy-MM-dd>/.
-// - Registers in ~/tradebot/run/instances/ (plan 6.4): per account, one instance is Primary (may send
+// - Registers in ~/tradebot/run/instances/ (audit-bot.md §4): per account, one instance is Primary (may send
 //   probe orders from step 5), the others Passive; a Passive takes over at once if the Primary stops.
-// - Probe orders (plan 6.2.2): 0.01 lot buy + sell per symbol in each window (London open, New York open,
+// - Probe orders (audit-bot.md §2.2): 0.01 lot buy + sell per symbol in each window (London open, New York open,
 //   quiet hour, US NFP/CPI releases from news-releases.json), opened and closed at once, only while Primary;
 //   written to probes.csv. Left-over AuditBot positions are closed; other positions are never touched.
 //

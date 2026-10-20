@@ -1,6 +1,6 @@
 # Phase 0 — Environment setup checklist
 
-Goal of Phase 0 (plan Section 8): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
+Goal of the setup (Phase 0 of the old plan; now [shared.md](shared.md)): demo accounts, cTrader ID linked, Open API app registered, .NET + VS Code on Ubuntu, Git repo. When every box below is ticked, run `scripts/check-env.sh`; it should print no `FAIL` lines.
 
 Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warnings. Open API app approved; Client ID, secret and tokens (scope `trading`, both demo accounts) in the secrets file. Pepperstone demo account type confirmed **Razor** by the owner on 19-Oct-2026.
 
@@ -9,8 +9,8 @@ Status on 16-Oct-2026: **Phase 0 complete.** `check-env.sh`: no failures, 0 warn
 ## Step 1 — IC Markets demo account (done)
 
 - [x] Log in at **https://app.ctrader.com** with the cTrader ID (email) you used for the IC Markets demo. The account should appear in the account list.
-- [x] Check the account is in **Hedging** mode, not Netting (account info in cTrader). The whole hedge design (plan 10.6) needs this. *Confirmed: Hedging.*
-- [x] Note the account type: **Raw Spread** (spread + commission) or **Standard** (spread only). Open item in plan Section 12; the Audit Bot will compare them. *Confirmed: Raw Spread.*
+- [x] Check the account is in **Hedging** mode, not Netting (account info in cTrader). The ownership rule and every hedge design ([shared §2](shared.md#2-brokers-and-accounts), [Auto Bot §6.6](bots/auto-bot.md#66-requirements-for-scenario-1-to-work)) need this. *Confirmed: Hedging.*
+- [x] Note the account type: **Raw Spread** (spread + commission) or **Standard** (spread only). Open question in [Auto Bot §9](bots/auto-bot.md#9-open-questions); the Audit Bot compares the brokers. *Confirmed: Raw Spread.*
 - [x] Note the base currency (USD assumed) and leverage. *Confirmed: USD, 1:500, demo balance USD 5,000 (entity: Raw Trading Ltd). Demo account number: **10124393**.*
 - [ ] Do **not** note down passwords anywhere in this repo. The bot never uses the account password — it uses OAuth tokens (Step 3).
 
@@ -145,7 +145,7 @@ A line with `CONNECTION ESTABLISHED` and a TLS protocol version means the path i
 
 ## Step 6 — Folders and secrets (outside the repo)
 
-Runtime folders from plan Section 6.3:
+Runtime folders ([shared §5](shared.md#5-folders-and-files)):
 
 ```bash
 mkdir -p ~/tradebot/{config,run/instances,logs,reports}

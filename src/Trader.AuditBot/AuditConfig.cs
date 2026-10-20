@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace Trader.AuditBot;
 
 /// <summary>
-/// One broker's Audit Bot settings: ~/tradebot/config/audit.&lt;broker&gt;.json (plan 6.3). Example:
+/// One broker's Audit Bot settings: ~/tradebot/config/audit.&lt;broker&gt;.json (audit-bot.md §3). Example:
 /// <code>
 /// {
 ///   "broker": "brokerA",                 // folder name under ~/tradebot/logs

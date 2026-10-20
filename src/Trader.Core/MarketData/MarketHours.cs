@@ -1,7 +1,7 @@
 namespace Trader.Core.MarketData;
 
 /// <summary>
-/// Main hours vs off-peak (plan 6.2.3): main = Mon–Fri from 08:00 London to 17:00 New York, on the same
+/// Main hours vs off-peak (audit-bot.md §2.3): main = Mon–Fri from 08:00 London to 17:00 New York, on the same
 /// calendar day in both cities; everything else is off-peak. Local times use time-zone rules, so the
 /// UK (25-Oct-2026) and US (1-Nov-2026) clock changes are handled automatically.
 /// </summary>

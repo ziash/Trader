@@ -24,7 +24,7 @@ internal sealed class PlanEnv
 }
 
 /// <summary>
-/// TM's rules (plan 10.9.3–10.9.5) as one function: from the account's positions and orders, the prices and the
+/// TM's rules (tm.md §3–§5) as one function: from the account's positions and orders, the prices and the
 /// remembered trades, work out what should be changed on the server. It runs every second; anything that did not
 /// work is simply planned again next time, so it is safe after missed messages, reconnects and restarts. State
 /// that only TM knows (fills seen, steps done) is updated here or by an action's <see cref="TmAction.Done"/>.
@@ -208,7 +208,7 @@ internal static class Planner
                 Leg(t.Mirror, mirPos, TmLabel.Mirror, TmLabel.HedgeMirror);
         }
 
-        /// <summary>The owner moved the hedge level: a new stop-loss on the main, or a dragged hedge order (10.9.4).</summary>
+        /// <summary>The owner moved the hedge level: a new stop-loss on the main, or a dragged hedge order (tm.md §4).</summary>
         private void HedgeLevelChange()
         {
             var hedgeOpen = new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }.Any(r => tmPos.ContainsKey((t.MainId, r)));
@@ -294,7 +294,7 @@ internal static class Planner
                 var close = env.ClosePrice(closedId) ?? hedgeExit;
                 var gain = hd * (close - leg.HedgeFill);
                 leg.Realized += gain;
-                leg.Raised = leg.Armed; // closed at fill + 1 pip: re-hedge 1R beyond the price (10.9.4)
+                leg.Raised = leg.Armed; // closed at fill + 1 pip: re-hedge 1R beyond the price (tm.md §4)
                 leg.Armed = false;
                 leg.HedgePositionId = null;
                 actions.Add(new Notify(t, hedgeRole, NotificationLevel.Info, "HedgeClosed", $"{t.Symbol} {name} hedge closed at {P(close, _s)}",
@@ -312,7 +312,7 @@ internal static class Planner
                 return;
             }
 
-            // Loss limits (10.9.5): the leg, its open hedge and its earlier hedges together, in R.
+            // Loss limits (tm.md §5): the leg, its open hedge and its earlier hedges together, in R.
             var result = profit + (hPos is not null ? hd * (hedgeExit - hPos.Entry) : 0) + leg.Realized;
             var lossR = leg.R > 0 ? -result / leg.R : 0;
             if (AtLeast(lossR * leg.R, env.Config.CloseR * leg.R))
@@ -342,7 +342,7 @@ internal static class Planner
                 return;
             }
 
-            // The hedge itself (10.9.4).
+            // The hedge itself (tm.md §4).
             if (hPos is not null)
             {
                 if (hOrd is not null)
@@ -386,7 +386,7 @@ internal static class Planner
                     $"Price was already beyond the hedge level {P(t.H, _s)}"));
             }
 
-            // The leg's own stop-loss goes once it is hedged (10.9.3); TM keeps the mirror's take-profit equal to the main's.
+            // The leg's own stop-loss goes once it is hedged (tm.md §3); TM keeps the mirror's take-profit equal to the main's.
             var hedged = hOrd is not null || hPos is not null;
             if (pos.StopLoss is not null && (leg.StopCleared || hedged))
                 Protect(pos, role, null, tp, () => leg.StopCleared = true);

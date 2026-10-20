@@ -13,7 +13,7 @@ namespace Trader.TM;
 /// <summary>
 /// Runs TM on one account: every second (sooner after an order event) it reads the account's positions and orders,
 /// lets the <see cref="Planner"/> decide, and carries out the actions one by one. Only while this instance is
-/// Primary on the account (plan 6.4), so two TM copies never act twice. Every order it sends is a row in actions.csv.
+/// Primary on the account (open-code-pieces.md §6), so two TM copies never act twice. Every order it sends is a row in actions.csv.
 /// </summary>
 internal sealed class AccountManager(
     TmAccount account,
@@ -193,7 +193,7 @@ internal sealed class AccountManager(
         return true;
     }
 
-    /// <summary>Default hedge distance (10.9.3): a share of the average daily range of the last N days, at least a multiple of the spread.</summary>
+    /// <summary>Default hedge distance (tm.md §3): a share of the average daily range of the last N days, at least a multiple of the spread.</summary>
     private async Task FetchDistanceAsync(CTraderSession session, SymbolInfo s)
     {
         var now = DateTime.UtcNow;

@@ -4,7 +4,7 @@ using System.Text;
 namespace Trader.Core.Csv;
 
 /// <summary>
-/// Reads a CSV file written in the format of plan 6.3.1 (header row, fields quoted only when needed).
+/// Reads a CSV file written in the format of shared.md §5 (header row, fields quoted only when needed).
 /// Columns are found by name, so files with extra or reordered columns still read. Lines whose field
 /// count does not match the header (e.g. a line cut off by a crash) are skipped and counted.
 /// </summary>

@@ -1,7 +1,7 @@
-# Trader.Core — shared framework for all bots
+# Trader.Core — the Open Code Pieces
 
 Every bot in this repo is a small program on top of this library. The connection, token handling,
-logging and start-up/shut-down live here **once**; bots do not copy them (plan decision 14).
+logging and start-up/shut-down live here **once**; bots do not copy them. What each piece is and the rules every bot follows: [docs/open-code-pieces.md](../../docs/open-code-pieces.md).
 
 | Folder | What it gives a bot |
 |---|---|
@@ -86,7 +86,7 @@ await BotRunner.RunTogetherAsync(ct, registry.RunAsync, bot.Connection.RunAsync)
 
 - Primary = holder of `run/instances/<BotName>-<account>.primary.lock`; released by Linux the moment the process ends, so a Passive copy takes over within 2 s.
 - `registry.View(ctid)` gives the siblings, this copy's role and its **slot** (0 = oldest) for staggering orders.
-- **Place orders only while Primary**, and follow the ownership rule: only touch orders/positions with your own label, close by `positionId` (plan 5.3).
+- **Place orders only while Primary**, and follow the ownership rule: only touch orders/positions with your own label, close by `positionId` ([open-code-pieces.md §4](../../docs/open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
 
 ## Orders
 
@@ -107,7 +107,7 @@ var atr = Candle.AverageTrueRange(days, 3);                                 // a
 
 - Market orders and closes wait for the fill; pending-order and SL/TP calls wait for the server's confirmation (several replies come back per order). All throw `CTraderApiException` with the broker's code on rejection (e.g. `TRADING_BAD_VOLUME`).
 - Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`.
-- Place orders only while Primary on the account, and follow the ownership rule (plan 5.3).
+- Place orders only while Primary on the account, and follow the ownership rule ([open-code-pieces.md §4](../../docs/open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
 
 ## Notifications to the owner
 

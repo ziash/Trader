@@ -1,4 +1,4 @@
-// Audit report (plan 6.5, Phase 1 step 6). Reads the Audit Bot's CSV logs and writes the broker comparison:
+// Audit report (audit-bot.md §5, build step 6). Reads the Audit Bot's CSV logs and writes the broker comparison:
 //   ~/tradebot/reports/daily-compare-<yyyy-MM-dd>.csv          one UTC day
 //   ~/tradebot/reports/summary-<from>_<to>.csv                 a range (the final 2-week summary)
 // Read-only: never connects to cTrader and never touches the logs, so it is safe while the bot runs.

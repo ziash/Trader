@@ -1,7 +1,7 @@
 namespace Trader.Core.Hosting;
 
 /// <summary>
-/// Runtime folders outside the repo (plan 6.3): ~/tradebot/{config,run/instances,logs,reports}.
+/// Runtime folders outside the repo (shared.md §5): ~/tradebot/{config,run/instances,logs,reports}.
 /// TRADEBOT_HOME overrides the root (used by tests).
 /// </summary>
 public static class TradebotPaths

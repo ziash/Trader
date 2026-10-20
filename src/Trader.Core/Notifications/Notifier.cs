@@ -7,7 +7,7 @@ using Trader.Core.Logging;
 namespace Trader.Core.Notifications;
 
 /// <summary>
-/// The one place a bot sends messages to the owner (plan 10.9.7):
+/// The one place a bot sends messages to the owner (open-code-pieces.md §7):
 ///
 ///     bot.Notify.Warning("LossWarning", "AUDJPY short at -2R", "Trade P123456789, leg MIR", account);
 ///

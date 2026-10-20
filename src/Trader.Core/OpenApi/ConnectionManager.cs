@@ -32,7 +32,7 @@ public sealed class ConnectionOptions
 }
 
 /// <summary>
-/// Keeps one Open API connection up for as long as <see cref="RunAsync"/> runs (plan 5.2):
+/// Keeps one Open API connection up for as long as <see cref="RunAsync"/> runs (open-code-pieces.md §2):
 /// connect → app auth → token refresh if due → account auth → <see cref="OnReady"/> → watch.
 /// On any loss it reconnects with backoff (<see cref="Backoff"/>) and authenticates again.
 /// </summary>

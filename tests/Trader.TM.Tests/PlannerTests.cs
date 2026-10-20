@@ -3,7 +3,7 @@ using Trader.TM;
 
 namespace Trader.TM.Tests;
 
-/// <summary>TM's rules (plan 10.9) run against <see cref="FakeBroker"/>. EURUSD, 0.5 lot; spread 0.2 pip.</summary>
+/// <summary>TM's rules (tm.md) run against <see cref="FakeBroker"/>. EURUSD, 0.5 lot; spread 0.2 pip.</summary>
 public sealed class PlannerTests
 {
     private const long Half = 5_000_000; // 0.5 lot in Open API units

@@ -219,7 +219,7 @@ public sealed class CTraderSession : IAsyncDisposable
         return ExecuteAsync(req, timeout);
     }
 
-    /// <summary>Order comment with the send time (plan 5.3): "sent 2026-10-19 08:00:01.234Z" (UTC, milliseconds).</summary>
+    /// <summary>Order comment with the send time (open-code-pieces.md §4): "sent 2026-10-19 08:00:01.234Z" (UTC, milliseconds).</summary>
     public static string SentComment(DateTime utc) =>
         "sent " + utc.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture) + "Z";
 

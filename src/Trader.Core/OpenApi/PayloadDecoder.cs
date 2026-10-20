@@ -7,7 +7,7 @@ namespace Trader.Core.OpenApi;
 /// <summary>
 /// Decodes a raw Open API envelope into its message. Uses the library's MessageFactory first; when that
 /// returns nothing — the 2022 library has no mapping for some messages, e.g. ProtoOASubscribeLiveTrendbarRes
-/// (found in Phase 1 step 3, plan 5.1) — it falls back to a table built from every generated message class
+/// (found in the Audit Bot's step 3, open-code-pieces.md §3) — it falls back to a table built from every generated message class
 /// in the library: each class knows its own payload type and has a parser.
 /// </summary>
 public static class PayloadDecoder

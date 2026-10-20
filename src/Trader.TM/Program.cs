@@ -1,10 +1,10 @@
-// TM — Trade Manually (plan 10.9, docs/bots/tm.md). The owner opens positions by hand in cTrader; TM mirrors each
+// TM — Trade Manually (docs/bots/tm.md). The owner opens positions by hand in cTrader; TM mirrors each
 // one and hedges both legs, manages the hedges, protects each leg at 1R, applies the 2R/3R loss rules and cleans
 // up when the owner closes. Demo accounts only.
 // - Reads ~/tradebot/config/tm.json (accounts, symbols, rule values) and notifications.json.
 // - Remembers its trades in ~/tradebot/run/tm/<broker>-<ctid>.json.
 // - Logs to ~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/events.csv and actions.csv.
-// - Acts on an account only while it is Primary there (one TM copy acts; plan 6.4).
+// - Acts on an account only while it is Primary there (one TM copy acts; open-code-pieces.md §6).
 //
 // Options: --config-dir <dir> (default ~/tradebot/config), plus the common ones (--help, --test-notification).
 

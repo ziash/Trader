@@ -9,10 +9,10 @@ using Trader.Core.OpenApi;
 namespace Trader.AuditBot;
 
 /// <summary>
-/// Probe orders (plan 6.2, 6.2.2, step 5): in each window, for each symbol, one 0.01-lot buy and one sell,
+/// Probe orders (audit-bot.md §2, §2.2, step 5): in each window, for each symbol, one 0.01-lot buy and one sell,
 /// each opened at market and closed again at once; both the open and the close are written to probes.csv.
 ///
-/// Safety (plan 5.3, 6.4): only while this instance is Primary on the account; one probe open at a time per
+/// Safety (open-code-pieces.md §4, audit-bot.md §4): only while this instance is Primary on the account; one probe open at a time per
 /// account; every probe carries the bot's label and a wide server-side backup stop-loss; positions are closed
 /// only by their own positionId. Left-over AuditBot positions (e.g. after a crash) are closed on connect, on
 /// becoming Primary, and before every window. Positions without the AuditBot label are never touched.
@@ -127,7 +127,7 @@ public sealed class ProbeRunner(
             return;
         }
 
-        await Task.Delay(SlotOffset * view.Slot, ct); // stagger instances (plan 6.4)
+        await Task.Delay(SlotOffset * view.Slot, ct); // stagger instances (audit-bot.md §4)
         var gate = Gate(c.AccountId);
         await gate.WaitAsync(ct);
         var results = new List<ProbeResult>();

@@ -5,7 +5,7 @@ using Trader.Core.Logging;
 
 namespace Trader.Core.Hosting;
 
-/// <summary>What one bot instance may do on one account (plan 6.4).</summary>
+/// <summary>What one bot instance may do on one account (open-code-pieces.md §6).</summary>
 public enum InstanceRole
 {
     /// <summary>The one instance of this bot on this account that may place orders.</summary>
@@ -34,7 +34,7 @@ public sealed record InstanceRecord(
 public sealed record AccountView(string Broker, long AccountId, InstanceRole Role, IReadOnlyList<InstanceRecord> Siblings, int Slot, int TotalInstances);
 
 /// <summary>
-/// The "know your siblings" registry (plan 6.4), shared by all bots.
+/// The "know your siblings" registry (open-code-pieces.md §6), shared by all bots.
 ///
 /// - Each instance writes a status file per account every 10 s: &lt;broker&gt;-&lt;account&gt;-&lt;instanceId&gt;.json
 ///   (written to a temp file, then renamed, so readers never see half a file). A file belongs to a dead
@@ -42,7 +42,7 @@ public sealed record AccountView(string Broker, long AccountId, InstanceRole Rol
 ///   this machine; whoever notices deletes it.
 /// - Primary: the instance holding the exclusive lock file &lt;BotName&gt;-&lt;account&gt;.primary.lock. Linux releases
 ///   the lock the moment the process ends — even on kill -9 or a crash — so a Passive instance takes over
-///   within one check (2 s), and there can never be two Primaries on this machine (plan v1.12).
+///   within one check (2 s), and there can never be two Primaries on this machine (open-code-pieces.md §6).
 /// - Roles are per account: one process can be Primary on one account and Passive on another.
 /// </summary>
 public sealed class InstanceRegistry : IDisposable
@@ -184,7 +184,7 @@ public sealed class InstanceRegistry : IDisposable
             RoleChanged?.Invoke(r.AccountId, view.Role);
         }
 
-        // Log the sibling picture on start, whenever it changes, and hourly (plan 6.4 "Visibility").
+        // Log the sibling picture on start, whenever it changes, and hourly (open-code-pieces.md §6; "Visibility").
         var key = string.Join(",", view.Siblings.Select(s => $"{s.InstanceId}:{s.Role}")) + $"|{view.Role}";
         if (key == r.LastSiblingKey && now - r.LastStatusLog < StatusLogInterval)
             return;

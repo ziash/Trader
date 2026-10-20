@@ -1,5 +1,5 @@
 {
-  // Notifications for every bot (plan 10.9.7). Live copy: ~/tradebot/config/notifications.json
+  // Notifications for every bot (open-code-pieces.md §7). Live copy: ~/tradebot/config/notifications.json
   // Logs (journal, events.csv) always get every notification; channels below get what passes their filter.
   // Levels: Info < Warning < Critical. Desktop pop-ups: Critical stays on screen until dismissed.
   // Filters per channel (all optional): "minLevel", "bots": ["TM"], "events": [...], "excludeEvents": [...], "enabled".

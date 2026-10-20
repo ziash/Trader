@@ -4,7 +4,7 @@ using Trader.Core.Csv;
 
 namespace Trader.AuditReport;
 
-/// <summary>One spreads.csv row (plan 6.3.1); spreads in pips and USD per lot.</summary>
+/// <summary>One spreads.csv row (audit-bot.md §3.1); spreads in pips and USD per lot.</summary>
 public sealed record SpreadRow(DateTime Time, int IntervalS, string Session, string Symbol, int Ticks,
     double? AvgPips, double? MaxPips, double? AvgUsd, double? MaxUsd);
 
@@ -27,7 +27,7 @@ public sealed class BrokerLogs(string broker)
 }
 
 /// <summary>
-/// Reads ~/tradebot/logs/&lt;broker&gt;/&lt;ctid&gt;/&lt;instanceId&gt;/&lt;yyyy-MM-dd&gt;/ (plan 6.3). Every restart gives a new
+/// Reads ~/tradebot/logs/&lt;broker&gt;/&lt;ctid&gt;/&lt;instanceId&gt;/&lt;yyyy-MM-dd&gt;/ (audit-bot.md §3). Every restart gives a new
 /// instance folder, so a day can be spread over several; they are merged here. When two instances ran at the
 /// same time (a Primary and a Passive both write spreads.csv), each interval is counted once: the row with
 /// more ticks is kept. Probes are sent only by the Primary; identical probe rows are counted once.

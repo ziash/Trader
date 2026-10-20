@@ -54,7 +54,7 @@ else
   warn "No GitHub login found (gh auth or SSH key). See setup.md 4.2"
 fi
 repo_root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)
-if [ -n "$repo_root" ] && [ -f "$repo_root/docs/plan.md" ]; then
+if [ -n "$repo_root" ] && [ -f "$repo_root/docs/shared.md" ]; then
   ok "Trader repo at $repo_root"
 else
   warn "Script not run from inside the Trader repo clone"
