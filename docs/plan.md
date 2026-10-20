@@ -3,7 +3,7 @@
 | Item | Detail |
 |---|---|
 | Owner | Zeeshan |
-| Document version | **v1.21** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
+| Document version | **v1.22** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
 | Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
@@ -115,6 +115,9 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 - Receive execution events (fills, rejections) and reconcile positions on reconnect, rebuilding leg pairs from their labels.
 - Respect Open API request-rate limits (shared budget per connection) — trailing stops and 4-leg trades increase order-modify traffic.
 - Structured logging (Serilog) in UTC timestamps.
+- *(v1.20)* Notifications to the owner (`bot.Notify`, Section 10.9.7).
+
+*(v1.21)* Built in `Trader.Core` so far: connection and reconnect, token refresh, spots and live trendbars, **daily/historical candles** and ATR (`GetTrendbarsAsync`, `Candle.AverageTrueRange`), market orders, **pending stop orders, moving and cancelling them**, **setting / removing a position's stop-loss and take-profit**, closing by `positionId`, reconcile, instance registry, CSV logs, notifications. Usage: `src/Trader.Core/README.md`.
 
 ### 5.3 One framework, many bots *(v1.10)*
 
@@ -231,6 +234,8 @@ Each broker gets its own folder; each running instance gets its own sub-folder. 
       probes.csv   # one row per probe order (open and close each a row, v1.13)
       events.csv   # connect, reconnect, errors, rejections (v1.8; was events.log)
     brokerB/<accountId>/<instanceId>/2026-10-12/ ...
+    brokerA/<accountId>/TM-<6hex>/2026-10-20/   # other bots log into the same broker/account folders (v1.22)
+      events.csv, actions.csv                    # TM: see 10.9.7
   reports/
     daily-compare-2026-10-12.csv  # one UTC day, both brokers (6.5); made daily at 00:15 UTC
     summary-2026-10-18_2026-11-01.csv  # a range of days (final 2-week summary, v1.16)
@@ -316,7 +321,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | `--date 2026-10-19` | That day, rebuilt |
 | `--from 2026-10-18 --to 2026-11-01` | `reports/summary-<from>_<to>.csv` — same columns over the whole range (the final summary) |
 
-- **Merging:** a day may be spread over several instance folders (every restart starts a new one). They are merged; if two instances logged the same interval (Primary and Passive), it is counted once (the row with more ticks).
+- **Merging:** a day may be spread over several instance folders (every restart starts a new one). *(v1.22)* Only the Audit Bot's own folders (`AuditBot-…`) are read; other bots (TM) log into the same broker/account folders and are ignored. They are merged; if two instances logged the same interval (Primary and Passive), it is counted once (the row with more ticks).
 - **Rows:** one per broker × symbol × period, sorted by symbol, then period, then broker, so IC Markets and Pepperstone are on adjacent lines. Periods: `day` (all), `main` and `offpeak` (spreads, 6.2.3), and each probe window (`QuietHour`, `LondonOpen`, …; probes only). Then one `ALL` row per broker with order totals, latency and reliability.
 - **Columns:**
 
@@ -339,6 +344,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 | Runtime / SDK | .NET 10 LTS SDK from Ubuntu's archive (`dotnet-sdk-10.0`); runtime only on the VPS later *(v1.4)* |
 | Editor | VS Code + C# Dev Kit (AI-assisted coding) |
 | Running the bot | systemd service (one unit per instance) → later Docker container. *(v1.14)* Audit Bot: **systemd user service** `trader-auditbot` (`deploy/trader-auditbot.service`), running a **published Release build** in `~/tradebot/bin/AuditBot/` so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs. Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal (`journalctl --user -u trader-auditbot`). *(v1.16)* Daily report: **systemd user timer** `trader-auditreport.timer` (00:15 UTC, catches up after the laptop was off) starting `trader-auditreport.service`, which runs the published build in `~/tradebot/bin/AuditReport/`; `scripts/deploy-auditreport.sh` publishes, installs and enables it. |
+| TM *(v1.21)* | Runs by hand until step 6 (`dotnet run --project src/Trader.TM`); then a systemd user service like the Audit Bot's (10.9.9). Its state survives restarts (`~/tradebot/run/tm/`). |
 | Secrets | API client secret and tokens in `~/.config/trader/secrets.env` (permissions 600) — never in Git |
 | Setup check | `scripts/check-env.sh` — read-only check of OS, .NET, Git, VS Code, clock, port 5035, folders, secrets *(v1.4)* |
 | Version control | Private Git repository (this repo — holds the plan and the code) |
@@ -671,6 +677,7 @@ Every change is recorded here, the version number in the header table is increas
 | v1.19 | 20-Oct-2026 | **One page per bot** (owner's request): `docs/bots/` with an index, a template and pages for the Audit Bot and TM; Bots table in the README; short README in each bot's code folder; rule in 5.3 and CLAUDE.md. The plan stays authoritative for the rules. |
 | v1.20 | 20-Oct-2026 | **TM step 1 done:** reusable notifications module in `Trader.Core` (10.9.7), `notifications.json` (6.3 layout, which now also lists `news-releases.json`), common option `--test-notification`. TM build steps listed (new 10.9.9). |
 | v1.21 | 20-Oct-2026 | **TM steps 2–5 done** in one go (owner: no dry-run stage on demo): engine of 10.9.9 (per-account loop, rule function, saved state, `tm.json`, `actions.csv` columns), tested on a simulated broker and live on both demos. Live findings recorded (10.9.9): SL/TP of manual positions can be changed (open item closed); hedge stop passed in a fast market → close at market; `TightHedge` warning under 5 × spread. New order functions in `Trader.Core` (stop orders, amend, cancel, SL/TP, daily candles, ATR). Disk layout (6.3). Step 6 (news / Friday / disconnect pop-ups, service) next. |
+| v1.22 | 20-Oct-2026 | **Documentation pass and report fix.** The daily report read every instance folder, so TM's live-test folders (19-Oct) counted as Audit Bot instances and warnings; it now reads only `AuditBot-…` folders (6.5.1) and the 19-Oct report was rebuilt. Framework status listed (5.2); other bots' log folders in the layout (6.3); TM's way of running (Section 7); glossary: Planner, state file, `TRADING_BAD_STOPS`. |
 
 ## 12. Open items / decisions pending
 
@@ -748,6 +755,9 @@ Every change is recorded here, the version number in the header table is increas
 | Market order | An order filled at once at the best available price, as opposed to a pending order waiting for a price. |
 | Latency | Delay: here the time from sending an order to receiving its fill message. |
 | Backup stop-loss | A stop-loss far from the price, held on the broker's server, that only matters if the bot fails to close a position itself. |
+| Planner *(v1.21)* | TM's rule function: from the account's positions, orders and prices it lists the changes the rules call for; run every second, so anything missed is redone next time (10.9.9). |
+| State file *(v1.21)* | `~/tradebot/run/tm/<broker>-<ctid>.json`: what TM remembers about each trade (hedge level, R, hedge results, steps done) so a restart carries on. |
+| `TRADING_BAD_STOPS` *(v1.21)* | The broker's refusal of a stop-loss that is already past the current price (e.g. a buy position's stop above the bid). |
 | Reconcile | Asking the server for all open positions and orders, to rebuild the bot's picture after a restart. |
 | Lock file | A file one process holds exclusively open; Linux releases it automatically when that process ends, however it ends. Used to make exactly one instance Primary. |
 | PID | Process ID: the number Linux gives each running program. |

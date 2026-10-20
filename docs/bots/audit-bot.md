@@ -57,7 +57,7 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
   summary-<from>_<to>.csv
 ```
 
-All CSV, UTC times, open directly in Google Sheets (plan 6.3.1). Every restart starts a new instance folder; the report merges them.
+All CSV, UTC times, open directly in Google Sheets (plan 6.3.1). Every restart starts a new instance folder; the report merges them. Other bots (TM) log into the same broker/account folders under their own names (`TM-…`); the report reads only `AuditBot-…` folders.
 
 ## History
 
@@ -67,5 +67,6 @@ All CSV, UTC times, open directly in Google Sheets (plan 6.3.1). Every restart s
 | v1.14 | 18 Oct 2026 | Send time in the order comment; systemd service; audit run started |
 | v1.15 | 19 Oct 2026 | Spread and slippage alerts; probe summary per asset class |
 | v1.16 | 19 Oct 2026 | Daily report tool and timer — Phase 1 complete |
+| v1.22 | 20 Oct 2026 | Report reads only Audit Bot folders (TM's test folders had been counted); 19-Oct report rebuilt |
 
 Full detail: [plan change log](../plan.md#11-change-log).

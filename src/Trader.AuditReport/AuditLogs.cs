@@ -31,9 +31,13 @@ public sealed class BrokerLogs(string broker)
 /// instance folder, so a day can be spread over several; they are merged here. When two instances ran at the
 /// same time (a Primary and a Passive both write spreads.csv), each interval is counted once: the row with
 /// more ticks is kept. Probes are sent only by the Primary; identical probe rows are counted once.
+/// Only the Audit Bot's own instance folders (<c>AuditBot-…</c>) are read: other bots (e.g. TM) log into the same
+/// broker/account folders, and their events must not count as the Audit Bot's.
 /// </summary>
 public static class AuditLogs
 {
+    public const string BotName = "AuditBot";
+
     public static IReadOnlyList<BrokerLogs> Load(string logsRoot, DateOnly from, DateOnly to)
     {
         var result = new List<BrokerLogs>();
@@ -72,6 +76,7 @@ public static class AuditLogs
     private static IEnumerable<(string Instance, DateOnly Day, string Path)> DayFolders(string brokerDir) =>
         from ctidDir in Directory.GetDirectories(brokerDir)
         from instanceDir in Directory.GetDirectories(ctidDir)
+        where Path.GetFileName(instanceDir).StartsWith(BotName + "-", StringComparison.Ordinal)
         from dayDir in Directory.GetDirectories(instanceDir)
         where DateOnly.TryParseExact(Path.GetFileName(dayDir), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
         select (Path.GetFileName(instanceDir), DateOnly.ParseExact(Path.GetFileName(dayDir), "yyyy-MM-dd", CultureInfo.InvariantCulture), dayDir);

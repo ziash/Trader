@@ -57,7 +57,7 @@ Account numbers above are broker login numbers. The API uses `ctidTraderAccountI
 - Logging: Serilog, **UTC timestamps** everywhere.
 - Layout: source in `src/`, tests in `tests/`, one solution file at the repo root.
 - **Many bots, one framework (plan 5.3, decision 14):** shared code lives in `src/Trader.Core` (usage guide: `src/Trader.Core/README.md`); each bot is `src/Trader.<BotName>/`, started from a copy of `src/Trader.SampleBot`, using `BotRunner`. Never copy connection/token/logging code into a bot; anything two bots need goes into `Trader.Core`. A change there affects every bot: run all tests.
-- Runtime data lives outside the repo, under `~/tradebot/` (`config/`, `run/instances/`, `logs/`, `reports/`) — plan Section 6.3. Reference copies of the config files are in the repo's `config/`; the bot reads `~/tradebot/config/`. Keep both in step when a config changes.
+- Runtime data lives outside the repo, under `~/tradebot/` (`config/`, `run/instances/`, `run/tm/`, `logs/`, `reports/`, `bin/`) — plan Section 6.3. Reference copies of the config files are in the repo's `config/`; the bot reads `~/tradebot/config/`. Keep both in step when a config changes.
 - Testing bots by hand: stop a background bot by its exact PID (`pgrep -f '^dotnet src/Trader.<Bot>'`); a `pkill -f` pattern can match the shell running it.
 - Messages to the owner go through `bot.Notify` (`Trader.Core/Notifications`, routed by `~/tradebot/config/notifications.json`), never through a bot's own pop-up or messaging code; new channels are added there.
 - Every order carries a label from `BotIdentity.Label()`: instance ID + optional leg, e.g. `TrendBot-3f9a1c-T1-S1` (plan 5.3, 10.8.2); max 100 characters. Reconcile positions after a restart by bot name, not instance ID.

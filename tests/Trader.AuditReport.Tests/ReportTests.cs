@@ -61,9 +61,11 @@ public sealed class ReportTests : IDisposable
         File("brokerA", "AuditBot-cccccc", "2026-10-19", "spreads.csv", SpreadsHeader, Spread("09:04:00", "main", "EURUSD", 40, 0.9, 0.9, 9, 9));
         File("brokerA", "AuditBot-aaaaaa", "2026-10-19", "probes.csv", ProbesHeader, Probe("07:00:01", "LondonOpen", "open", "EURUSD", "buy", -0.1, -1, 500));
         File("brokerA", "AuditBot-aaaaaa", "2026-10-18", "spreads.csv", SpreadsHeader, Spread("23:58:00", "offpeak", "EURUSD", 9, 5, 5, 50, 50)); // other day
+        File("brokerA", "TM-tttttt", "2026-10-19", "events.csv", EventsHeader, "2026-10-19 09:00:00,Warning,LossWarning,x");                  // another bot
 
         var logs = Assert.Single(AuditLogs.Load(Logs, Day, Day));
-        Assert.Equal(["AuditBot-aaaaaa", "AuditBot-bbbbbb", "AuditBot-cccccc"], logs.Instances);
+        Assert.Equal(["AuditBot-aaaaaa", "AuditBot-bbbbbb", "AuditBot-cccccc"], logs.Instances); // TM's folder is not read
+        Assert.Empty(logs.Events);
         Assert.Equal([50, 60], logs.Spreads.Select(s => s.Ticks)); // 09:04 from b (more ticks), not c
         Assert.Single(logs.Probes);
         Assert.Equal([new DateOnly(2026, 10, 18), Day], AuditLogs.Days(Logs));

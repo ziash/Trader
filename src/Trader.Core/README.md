@@ -6,10 +6,10 @@ logging and start-up/shut-down live here **once**; bots do not copy them (plan d
 | Folder | What it gives a bot |
 |---|---|
 | `Hosting/` | `BotRunner` (start-up, options, Ctrl+C/SIGTERM, exit codes, `RunTogetherAsync`), `BotIdentity` (instance ID, order labels), `InstanceRegistry` (status files, one Primary per bot per account) |
-| `OpenApi/` | `ConnectionManager` (stay connected: reconnect, dead-line ping, token refresh, account auth), `CTraderSession` (requests/replies on one connection) |
+| `OpenApi/` | `ConnectionManager` (stay connected: reconnect, dead-line ping, token refresh, account auth), `CTraderSession` (requests/replies on one connection: market and stop orders, amend, cancel, SL/TP, close, reconcile, candles) |
 | `Config/` | `SecretsFile` (reads `~/.config/trader/secrets.env`, demo only), `TokenRefresher` (refresh + atomic save under a lock) |
 | `Logging/` | `BotLogging` (console, UTC timestamps, instance ID on every line), `LogTap` + `CsvEventSink` (events.csv), `log.Event("Name")` |
-| `MarketData/` | `SymbolCatalog` (names → IDs, details, currency conversion symbols), `PriceFeed` (spot events → bid/ask quotes, live trendbars), `TradingSchedule` (is the market open?), `MarketHours` (main hours / off-peak, 2/5-min boundaries) |
+| `MarketData/` | `Candle` (historical candles, `AverageTrueRange`), `SymbolCatalog` (names → IDs, details, currency conversion symbols), `PriceFeed` (spot events → bid/ask quotes, live trendbars), `TradingSchedule` (is the market open?), `MarketHours` (main hours / off-peak, 2/5-min boundaries) |
 | `Csv/` | `DailyCsvWriter` (one file per UTC day, header, flushed per row), `CsvFormat` (time and number formats for Google Sheets), `CsvTable` (read our CSV files back, columns by name) |
 | `Notifications/` | `Notifier` (`bot.Notify`: messages to the owner, always logged, routed to channels), `DesktopChannel` (Ubuntu pop-ups), `NotificationConfig` (`notifications.json`) |
 | `Hosting/TradebotPaths` | `~/tradebot/{config,logs,run/instances,reports}` (`TRADEBOT_HOME` overrides) |
