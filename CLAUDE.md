@@ -44,12 +44,13 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 | Broker B | Pepperstone demo **5357135** — Hedging, Razor, USD, 1:200 — `ctidTraderAccountId` 49124666 |
 | Demo endpoint | `demo.ctraderapi.com:5035` (Protobuf over TLS) |
 | Live endpoint | `live.ctraderapi.com:5035` — **do not use** before Phase 5 |
+| Replay | Rewind (`~/code/Rewind`, a separate project) on `localhost:5036`; `CTRADER_ENV=replay`, localhost only; secrets in `~/rewind/tm/secrets.env` (fake), run with `~/rewind/tm/run-tm.sh` |
 | Rate limits | 50 req/s, 5 req/s for historical data (per connection) |
 | Heartbeat | every 10 s |
 
 Account numbers above are broker login numbers. The API uses `ctidTraderAccountId`, a different number obtained from `ProtoOAGetAccountListByAccessTokenReq` (run `dotnet run --project src/Trader.ListAccounts` to list them).
 
-**Demo only.** No code may connect to the live endpoint or place orders on a live account until a go-live is decided and recorded in that bot's document (shared.md §4). Make `CTRADER_ENV=demo` the default and refuse `live` unless explicitly enabled by the owner.
+**Demo only.** No code may connect to the live endpoint or place orders on a live account until a go-live is decided and recorded in that bot's document (shared.md §4). Make `CTRADER_ENV=demo` the default and refuse `live` unless explicitly enabled by the owner. `CTRADER_ENV=replay` reaches only localhost (open-code-pieces.md §3); never weaken that check.
 
 ## Tech stack and conventions
 

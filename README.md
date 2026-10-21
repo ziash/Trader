@@ -53,6 +53,8 @@ scripts/deploy-tm.sh                                # publish to ~/tradebot/bin/
 systemctl --user enable --now trader-tm             # start now and at every login
 ```
 
+TM on past prices: [Rewind](https://github.com/ziash/Rewind) (separate project) replays history with a simulated broker; with Rewind running, `~/rewind/tm/run-tm.sh` starts TM against it (`CTRADER_ENV=replay`, localhost only — [open-code-pieces.md §3](docs/open-code-pieces.md#3-connection-and-tokens)).
+
 Daily report (runs by itself every day at 00:15 UTC; reports in `~/tradebot/reports/`, open in Google Sheets):
 
 ```bash

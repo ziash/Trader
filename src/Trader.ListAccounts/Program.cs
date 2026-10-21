@@ -40,7 +40,7 @@ static async Task<int> RunAsync()
 
     try
     {
-        await using var session = await CTraderSession.ConnectAsync(secrets.Environment, Log.Logger);
+        await using var session = await CTraderSession.ConnectAsync(secrets, Log.Logger);
 
         await session.AuthenticateApplicationAsync(secrets);
         Log.Information("Application authenticated");

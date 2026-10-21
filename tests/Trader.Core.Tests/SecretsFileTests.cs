@@ -44,6 +44,36 @@ public class SecretsFileTests
         Assert.Throws<SecretsException>(() => SecretsFile.Parse(lines));
     }
 
+    private static IEnumerable<string> Replay(params string[] extra) =>
+        ValidLines.Select(l => l.StartsWith("CTRADER_ENV") ? "CTRADER_ENV=replay" : l).Concat(extra);
+
+    [Fact]
+    public void Replay_reads_a_local_host_and_port()
+    {
+        var s = SecretsFile.Parse(Replay("CTRADER_HOST=localhost", "CTRADER_PORT=5036"));
+        Assert.Equal(ApiEnvironment.Replay, s.Environment);
+        Assert.Equal(("localhost", 5036), (s.Host, s.Port));
+    }
+
+    [Theory]
+    [InlineData("demo.ctraderapi.com")]
+    [InlineData("live.ctraderapi.com")]
+    [InlineData("192.168.1.10")]
+    [InlineData("")]
+    public void Replay_refuses_any_host_but_this_computer(string host) =>
+        Assert.Throws<SecretsException>(() => SecretsFile.Parse(Replay($"CTRADER_HOST={host}", "CTRADER_PORT=5036")));
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("70000")]
+    [InlineData("x")]
+    public void Replay_needs_a_port(string port) =>
+        Assert.Throws<SecretsException>(() => SecretsFile.Parse(Replay("CTRADER_HOST=127.0.0.1", $"CTRADER_PORT={port}")));
+
+    [Fact]
+    public void Host_and_port_are_refused_with_demo() =>
+        Assert.Contains("replay", Assert.Throws<SecretsException>(() => SecretsFile.Parse(ValidLines.Append("CTRADER_HOST=localhost"))).Message);
+
     [Fact]
     public void Missing_key_error_names_key_but_not_values()
     {

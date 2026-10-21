@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
-| Document version | v1.1 (20-Oct-2026) — history in §13 |
+| Document version | v1.2 (21-Oct-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -157,6 +157,14 @@ systemctl --user stop trader-tm            # stop (positions keep their hedges a
 
 Run only one TM: stop the service before running it by hand in a terminal (`dotnet run --project src/Trader.TM`, Ctrl+C stops it). The service restarts TM 30 s after a crash, but not after a fatal problem it reported itself (token rejected, bad config). User services run while you are logged in (shared.md §3).
 
+**On past prices (Rewind):** [Rewind](https://github.com/ziash/Rewind) (separate project) replays past prices in the browser with a simulated broker that speaks the Open API. TM runs against it unchanged — start Rewind, then:
+
+```bash
+~/rewind/tm/run-tm.sh        # TM with Rewind's secrets, certificate and tm.json (account 9000001); Ctrl+C stops it
+```
+
+Trades on Rewind are kept apart from the demo accounts by the broker name `rewind` (state `~/tradebot/run/tm/rewind-9000001.json`, logs `~/tradebot/logs/rewind/`). The demo service can run at the same time. TM's news and Friday pop-ups follow the real clock, not the replay's.
+
 Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnings (2R, mirror skipped, refused orders, tight hedge, news, Friday close, connection down); everything is in the console and the logs.
 
 ### Outputs
@@ -196,3 +204,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | — | 20 Oct 2026 | (old plan v1.20–v1.22) Step 1: notifications ([Open Code Pieces](../open-code-pieces.md)); steps 2–5: the trading engine, tested live on both demos |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Section 10.9) and the former TM page. Content unchanged |
 | v1.1 | 20 Oct 2026 | Step 6 done: news / Friday / disconnect pop-ups (§6, decision 8), systemd service `trader-tm` and `scripts/deploy-tm.sh` (§10). TM is built |
+| v1.2 | 21 Oct 2026 | TM tested unchanged on Rewind's replayed prices (§10): take-over with mirror and both hedges, SL removed once hedged, hedges filled at H, hedge stops at ½R, re-hedge, 2R warning; clean-up after close all |

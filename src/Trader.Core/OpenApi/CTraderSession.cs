@@ -23,7 +23,7 @@ public sealed class CTraderApiException(string errorCode, string? description)
 }
 
 /// <summary>
-/// One TLS connection to the cTrader Open API (demo host only), on top of Spotware's OpenAPI.Net client.
+/// One TLS connection to the cTrader Open API (demo host, or a replay broker on localhost), on top of Spotware's OpenAPI.Net client.
 ///
 /// - Requests carry a unique clientMsgId; replies with the same ID go to that request, so several
 ///   requests can be in flight at once. Orders get several replies (accepted, filled, …) under one ID.
@@ -68,18 +68,23 @@ public sealed class CTraderSession : IAsyncDisposable
 
     public string Host => _client.Host;
 
-    public static async Task<CTraderSession> ConnectAsync(ApiEnvironment env, ILogger log)
+    /// <summary>
+    /// Connects to the demo host, or for <see cref="ApiEnvironment.Replay"/> to the replay broker named in the secrets
+    /// file — localhost only, checked again here (open-code-pieces.md §3). Live is never accepted.
+    /// </summary>
+    public static async Task<CTraderSession> ConnectAsync(TraderSecrets secrets, ILogger log)
     {
-        var host = env switch
+        var (host, port) = secrets.Environment switch
         {
-            ApiEnvironment.Demo => ApiInfo.DemoHost,
-            _ => throw new InvalidOperationException($"Environment {env} is not allowed"),
+            ApiEnvironment.Demo => (ApiInfo.DemoHost, ApiInfo.Port),
+            ApiEnvironment.Replay when TraderSecrets.IsLocalHost(secrets.Host) && secrets.Port > 0 => (secrets.Host!, secrets.Port),
+            _ => throw new InvalidOperationException($"Environment {secrets.Environment} with host {secrets.Host} is not allowed"),
         };
 
         // maxRequestPerSecond: Spotware allows 50/s per connection; stay well under it.
-        var client = new OpenClient(host, ApiInfo.Port, Heartbeat, maxRequestPerSecond: 40, useWebSocket: false);
+        var client = new OpenClient(host, port, Heartbeat, maxRequestPerSecond: 40, useWebSocket: false);
         var session = new CTraderSession(client, log);
-        log.Event("Connecting").Information("Connecting to {Host}:{Port} (TLS)", host, ApiInfo.Port);
+        log.Event("Connecting").Information("Connecting to {Host}:{Port} (TLS)", host, port);
         try
         {
             await client.Connect();

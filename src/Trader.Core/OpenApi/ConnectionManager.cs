@@ -79,7 +79,7 @@ public sealed class ConnectionManager(string secretsPath, TraderSecrets secrets,
             string reason;
             try
             {
-                session = await CTraderSession.ConnectAsync(_secrets.Environment, log);
+                session = await CTraderSession.ConnectAsync(_secrets, log);
                 session.MessageReceived += OnSessionMessage;
 
                 await AuthenticateApplicationAsync(session);

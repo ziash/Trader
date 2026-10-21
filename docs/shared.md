@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.1 (20-Oct-2026) — history in §10 |
+| Document version | v1.2 (21-Oct-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -14,7 +14,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Project | What it is | Status | Document |
 |---|---|---|---|
 | **Audit Bot** | Compares two brokers' spreads, slippage, latency and reliability with tiny probe orders; daily report | Built and finished; running (audit run since 18-Oct-2026) | [bots/audit-bot.md](bots/audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Working on demo (steps 1–5 of 6) | [bots/tm.md](bots/tm.md) |
+| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`); can also trade replayed prices on Rewind | [bots/tm.md](bots/tm.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [bots/auto-bot.md](bots/auto-bot.md) |
 | **Open Code Pieces** | The reusable code all bots are built from | In use by the Audit Bot and TM | [open-code-pieces.md](open-code-pieces.md) |
 
@@ -50,6 +50,7 @@ Broker login numbers differ from the `ctidTraderAccountId` the API uses (`dotnet
 ## 4. Safety rules for every bot
 
 - **Demo only.** No bot connects to the live endpoint or places orders on a live account until a go-live is decided and recorded in that bot's document. A go-live means: a small live account, strict risk limits, a VPS near the broker servers, and a review after one month. The code refuses `live` unless explicitly enabled by the owner.
+- **Replay** (`CTRADER_ENV=replay`) connects only to a broker simulator on this computer ([Rewind](https://github.com/ziash/Rewind), a separate project), with its own secrets file of fake values (`TRADER_SECRETS_FILE`); the code refuses any other host ([Open Code Pieces §3](open-code-pieces.md#3-connection-and-tokens)).
 - **Secrets** live only in `~/.config/trader/secrets.env` (permissions 600), never in Git, logs or chat; only "set / not set" or a masked form may be shown. The refresh token is replaced on every refresh and written back atomically by the shared code only.
 - **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server — a hedge order, a stop-loss, or (for the Audit Bot's one-second probes) a wide backup stop-loss. Each bot's document says how.
 - **Ownership:** a bot touches only its own orders and positions, by `positionId` — with one recorded exception, TM ([Open Code Pieces §4](open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
@@ -176,3 +177,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | — | 08–20 Oct 2026 | Everything here was part of the old single plan (v1.0–v1.22): decisions, setup (Phase 0 complete 16-Oct-2026), environment, folders, file format, open items, glossary |
 | v1.0 | 20 Oct 2026 | Own document. The old plan was split into one project document per bot (Audit Bot, TM, Auto Bot), [Open Code Pieces](open-code-pieces.md) and this page (owner: "each bot is a project in itself"). Content unchanged |
 | v1.1 | 20 Oct 2026 | `news-releases.json` now shared by the Audit Bot and TM (§5) |
+| v1.2 | 21 Oct 2026 | Replay safety rule (§4); TM's status in §1 brought up to date (built, service) |

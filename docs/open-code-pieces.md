@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by the Audit Bot and TM |
-| Document version | v1.1 (20-Oct-2026) — history in §10 |
+| Document version | v1.2 (21-Oct-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -20,7 +20,7 @@ The functions every bot needs are written **once**; bots never copy them. Each b
 | Start-up and shut-down | Common options, logging, secrets (demo only), clean stop on Ctrl+C / SIGTERM, exit codes, running several jobs together | `Hosting/BotRunner` | all |
 | Identity and labels | Instance ID (`<BotName>-<6hex>`), order labels, parsing labels back | `Hosting/BotIdentity` | all |
 | Instance registry | One Primary per bot per account; status files; slots (§6) | `Hosting/InstanceRegistry` | Audit Bot, TM |
-| Connection | Stay connected: heartbeat, dead-line ping, reconnect with backoff, account auth, token refresh (§3); since when it has been down (`DownSinceUtc`) | `OpenApi/ConnectionManager` | all (down time: TM) |
+| Connection | Stay connected: heartbeat, dead-line ping, reconnect with backoff, account auth, token refresh (§3); since when it has been down (`DownSinceUtc`); demo host or a replay broker on localhost (§3) | `OpenApi/ConnectionManager`, `CTraderSession.ConnectAsync` | all (down time: TM) |
 | Requests | Market orders, **stop orders, moving and cancelling them, setting / removing a position's stop-loss and take-profit**, closing by `positionId`, reconcile, symbols, spots, live trendbars, **historical candles** | `OpenApi/CTraderSession` | Audit Bot (market, close, reconcile), TM (all) |
 | Secrets and tokens | Reads `~/.config/trader/secrets.env`; refreshes tokens and saves them atomically under a lock | `Config/SecretsFile`, `TokenRefresher` | all |
 | Symbols and prices | Names → IDs and details (pip, lot, digits, schedule), currency conversion symbols, bid/ask quotes, trading hours | `MarketData/SymbolCatalog`, `PriceFeed`, `TradingSchedule`, `MarketHours` | Audit Bot, TM |
@@ -39,6 +39,7 @@ Still to come when a bot needs it: respect the request-rate budget when many ord
 - One cTrader ID (cTID) linked to both broker demo accounts; OAuth grants the app access to each account.
 - .NET worker service using Spotware's official OpenAPI.Net library (NuGet `cTrader.OpenAPI.Net`) for the TCP/Protobuf connection.
 - Demo and live use separate API hosts: `demo.ctraderapi.com:5035` and `live.ctraderapi.com:5035` (Protobuf over TLS; confirmed). One connection serves all demo accounts; a second serves all live accounts.
+- **Replay environment** (21-Oct-2026, for [Rewind](https://github.com/ziash/Rewind), a separate project that replays past prices and speaks the Open API): `CTRADER_ENV=replay` with `CTRADER_HOST` and `CTRADER_PORT` in the secrets file. Only `localhost`, `127.0.0.1` or `::1` are accepted — checked when the file is read and again when connecting — so a replay setting can never reach a real broker; host and port are refused with `demo`, and `live` stays refused. The secrets file is chosen with `TRADER_SECRETS_FILE` (default `~/.config/trader/secrets.env`), so a bot run against Rewind never reads or rewrites the real tokens. Rewind's own certificate is trusted by starting the bot with `SSL_CERT_FILE` pointing at a file with the system's certificates plus Rewind's (.NET on Linux honours it; confirmed 21-Oct-2026) — no code. Rewind writes a script that sets all of this (`~/rewind/tm/run-tm.sh`).
 - Access token lasts about 30 days; the bot renews it with the refresh token and must save the new refresh token each time (the old one is invalidated).
 - *(step 2)* Token refresh runs over the same Protobuf connection (`ProtoOARefreshTokenReq`), when the token has under 7 days left, when its expiry is unknown, or when the server rejects it. The new pair and its expiry (`CTRADER_ACCESS_TOKEN_EXPIRES_UTC`) are written to `secrets.env` atomically (temp file, then rename; mode 600), under a lock file (`secrets.env.lock`) so only one instance refreshes at a time. First refresh 17-Oct-2026: the server returned a lifetime of about 30 days 10 h (expires 16-Nov-2026).
 - *(step 2)* Heartbeats: the bot sends one at least every 10 s when idle; the server sends its own only after about 30 s without traffic. Dead-line rule: after 40 s with nothing received the bot sends a ping (`ProtoOAVersionReq`); no reply within 10 s → reconnect. Reconnect waits 1, 2, 4 … up to 60 s (+ up to 20 % random jitter), then authenticates the app and every account again.
@@ -115,3 +116,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | — | 20 Oct 2026 | (old plan v1.20–v1.21) Notifications; stop orders, amend, cancel, SL/TP, historical candles, ATR (for TM) |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](archive/plan-v1.22.md), Sections 5, 6.4, 10.9.7) under the name **Open Code Pieces**. Content unchanged |
 | v1.1 | 20 Oct 2026 | News calendar moved here from the Audit Bot (now used by TM too); `ConnectionManager.DownSinceUtc` for TM's disconnect pop-up |
+| v1.2 | 21 Oct 2026 | Replay environment (§3): `CTRADER_ENV=replay`, localhost only, for Rewind; `CTraderSession.ConnectAsync` takes the secrets; tested with `Trader.ListAccounts` and TM against Rewind |

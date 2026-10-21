@@ -14,6 +14,8 @@ public static class SecretsFile
     public const string AccessTokenKey = "CTRADER_ACCESS_TOKEN";
     public const string RefreshTokenKey = "CTRADER_REFRESH_TOKEN";
     public const string EnvKey = "CTRADER_ENV";
+    public const string HostKey = "CTRADER_HOST"; // replay only
+    public const string PortKey = "CTRADER_PORT"; // replay only
     /// <summary>Written by the bot after each token refresh (UTC, ISO 8601). Absent until the first refresh.</summary>
     public const string ExpiresKey = "CTRADER_ACCESS_TOKEN_EXPIRES_UTC";
 
@@ -58,13 +60,31 @@ public static class SecretsFile
                 ? v
                 : throw new SecretsException($"{key} is not set in the secrets file");
 
+        var env = ParseEnvironment(values.GetValueOrDefault(EnvKey));
+        string? host = null;
+        var port = 0;
+        if (env == ApiEnvironment.Replay)
+        {
+            host = Required(HostKey);
+            if (!TraderSecrets.IsLocalHost(host))
+                throw new SecretsException($"{HostKey} must be localhost, 127.0.0.1 or ::1 for {EnvKey}=replay");
+            if (!int.TryParse(Required(PortKey), NumberStyles.None, CultureInfo.InvariantCulture, out port) || port is < 1 or > 65535)
+                throw new SecretsException($"{PortKey} must be a port number (1–65535)");
+        }
+        else if (values.ContainsKey(HostKey) || values.ContainsKey(PortKey))
+        {
+            throw new SecretsException($"{HostKey} and {PortKey} are only used with {EnvKey}=replay; demo always uses the demo host");
+        }
+
         return new TraderSecrets(
             Required(ClientIdKey),
             Required(ClientSecretKey),
             Required(AccessTokenKey),
             Required(RefreshTokenKey),
-            ParseEnvironment(values.GetValueOrDefault(EnvKey)),
-            ParseExpiry(values.GetValueOrDefault(ExpiresKey)));
+            env,
+            ParseExpiry(values.GetValueOrDefault(ExpiresKey)),
+            host,
+            port);
     }
 
     internal static DateTime? ParseExpiry(string? value) =>
@@ -163,14 +183,15 @@ public static class SecretsFile
         return key.StartsWith("export ", StringComparison.Ordinal) ? key["export ".Length..].Trim() : key;
     }
 
-    /// <summary>Demo is the default. Live is refused until Phase 5 (CLAUDE.md "Demo only").</summary>
+    /// <summary>Demo is the default; replay = a replay broker on this computer (Rewind). Live is refused until Phase 5 (CLAUDE.md "Demo only").</summary>
     internal static ApiEnvironment ParseEnvironment(string? value) =>
         (value ?? "").Trim().ToLowerInvariant() switch
         {
             "" or "demo" => ApiEnvironment.Demo,
+            "replay" => ApiEnvironment.Replay,
             "live" => throw new SecretsException(
                 $"{EnvKey}=live is refused: live trading is not enabled before Phase 5. Use {EnvKey}=demo."),
-            _ => throw new SecretsException($"{EnvKey} must be 'demo'"),
+            _ => throw new SecretsException($"{EnvKey} must be 'demo' (or 'replay' for a replay broker on this computer)"),
         };
 
     private static string Unquote(string v) =>
