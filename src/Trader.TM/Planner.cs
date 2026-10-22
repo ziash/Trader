@@ -21,6 +21,9 @@ internal sealed class PlanEnv
 
     /// <summary>Price a position was closed at, from the execution events; null if not seen.</summary>
     public required Func<long, double?> ClosePrice { get; init; }
+
+    /// <summary>The position a pending order opened, from the execution events; null if not seen (e.g. TM was down).</summary>
+    public Func<long, long?> FilledPosition { get; init; } = _ => null;
 }
 
 /// <summary>
@@ -36,32 +39,185 @@ internal static class Planner
         var actions = new List<TmAction>();
         var tmPos = new Dictionary<(long, string), Pos>();
         var tmOrd = new Dictionary<(long, string), Ord>();
+        var mirrorPos = new Dictionary<long, Pos>();   // mirror orders of the owner's pending orders, by the owner's orderId …
+        var mirrorOrd = new Dictionary<long, Ord>();   // … and their positions once filled
         foreach (var p in snap.Positions)
-            if (TmLabel.TryParse(p.Label, env.BotName, out var id, out var role))
-                tmPos[(id, role)] = p;
+            if (TmLabel.TryParse(p.Label, env.BotName, out var id, out var role, out var byOrder))
+                if (byOrder) mirrorPos[id] = p; else tmPos[(id, role)] = p;
         foreach (var o in snap.Orders)
-            if (TmLabel.TryParse(o.Label, env.BotName, out var id, out var role))
-                tmOrd[(id, role)] = o;
+            if (TmLabel.TryParse(o.Label, env.BotName, out var id, out var role, out var byOrder))
+                if (byOrder) mirrorOrd[id] = o; else tmOrd[(id, role)] = o;
         var mains = snap.Positions.Where(p => p.Label.Length == 0 && env.Symbol(p.SymbolId) is not null).ToDictionary(p => p.Id);
+        var mainOrders = snap.Orders.Where(o => o.Label.Length == 0 && env.Symbol(o.SymbolId) is not null).ToDictionary(o => o.Id);
+
+        // The owner's pending orders (tm.md §3) first: one that filled becomes its trade's main before the take-over below.
+        foreach (var order in mainOrders.Values.Where(o => book.FindOrder(o.Id) is null))
+            PendingTakeOver(book, order, mirrorOrd, env, actions);
+        foreach (var trade in book.Trades.Where(t => t.Pending).ToList())
+            Pending(book, trade, mainOrders.GetValueOrDefault(trade.MainOrderId), mains, mirrorPos, mirrorOrd, env, actions);
+        foreach (var (orderId, o) in mirrorOrd.Where(kv => book.FindOrder(kv.Key) is null && !mainOrders.ContainsKey(kv.Key)))
+            OrphanMirrorOrder(book, orderId, o, env, actions);
 
         // TM orders without a remembered trade first, so their main is not taken over a second time.
         foreach (var mainId in tmPos.Keys.Concat(tmOrd.Keys).Select(k => k.Item1).Distinct().Where(id => book.Find(id) is null).ToList())
-            Rebuild(book, mainId, mains.GetValueOrDefault(mainId), tmPos, tmOrd, env, actions);
+            Rebuild(book, mainId, mains.GetValueOrDefault(mainId), tmPos, tmOrd, mirrorPos, env, actions);
 
         foreach (var main in mains.Values.Where(m => book.Find(m.Id) is null))
             TakeOver(book, main, env, actions);
 
-        foreach (var trade in book.Trades.ToList())
-            new TradePlan(trade, mains.GetValueOrDefault(trade.MainId), tmPos, tmOrd, env, actions).Run();
+        foreach (var trade in book.Trades.Where(t => !t.Pending).ToList())
+            new TradePlan(trade, mains.GetValueOrDefault(trade.MainId), tmPos, tmOrd, mirrorPos, env, actions).Run();
 
         foreach (var done in book.Trades.Where(t => t.Done).ToList())
         {
             book.Trades.Remove(done);
-            actions.Add(new Notify(done, "", NotificationLevel.Info, "TradeDone", $"{done.Symbol} trade P{done.MainId} finished",
-                $"All legs and hedges closed; hedges result {Fmt(done.Main.Realized + (done.Mirror?.Realized ?? 0))} per unit"));
+            actions.Add(done.Cancelled
+                ? new Notify(done, "", NotificationLevel.Info, "PendingDone", $"{done.Symbol} order {done.Name} cancelled", "Its mirror order is cancelled too")
+                : new Notify(done, "", NotificationLevel.Info, "TradeDone", $"{done.Symbol} trade {done.Name} finished",
+                    $"All legs and hedges closed; hedges result {Fmt(done.Main.Realized + (done.Mirror?.Realized ?? 0))} per unit"));
         }
         return actions;
     }
+
+    /// <summary>
+    /// The owner placed a pending order on a listed symbol (tm.md §3): a trade starts in the pending state. H is the
+    /// order's stop-loss, otherwise the default distance from the order price; the mirror order follows in <see cref="Pending"/>.
+    /// Hedges wait for the fills: a hedge stop at H often cannot be placed yet (e.g. a buy-stop at H below the price,
+    /// for a sell-stop entry) and could fill without the entry.
+    /// </summary>
+    private static void PendingTakeOver(TradeBook book, Ord order, Dictionary<long, Ord> mirrorOrd, PlanEnv env, List<TmAction> actions)
+    {
+        var s = env.Symbol(order.SymbolId)!;
+        double distance;
+        string source;
+        if (order.StopLoss is { } sl && order.Dir * (order.Price - sl) > 0)
+        {
+            distance = Math.Abs(order.Price - sl);
+            source = "your stop-loss";
+        }
+        else if (env.Distance(order.SymbolId) is { } d)
+        {
+            distance = d;
+            source = $"{env.Config.RangePercent:0.#} % of the {env.Config.RangeDays}-day range";
+        }
+        else
+        {
+            actions.Add(new NeedDistance(order.SymbolId));
+            return;
+        }
+        var h = Math.Round(order.Price - order.Dir * distance, s.Digits);
+        var t = new TradeState
+        {
+            MainOrderId = order.Id, SymbolId = order.SymbolId, Symbol = s.Name, Dir = order.Dir, H = h, PendingDistance = distance,
+            StartedUtc = env.Now, Trailing = order.Trailing,
+            MirrorOrderSent = mirrorOrd.ContainsKey(order.Id), // after a lost state file: its mirror order is already there
+            Main = new LegState { Entry = order.Price, Volume = order.Volume, R = distance },
+        };
+        book.Trades.Add(t);
+        actions.Add(new Notify(t, "MAIN", NotificationLevel.Info, "PendingMirrored",
+            $"{s.Name} {order.Name} {s.LotsForVolume(order.Volume):0.##} lot at {P(order.Price, s)} mirrored",
+            $"Order {order.Id}: mirror {order.Name} at the same price, its stop-loss at {P(h, s)} ({source}); hedges at {P(h, s)} once they fill"));
+    }
+
+    /// <summary>A pending trade, every run: the mirror order follows the owner's order; when that order is gone, the trade
+    /// starts (it filled) or ends (cancelled).</summary>
+    private static void Pending(TradeBook book, TradeState t, Ord? order, Dictionary<long, Pos> mains, Dictionary<long, Pos> mirrorPos,
+        Dictionary<long, Ord> mirrorOrd, PlanEnv env, List<TmAction> actions)
+    {
+        if (env.Symbol(t.SymbolId) is not { } s)
+            return;
+        var mirOrd = mirrorOrd.GetValueOrDefault(t.MainOrderId);
+        var mirPos = mirrorPos.GetValueOrDefault(t.MainOrderId);
+
+        if (t.Cancelled)
+        {
+            if (mirOrd is not null)
+                actions.Add(new CancelOrder(t, TmLabel.Mirror, mirOrd.Id));
+            if (mirPos is not null)
+                actions.Add(new ClosePosition(t, TmLabel.Mirror, mirPos.Id, mirPos.Volume));
+            if (mirOrd is null && mirPos is null)
+            {
+                t.Main.Done = true;
+                t.NoMirror = true;
+            }
+            return;
+        }
+
+        if (order is not null)
+        {
+            // The owner may move the order, its stop-loss or take-profit: H and the mirror order follow.
+            if (order.StopLoss is { } sl && order.Dir * (order.Price - sl) > 0)
+                t.PendingDistance = Math.Abs(order.Price - sl);
+            t.H = Math.Round(order.Price - order.Dir * t.PendingDistance, s.Digits);
+            t.Main.Entry = order.Price;
+            t.Main.Volume = order.Volume;
+            t.Main.R = t.PendingDistance;
+            t.Trailing = order.Trailing;
+            if (mirOrd is not null)
+            {
+                t.MirrorOrderSent = true;
+                if (!Same(mirOrd.Price, order.Price, s) || mirOrd.Volume != order.Volume || !Same(mirOrd.StopLoss, t.H, s) || !Same(mirOrd.TakeProfit, order.TakeProfit, s))
+                    actions.Add(new AmendMirrorOrder(t, mirOrd.Id, order, t.H, order.TakeProfit));
+            }
+            else if (mirPos is null && !t.MirrorOrderSent)
+            {
+                t.MirrorOrderSent = true;
+                actions.Add(new PlaceMirrorOrder(t, order, t.H, order.TakeProfit));
+            }
+            return; // a mirror that filled before the owner's order (it was just moved) waits, protected by its stop-loss at H
+        }
+
+        // The owner's order is gone: filled (its position, from the execution events or by its look) or cancelled.
+        var main = env.FilledPosition(t.MainOrderId) is { } id ? mains.GetValueOrDefault(id) : null;
+        main ??= mains.Values
+            .Where(p => book.Find(p.Id) is null && p.SymbolId == t.SymbolId && p.Dir == t.Dir && p.Volume == t.Main.Volume && p.OpenUtc >= t.StartedUtc.AddSeconds(-5))
+            .OrderBy(p => p.OpenUtc).FirstOrDefault();
+        if (main is null)
+        {
+            t.Cancelled = true;
+            Pending(book, t, null, mains, mirrorPos, mirrorOrd, env, actions);
+            return;
+        }
+
+        t.MainId = main.Id;
+        t.StartedUtc = env.Now;
+        t.Trailing = main.Trailing && main.StopLoss is not null;
+        t.Main = new LegState { PositionId = main.Id, Entry = main.Entry, Volume = main.Volume, R = Math.Abs(t.H - main.Entry) };
+        if (mirPos is not null)
+            t.MirrorRequested = true;                     // filled with it: the mirror leg starts in TradePlan
+        else if (mirOrd is not null)
+        {
+            t.MirrorRequested = true;                     // did not fill with it: cancelled, then the mirror opens at market
+            actions.Add(new CancelOrder(t, TmLabel.Mirror, mirOrd.Id) { Done = _ => t.MirrorRequested = false });
+        }
+        if (mirPos is null && env.Now - main.OpenUtc > TimeSpan.FromSeconds(env.Config.MirrorWithinSeconds))
+        {
+            t.NoMirror = true;                            // filled while TM was down: hedges only, as for any main found late (tm.md §6)
+            actions.Add(new Notify(t, "MAIN", NotificationLevel.Warning, "MirrorSkipped", $"{s.Name}: your order {t.MainOrderId} filled while TM was away",
+                $"Position {main.Id} opened {main.OpenUtc:HH:mm:ss}Z. No mirror; hedges at {P(t.H, s)}"));
+        }
+        var what = $"{s.Name} {(t.Dir > 0 ? "long" : "short")} {s.LotsForVolume(main.Volume):0.##} lot";
+        actions.Add(new Notify(t, "MAIN", NotificationLevel.Info, "TradeTakenOver", $"{what} filled from your order {t.MainOrderId}: taken over",
+            $"Position {main.Id}: {(mirPos is not null ? "mirror filled with it" : "mirror at market")} + 2 hedges at {P(t.H, s)}; 1R = {P(t.Main.R, s)}"
+            + (t.Trailing ? "; trailing stops from break-even" : "")));
+        TightHedge(t, s, env, actions);
+    }
+
+    /// <summary>A mirror order whose owner's order is gone and that no trade remembers (state file lost): cancelled.</summary>
+    private static void OrphanMirrorOrder(TradeBook book, long orderId, Ord o, PlanEnv env, List<TmAction> actions)
+    {
+        var s = env.Symbol(o.SymbolId);
+        if (s is null)
+            return;
+        var t = new TradeState { MainOrderId = orderId, SymbolId = o.SymbolId, Symbol = s.Name, Dir = o.Dir, StartedUtc = env.Now, Cancelled = true, MirrorOrderSent = true };
+        book.Trades.Add(t);
+        actions.Add(new CancelOrder(t, TmLabel.Mirror, o.Id));
+        actions.Add(new Notify(t, TmLabel.Mirror, NotificationLevel.Warning, "MirrorOrderOrphan", $"{s.Name}: mirror order {o.Id} cancelled",
+            $"Your order {orderId} is gone and TM has no record of it"));
+    }
+
+    private static bool Same(double? a, double? b, SymbolInfo s) =>
+        a is null ? b is null : b is not null && Math.Abs(a.Value - b.Value) < s.PipSize * 0.05;
 
     private static void TakeOver(TradeBook book, Pos main, PlanEnv env, List<TmAction> actions)
     {
@@ -120,14 +276,22 @@ internal static class Planner
 
     /// <summary>TM orders without a remembered trade (state file lost or from another TM instance): rebuild what can be seen.</summary>
     private static void Rebuild(TradeBook book, long mainId, Pos? main, Dictionary<(long, string), Pos> tmPos, Dictionary<(long, string), Ord> tmOrd,
-        PlanEnv env, List<TmAction> actions)
+        Dictionary<long, Pos> mirrorPos, PlanEnv env, List<TmAction> actions)
     {
         var mirror = tmPos.GetValueOrDefault((mainId, TmLabel.Mirror));
+        var mirrorOrderId = 0L;
+        if (mirror is null && main is not null)
+        {
+            // A mirror from a pending order is labelled with the owner's orderId: take the one unclaimed on this side.
+            var free = mirrorPos.Where(kv => book.FindOrder(kv.Key) is null && kv.Value.SymbolId == main.SymbolId && kv.Value.Dir == main.Dir).ToList();
+            if (free.Count == 1)
+                (mirrorOrderId, mirror) = (free[0].Key, free[0].Value);
+        }
         var hedgeOrders = new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }.Select(r => tmOrd.GetValueOrDefault((mainId, r))).OfType<Ord>().ToList();
         var hedgePositions = new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }.Select(r => tmPos.GetValueOrDefault((mainId, r))).OfType<Pos>().ToList();
         var symbolId = main?.SymbolId ?? mirror?.SymbolId ?? hedgeOrders.Concat<object>(hedgePositions).Select(x => x is Ord o ? o.SymbolId : ((Pos)x).SymbolId).First();
         var dir = main?.Dir ?? mirror?.Dir ?? -(hedgeOrders.Select(o => o.Dir).Concat(hedgePositions.Select(p => p.Dir)).First());
-        double? h = hedgeOrders.Select(o => (double?)o.StopPrice).FirstOrDefault() ?? hedgePositions.Select(p => (double?)p.Entry).FirstOrDefault() ?? mirror?.StopLoss;
+        double? h = hedgeOrders.Select(o => (double?)o.Price).FirstOrDefault() ?? hedgePositions.Select(p => (double?)p.Entry).FirstOrDefault() ?? mirror?.StopLoss;
         var s = env.Symbol(symbolId);
         if (h is null || s is null)
             return;
@@ -152,7 +316,7 @@ internal static class Planner
 
         var t = new TradeState
         {
-            MainId = mainId, SymbolId = symbolId, Symbol = s.Name, Dir = dir, H = h.Value, StartedUtc = env.Now,
+            MainId = mainId, MainOrderId = mirrorOrderId, SymbolId = symbolId, Symbol = s.Name, Dir = dir, H = h.Value, StartedUtc = env.Now,
             NoMirror = mirror is null, MirrorRequested = mirror is not null,
             Main = Leg(main, TmLabel.HedgeMain),
             Mirror = mirror is null && !tmPos.ContainsKey((mainId, TmLabel.HedgeMirror)) && !tmOrd.ContainsKey((mainId, TmLabel.HedgeMirror))
@@ -169,7 +333,7 @@ internal static class Planner
 
     /// <summary>Plans one trade. One protection change per position per run, so two rules never fight over it.</summary>
     private sealed class TradePlan(TradeState t, Pos? mainPos, Dictionary<(long, string), Pos> tmPos, Dictionary<(long, string), Ord> tmOrd,
-        PlanEnv env, List<TmAction> actions)
+        Dictionary<long, Pos> mirrorPos, PlanEnv env, List<TmAction> actions)
     {
         private readonly HashSet<long> _touched = [];
         private SymbolInfo _s = null!;
@@ -184,7 +348,7 @@ internal static class Planner
             _s = s;
             _q = q;
 
-            var mirPos = tmPos.GetValueOrDefault((t.MainId, TmLabel.Mirror));
+            var mirPos = tmPos.GetValueOrDefault((t.MainId, TmLabel.Mirror)) ?? (t.MainOrderId != 0 ? mirrorPos.GetValueOrDefault(t.MainOrderId) : null);
             if (!t.NoMirror && t.Mirror is null)
             {
                 if (mirPos is not null)
@@ -239,10 +403,10 @@ internal static class Planner
             {
                 var dragged = t.Legs().Where(l => !l.Leg.Done && !l.Leg.Protected && !l.Leg.Raised)
                     .Select(l => tmOrd.GetValueOrDefault((t.MainId, l.HedgeRole))).OfType<Ord>()
-                    .FirstOrDefault(o => !Same(o.StopPrice, t.H));
+                    .FirstOrDefault(o => !Same(o.Price, t.H));
                 if (dragged is not null)
                 {
-                    newH = dragged.StopPrice;
+                    newH = dragged.Price;
                     how = "hedge order moved";
                 }
             }
@@ -388,7 +552,7 @@ internal static class Planner
                     if (ValidStop(hd, t.H))
                         actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, t.H) { Done = _ => leg.Raised = false });
                 }
-                else if (!Same(hOrd.StopPrice, t.H))
+                else if (!Same(hOrd.Price, t.H))
                     actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, t.H));
             }
             else if (ValidStop(hd, t.H))

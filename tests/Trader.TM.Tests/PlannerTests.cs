@@ -29,7 +29,7 @@ public sealed class PlannerTests
         Assert.All(new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }, role =>
         {
             var o = b.Order(role)!;
-            Assert.Equal((1, Half, 1.16100), (o.Dir, o.Volume, o.StopPrice)); // buy-stops at H
+            Assert.Equal((1, Half, 1.16100), (o.Dir, o.Volume, o.Price)); // buy-stops at H
         });
         Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);   // removed after its hedge was confirmed
         Assert.Null(mirror.StopLoss);
@@ -53,8 +53,8 @@ public sealed class PlannerTests
 
         b.Distance = 0.0012;
         b.Run();
-        Assert.Equal(1.16120, b.Order(TmLabel.HedgeMain)!.StopPrice, 9);
-        Assert.Equal(1.16120, b.Order(TmLabel.HedgeMirror)!.StopPrice, 9);
+        Assert.Equal(1.16120, b.Order(TmLabel.HedgeMain)!.Price, 9);
+        Assert.Equal(1.16120, b.Order(TmLabel.HedgeMirror)!.Price, 9);
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class PlannerTests
         b.OpenManual(1, Half); // buys at the ask 1.16002
         b.Run();
         var o = b.Order(TmLabel.HedgeMain)!;
-        Assert.Equal((-1, 1.15902), (o.Dir, Math.Round(o.StopPrice, 5)));
+        Assert.Equal((-1, 1.15902), (o.Dir, Math.Round(o.Price, 5)));
         Assert.Equal(1, b.Find(TmLabel.Mirror)!.Dir);
     }
 
@@ -85,12 +85,12 @@ public sealed class PlannerTests
 
         b.MoveTo(1.16110);                                     // the wick reverses: hedge exits at +1 pip
         Assert.Null(b.Find(TmLabel.HedgeMain));
-        Assert.Equal(1.16212, b.Order(TmLabel.HedgeMain)!.StopPrice, 9); // re-hedged 1R above the ask (1.16112)
+        Assert.Equal(1.16212, b.Order(TmLabel.HedgeMain)!.Price, 9); // re-hedged 1R above the ask (1.16112)
         Assert.True(b.Book.Trades[0].Main.Raised);
         Assert.Equal(0.00010, b.Book.Trades[0].Main.Realized, 9);
 
         b.MoveTo(1.16050);                                     // back below H: hedge returns to H
-        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.StopPrice, 9);
+        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.Price, 9);
         Assert.False(b.Book.Trades[0].Main.Raised);
     }
 
@@ -101,7 +101,7 @@ public sealed class PlannerTests
         b.MoveTo(1.16098);                                     // hedges fill at 1.16100
         b.MoveTo(1.16050);                                     // falls back before arming: hedge stop at 1.16050 hit
         Assert.Null(b.Find(TmLabel.HedgeMain));
-        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.StopPrice, 9);
+        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.Price, 9);
         Assert.Equal(-0.00050, b.Book.Trades[0].Main.Realized, 9); // the cycle cost ½R
     }
 
@@ -168,21 +168,69 @@ public sealed class PlannerTests
     }
 
     [Fact]
-    public void Owners_pending_orders_are_left_alone_and_their_fill_is_taken_over()
+    public void Owners_pending_order_gets_a_mirror_order_and_both_are_hedged_once_filled()
     {
         var b = new FakeBroker();
-        var sellStop = b.PlaceManualStop(-1, 1.15950, Half);  // a breakdown entry, placed by hand
-        Assert.Empty(b.Run());
-        Assert.Equal(sellStop, b.Orders.Single());
+        var sellStop = b.PlaceManualStop(-1, 1.15950, Half, stopLoss: 1.16050, takeProfit: 1.15500); // a breakdown entry, by hand
+        b.Run();
+        var mirror = b.Orders.Single(o => o.Id != sellStop.Id);
+        Assert.Equal(("sell-stop", Half, 1.15950, 1.16050, 1.15500), (mirror.Name, mirror.Volume, mirror.Price, mirror.StopLoss, mirror.TakeProfit));
+        Assert.EndsWith($"-O{sellStop.Id}-MIR", mirror.Label);
+        Assert.Null(b.Order(TmLabel.HedgeMain));                         // hedges wait for the fills
+        Assert.Contains("PendingMirrored", Events(b.Log));
+        Assert.True(b.Book.Trades.Single().Pending);
 
-        b.MoveTo(1.15950);                                     // it fills: an unlabelled position, i.e. a main
+        b.MoveTo(1.15950);                                               // both fill
         Assert.Contains("TradeTakenOver", Events(b.Log));
-        Assert.Equal((-1, 1.15950), (b.Find(TmLabel.Mirror)!.Dir, b.Find(TmLabel.Mirror)!.Entry));
-        Assert.Equal(1.16050, b.Order(TmLabel.HedgeMain)!.StopPrice, 9); // default distance 10 pips above its fill
+        Assert.DoesNotContain(b.Log, a => a is OpenMirror);              // no second mirror at market
+        var t = b.Book.Trades.Single();
+        var main = b.Positions.Single(p => p.Label.Length == 0);
+        Assert.Equal((main.Id, b.Find(TmLabel.Mirror)!.Id), (t.MainId, t.Mirror!.PositionId));
+        Assert.All(new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }, role => Assert.Equal((1, 1.16050), (b.Order(role)!.Dir, b.Order(role)!.Price)));
+        Assert.All(new[] { main, b.Find(TmLabel.Mirror)! }, p => Assert.Equal((null, 1.15500), (p.StopLoss, p.TakeProfit))); // SL gone once hedged
     }
 
     [Fact]
-    public void Snapshot_reads_trailing_stops_and_skips_limit_orders()
+    public void The_mirror_order_follows_the_owners_order_and_a_cancel()
+    {
+        var b = new FakeBroker();
+        var buyLimit = b.PlaceManual(limit: true, 1, 1.15900, Half);     // a pullback entry without a stop-loss
+        b.Run();
+        Ord Mirror() => b.Orders.Single(o => o.Label.EndsWith("-MIR"));
+        Assert.Equal(("buy-limit", 1.15900, 1.15800), (Mirror().Name, Mirror().Price, Mirror().StopLoss!.Value)); // H 10 pips below
+
+        b.AmendManual(buyLimit.Id, 1.15850, null, null);                 // moved: H keeps its distance
+        b.Run();
+        Assert.Equal((1.15850, 1.15750), (Mirror().Price, Mirror().StopLoss!.Value));
+        b.AmendManual(buyLimit.Id, 1.15850, 1.15700, 1.16500);           // a stop-loss and take-profit added
+        b.Run();
+        Assert.Equal((1.15700, 1.16500), (Mirror().StopLoss!.Value, Mirror().TakeProfit!.Value));
+        Assert.Equal(1.15700, b.Book.Trades.Single().H, 9);
+
+        b.Cancel(buyLimit.Id);                                           // the owner changes their mind
+        b.Run();
+        Assert.Empty(b.Orders);
+        Assert.Empty(b.Book.Trades);
+        Assert.Contains("PendingDone", Events(b.Log));
+    }
+
+    [Fact]
+    public void A_refused_mirror_order_means_a_mirror_at_market_after_the_fill()
+    {
+        var b = new FakeBroker();
+        b.Refuse.Add(nameof(PlaceMirrorOrder));
+        b.PlaceManualStop(-1, 1.15950, Half, stopLoss: 1.16050);
+        b.Run();
+        b.Run();
+        Assert.Single(b.Log.OfType<PlaceMirrorOrder>());                 // tried once, not every second
+        b.Refuse.Clear();
+        b.MoveTo(1.15950);
+        Assert.Single(b.Log.OfType<OpenMirror>());
+        Assert.NotNull(b.Order(TmLabel.HedgeMirror));
+    }
+
+    [Fact]
+    public void Snapshot_reads_trailing_stops_and_both_kinds_of_pending_order()
     {
         var res = new ProtoOAReconcileRes { CtidTraderAccountId = 1 };
         res.Position.Add(new ProtoOAPosition
@@ -190,15 +238,16 @@ public sealed class PlannerTests
             PositionId = 7, Price = 1.16, StopLoss = 1.161, TrailingStopLoss = true,
             TradeData = new ProtoOATradeData { SymbolId = 1, Volume = Half, TradeSide = ProtoOATradeSide.Sell },
         });
-        foreach (var (type, id) in new[] { (ProtoOAOrderType.Limit, 8L), (ProtoOAOrderType.Stop, 9L) })
+        foreach (var (type, id) in new[] { (ProtoOAOrderType.Limit, 8L), (ProtoOAOrderType.Stop, 9L), (ProtoOAOrderType.StopLimit, 10L) })
             res.Order.Add(new ProtoOAOrder
             {
-                OrderId = id, OrderType = type, LimitPrice = 1.162, StopPrice = 1.158,
+                OrderId = id, OrderType = type, LimitPrice = 1.162, StopPrice = 1.158, StopLoss = 1.163, TakeProfit = 1.150,
                 TradeData = new ProtoOATradeData { SymbolId = 1, Volume = Half, TradeSide = ProtoOATradeSide.Sell },
             });
         var snap = Snapshot.From(res);
         Assert.True(snap.Positions.Single().Trailing);
-        Assert.Equal(9, snap.Orders.Single().Id); // the owner's limit orders are not TM's business
+        Assert.Equal([(8L, true, 1.162), (9L, false, 1.158)], snap.Orders.Select(o => (o.Id, o.Limit, o.Price))); // stop-limits are not handled
+        Assert.All(snap.Orders, o => Assert.Equal((1.163, 1.150), (o.StopLoss, o.TakeProfit)));
     }
 
     [Fact]
@@ -242,7 +291,7 @@ public sealed class PlannerTests
         var (b, main) = ShortWithStop();
         b.SetStopLoss(main.Id, 1.16080);
         b.Run();
-        Assert.All(b.Orders, o => Assert.Equal(1.16080, o.StopPrice, 9));
+        Assert.All(b.Orders, o => Assert.Equal(1.16080, o.Price, 9));
         Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);
         Assert.Equal(0.00080, b.Book.Trades[0].Main.R, 9);
         Assert.Contains("HedgeMoved", Events(b.Log));
@@ -254,11 +303,11 @@ public sealed class PlannerTests
         var (b, main) = ShortWithStop();
         b.DragOrder(TmLabel.HedgeMain, 1.16150);
         b.Run();
-        Assert.All(b.Orders, o => Assert.Equal(1.16150, o.StopPrice, 9));
+        Assert.All(b.Orders, o => Assert.Equal(1.16150, o.Price, 9));
 
         b.SetStopLoss(main.Id, 1.15900);                       // below the entry of a short: not protective
         b.Run();
-        Assert.All(b.Orders, o => Assert.Equal(1.16150, o.StopPrice, 9));
+        Assert.All(b.Orders, o => Assert.Equal(1.16150, o.Price, 9));
         Assert.Contains("HedgeMoveIgnored", Events(b.Log));
         Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);
     }
@@ -322,7 +371,7 @@ public sealed class PlannerTests
         b.MoveTo(1.16040);                                     // and the price falls past the hedge stop (1.16050)
         Assert.Null(b.Find(TmLabel.HedgeMain));
         Assert.Contains(b.Log, a => a is ClosePosition { Role: TmLabel.HedgeMain });
-        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.StopPrice, 9); // re-hedged at H
+        Assert.Equal(1.16100, b.Order(TmLabel.HedgeMain)!.Price, 9); // re-hedged at H
     }
 
     [Fact]

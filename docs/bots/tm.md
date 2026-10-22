@@ -5,15 +5,15 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
-| Document version | v1.4 (22-Oct-2026) — history in §13 |
+| Document version | v1.5 (22-Oct-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
 | Memory | `~/tradebot/run/tm/<broker>-<ctid>.json` (trades TM is managing; survives restarts) |
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only |
 | Symbols | AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (per account in `tm.json`) |
-| Bot name / labels | `TM` — `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN`, `-HMIR` (hedges) |
-| Takes over | Positions **without a label** on a **listed symbol** (your manual trades, opened at market or by your own pending order once it fills). Your pending orders, unlisted symbols and other bots' positions are never touched |
+| Bot name / labels | `TM` — `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN`, `-HMIR` (hedges); `TM-<6hex>-O<yourOrderId>-MIR` (mirror order of your pending order) |
+| Takes over | Positions and pending orders **without a label** on a **listed symbol** (your manual trades: market entries, and buy/sell limit and stop orders). Unlisted symbols and other bots' positions are never touched |
 | Directions | Longs and shorts (for a long everything is mirrored: the hedge is a sell-stop below) |
 
 ## At a glance (example: you open 0.5 lot short)
@@ -28,7 +28,7 @@
 | You close a leg (or its TP hits) | Removes that leg's hedge and stop; the other leg carries on |
 | You set a new stop-loss or drag a hedge | Both hedges move there (protective side only; not while a hedge is filled) |
 | You open another position | A separate trade with its own mirror and hedges — TM never adds or rotates on its own |
-| You place a pending order (buy/sell limit, buy/sell stop) | Nothing while it waits; when it fills, its position is taken over as if you had opened it then (with the order's stop-loss and take-profit) |
+| You place a pending order (buy/sell limit, buy/sell stop) | A **mirror order** of the same type, side, lots and price beside it, with a stop-loss at H and your take-profit; it follows your changes and is cancelled with yours. Hedges once both fill (they cannot be placed before: §3.1) |
 | Your main has a **trailing stop** | Removed with the stop-loss while hedged (the hedge protects); at 1R both legs' break-even stops are set as **trailing stops** on the server. Switching trailing off or on in cTrader afterwards is followed on both legs |
 | TM was offline when you opened | Hedges only, no mirror, plus a warning |
 | 10 min before NFP/CPI or the Friday close | Pop-up listing your open TM trades |
@@ -60,7 +60,7 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 - Accounts: **both demos**, IC Markets 49123893 and Pepperstone 49124666, each managed separately with its own symbol list in TM's config.
 - Symbols: per account in the config; at first the Audit Bot's six (AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD).
 - TM takes over **positions without a label on a listed symbol**. Positions on unlisted symbols stay fully the owner's. Positions with another bot's label (e.g. Audit Bot probes) are never touched.
-- **The owner's pending orders** (buy-limit, sell-limit, buy-stop, sell-stop, without a label) are never touched while they wait. When one fills, its position is an unlabelled position like a market entry: TM takes it over at once (mirror at market, hedges), with the order's stop-loss as H and its take-profit copied to the mirror.
+- **The owner's pending orders** (buy-limit, sell-limit, buy-stop, sell-stop, without a label) get a **mirror order** (§3.1); TM never changes the owner's order itself.
 - **Exception to the ownership rule ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)), owner's decision:** TM modifies the main (removes or copies its stop-loss and take-profit) — the only case in which a bot touches a position it did not open. TM never closes the main except under the 3R rule (§5).
 
 ## 3. Trade start (Q3, Q4, Q7)
@@ -76,6 +76,20 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 - If the main has a **take-profit**, TM copies it to the mirror and follows later changes (Q14).
 - If the mirror is rejected, the main still gets its hedge (and a warning). Risk limits (leverage 1:10, margin level 300 %, as in [Auto Bot §5](auto-bot.md#5-risk-guardrails)) do **not** block TM: it always mirrors and hedges; when a limit is broken it only warns (Q12, owner's decision: "Trade Manually — if I am opening, just follow the rules").
 - Every further manual position is a **separate trade** with its own mirror and hedges; TM never opens adds of its own and never rotates (rules R4, R5 of [Auto Bot §7.3](auto-bot.md#73-lifecycle-rules) are not used by TM) (Q6).
+
+### 3.1 Entry by a pending order (owner, 22-Oct-2026)
+
+| Step | Event | TM action |
+|---|---|---|
+| 1 | Owner places a buy/sell **limit** or **stop** order, e.g. 0.5 lot sell-stop at 1.0920 with SL 1.0935 | **H** = the order's stop-loss, otherwise the order price ± D (§3 step 2, from the order price) |
+| 2 | | Places the **mirror order**: same type, side, volume and price, **stop-loss at H**, the owner's take-profit; label `TM-<6hex>-O<orderId>-MIR` |
+| 3 | Owner moves the order, its stop-loss or take-profit | The mirror order follows; without a stop-loss H keeps its distance from the order price |
+| 4 | Owner cancels the order (or it expires) | Cancels the mirror order; the trade ends |
+| 5 | Both orders fill (same type and price: the same tick) | The trade starts as in §3 from step 4: both **hedges at H**, then the stop-losses removed; no mirror at market |
+
+- **No hedges before the fill.** A hedge stop at H often cannot be placed while the entry waits — for a sell-stop entry below the price, H lies below the price too, where the broker refuses a buy-stop — and one that could be placed might fill without the entry. Until the hedges are in (about a second after the fill), the server protects both legs: the main by the owner's own stop-loss (none if the order has none, as for a market entry), the mirror by its stop-loss at H.
+- If the mirror order was refused, or did not fill with the owner's order (it is then cancelled), the mirror opens **at market** after the fill, as in §3. If the order filled while TM was down (more than `mirrorWithinSeconds` ago) and its mirror order did not fill: hedges only, no mirror (§6).
+- TM finds the main from the fill's execution event; after a restart from its look (same symbol, side and volume, opened after TM saw the order). A mirror order left over without its trade (state file lost) is cancelled.
 
 ## 4. Hedge management (Q8, Q9, Q10)
 
@@ -112,7 +126,7 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 
 ## 7. Labels, logs and notifications (Q17)
 
-- **Labels** ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)): `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN` (hedge of the main), `-HMIR` (hedge of the mirror), e.g. `TM-3f9a1c-P123456789-HMAIN`. The main's `positionId` in the label links every order to its trade across restarts; reconcile by bot name, as for every bot.
+- **Labels** ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)): `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN` (hedge of the main), `-HMIR` (hedge of the mirror), e.g. `TM-3f9a1c-P123456789-HMAIN`. The main's `positionId` in the label links every order to its trade across restarts; reconcile by bot name, as for every bot. A **mirror order** (§3.1) is placed before the main has a `positionId`, so it carries the owner's `orderId` instead: `TM-3f9a1c-O123456789-MIR`; its position keeps that label (a label cannot change). The `trade` column of `actions.csv` reads `O<orderId>` while the main is a pending order, `P<positionId>` after. New actions: `PlaceMirrorOrder`, `AmendMirrorOrder`.
 - **Logs:** per account and instance as for the Audit Bot ([Audit Bot §3](audit-bot.md#3-logs-on-disk)): `events.csv`, plus `actions.csv` — one row per order TM sends or changes. Columns: `time_utc`, `trade` (P + main's positionId), `symbol`, `role` (MAIN, MIR, HMAIN, HMIR), `action` (OpenMirror, PlaceHedge, MoveOrder, CancelOrder, SetProtection, ClosePosition), `side`, `lots`, `price_req`, `price_fill`, `latency_ms`, `result` (`ok` or the broker's code), `detail`.
 - **Notifications:** a **reusable module in the [Open Code Pieces](../open-code-pieces.md#7-notifications)**: one call for every bot; channels plug in behind it — **desktop pop-ups** on Ubuntu now (`notify-send`), Telegram or others later as one new class; a config file routes events to channels. Logs (journal, `events.csv`) always get everything. Pop-ups for: 2R warning, 3R close, mirror skipped or rejected, hedge rejected, TM stopped or disconnected, news / Friday warnings.
 
@@ -137,6 +151,7 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 - In a fast market the price can pass a hedge's stop (Fh − B) before the stop is set; the broker refuses it (`TRADING_BAD_STOPS`). TM then closes the hedge at market — what the rule intends.
 - A hedge level only a few spreads from the entry makes every hedge cycle cost about 1R (test: BTCUSD with 1R = $10 against a ~$5 spread reached −2R in a minute). TM warns (`TightHedge`) when 1R is under 5 × the spread.
 - TM recognises the orders of an earlier TM copy (labels carry the bot name; reconcile by bot name, [Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
+- **Mirror orders (v1.5), on Rewind (22-Oct-2026):** a manual sell-stop (0.5 lot, SL, TP) got its mirror sell-stop at the same price with SL at H and the TP; a manual buy-limit without SL got its mirror with SL at the default distance, which followed the owner's move and new TP and was cancelled with it. Both sell-stops filled at 1.09200 and became one trade (no mirror at market), hedges at H, stop-losses removed; Rewind's `tm-trades.csv` had both legs. 8 orders, all accepted.
 - **Pending orders and trailing stops (v1.4), on Rewind (22-Oct-2026):** a manual sell-limit with SL (trailing) and TP and a manual buy-stop were left alone while pending; the sell-limit's fill was taken over (mirror, both hedges at its stop-loss, TP copied); at 1R each leg got a trailing break-even stop, which trailed with the price and closed the mirror at +0.37R and the main at +2.61R (Rewind's `tm-trades.csv`). 10 orders, all accepted. Not yet seen on a cTrader demo (§12).
 
 Each step only on the owner's go; each tested on the demo accounts before the next.
@@ -196,7 +211,8 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 6 | Built without a dry-run stage (owner: "we are on demo already") | Speed; demo money |
 | 7 | One loop per account that compares the server with the rules every second, plus a saved state file (§9) | Missed messages, reconnects and restarts heal themselves |
 | 8 | Connection-down pop-up only after 60 s, Critical; "connected again" as Warning. News / Friday pop-ups also when no TM trade is open | Routine reconnects (~7 s) would be noise; a long outage leaves trades unmanaged. A heads-up before news is useful before opening a trade too |
-| 9 | The owner's pending orders are left alone; a filled one is taken over like a market entry. A trailing stop on the main makes both legs' break-even stops trail; before 1R the hedge protects, as for any stop-loss (owner, 22-Oct-2026) | Every entry type the owner uses is managed the same way; trailing is kept as the owner's wish without a stop that would close the main at the hedge level |
+| 9 | A trailing stop on the main makes both legs' break-even stops trail; before 1R the hedge protects, as for any stop-loss (owner, 22-Oct-2026) | Trailing is kept as the owner's wish without a stop that would close the main at the hedge level |
+| 10 | The owner's pending order gets a mirror order of the same type at the same price (stop-loss at H, the owner's take-profit), following the owner's changes; hedges once both fill (owner, 22-Oct-2026; replaces v1.4's "pending orders left alone, mirror at market after the fill") | Main and mirror enter at the same price, as with a market entry; hedges cannot sit at H before the entry (§3.1) |
 
 ## 12. Open items
 
@@ -204,6 +220,7 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 - Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits. Rewind's `tm-trades.csv` (§10) gives the per-leg data for this (replayed trades with TM unchanged); rule values can be tried in `~/rewind/tm/tm.json` without touching the demo config.
 - Trailing (R3) needs the exact M5 swing definition ("last lower high") and the stop buffer — the same open question as [Auto Bot §9](auto-bot.md#9-open-questions).
 - A partial close of a main does not yet resize its pending hedge (the hedge keeps the original volume).
+- Mirror orders (§3.1) are tested on Rewind only: check once on a cTrader demo that a limit / stop order with an absolute stop-loss and take-profit is accepted, that an amend with price, volume, stop-loss and take-profit replaces them, and that the fill's execution event carries the order's type and the new `positionId`.
 - Trailing stops set over the Open API (§5, decision 9) are tested on Rewind only: check once on a cTrader demo that `trailingStopLoss` on an amended stop-loss is accepted, shown in the reconcile, and trails at the distance it had when set.
 
 ## 13. History
@@ -217,3 +234,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.2 | 21 Oct 2026 | TM tested unchanged on Rewind's replayed prices (§10): take-over with mirror and both hedges, SL removed once hedged, hedges filled at H, hedge stops at ½R, re-hedge, 2R warning; clean-up after close all |
 | v1.3 | 22 Oct 2026 | §10: Rewind's exact mode and its per-leg results file `tm-trades.csv`. A replayed week (17–21 Mar 2025, 11 trades on EURUSD, GBPJPY, BTCUSD) with TM unchanged: 150 orders, all accepted; Rewind's results matched TM's logs leg for leg (hedge cycles 0–5, break-even, 2R warnings, one 3R close). Seen there: chop around H (accepted risk, §8) — 3 hedge cycles cost 2.6R on one EURUSD trade, 5 cycles led to the 3R close on another. §12: Rewind as the backtest tool for the rule values |
 | v1.4 | 22 Oct 2026 | Owner's pending orders (buy/sell limit and stop) and trailing stops (§2, §5, decision 9): pending orders untouched, a fill taken over like a market entry; a main's trailing stop makes both legs' break-even stops server-side trailing stops, following the main's switch. Code: `Pos.Trailing`, `TradeState.Trailing`, `SetProtection.Trailing`; Trader.Core's SL call takes the trailing flag ([Open Code Pieces](../open-code-pieces.md) v1.3); 4 new tests. Tested on Rewind (§9) |
+| v1.5 | 22 Oct 2026 | **Mirror orders** (§3.1, decision 10, owner): the owner's buy/sell limit or stop order gets a mirror order of the same type at the same price, stop-loss at H, the owner's take-profit; it follows the owner's changes and is cancelled with the order; hedges once both fill (they cannot be placed at H before). Labels `TM-<6hex>-O<orderId>-MIR` (§7). Code: `Planner` (pending trades), `TradeState.MainOrderId`, `Ord` with type and protection; Trader.Core `PlacePendingOrderAsync` / `AmendPendingOrderAsync` ([Open Code Pieces](../open-code-pieces.md) v1.4); TM tests: 36 (3 new, 2 rewritten). Tested on Rewind (§9) |

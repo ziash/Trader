@@ -100,6 +100,9 @@ var open = await session.ReconcileAsync(ctid);                              // a
 var stop = await session.PlaceStopOrderAsync(ctid, symbolId, ProtoOATradeSide.Buy, volume, 1.16100, label, clientOrderId);
 await session.AmendStopOrderAsync(ctid, stop.OrderId, 1.16150);            // move a pending stop order
 await session.CancelOrderAsync(ctid, stop.OrderId);
+await session.PlacePendingOrderAsync(ctid, symbolId, ProtoOAOrderType.Limit, ProtoOATradeSide.Buy, volume, price: 1.155,
+    stopLoss: 1.150, takeProfit: 1.170, label, clientOrderId);   // stop or limit, SL / TP go to its position
+await session.AmendPendingOrderAsync(ctid, orderId, ProtoOAOrderType.Limit, volume, price: 1.156, stopLoss: 1.151, takeProfit: 1.170);
 await session.AmendPositionProtectionAsync(ctid, positionId, stopLoss: 1.16, takeProfit: null); // null removes it
 await session.AmendPositionProtectionAsync(ctid, positionId, stopLoss: 1.16, takeProfit: null, trailingStopLoss: true); // the server trails it
 var days = await session.GetTrendbarsAsync(ctid, symbolId, ProtoOATrendbarPeriod.D1, from, to); // List<Candle>

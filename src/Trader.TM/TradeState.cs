@@ -10,7 +10,23 @@ namespace Trader.TM;
 /// </summary>
 internal sealed class TradeState
 {
+    /// <summary>The main's positionId; 0 while the main is still the owner's pending order (<see cref="MainOrderId"/>).</summary>
     public long MainId { get; set; }
+
+    /// <summary>The owner's pending order the main came from (0 for a market entry); its mirror order is labelled with it.</summary>
+    public long MainOrderId { get; set; }
+
+    /// <summary>The main is still a pending order: TM keeps a mirror order beside it (tm.md §3).</summary>
+    public bool Pending => MainId == 0;
+
+    /// <summary>While pending without a stop-loss on the order: H sits this far from the order price, and moves with it.</summary>
+    public double PendingDistance { get; set; }
+
+    /// <summary>The owner's pending order was cancelled (or expired): the mirror order is cancelled, the trade ends.</summary>
+    public bool Cancelled { get; set; }
+
+    /// <summary>"P&lt;positionId&gt;", or "O&lt;orderId&gt;" while pending — the trade column of actions.csv.</summary>
+    public string Name => Pending ? $"O{MainOrderId}" : $"P{MainId}";
     public long SymbolId { get; set; }
     public string Symbol { get; set; } = "";
 
@@ -26,6 +42,9 @@ internal sealed class TradeState
     public bool NoMirror { get; set; }
 
     public bool MirrorRequested { get; set; }
+
+    /// <summary>The mirror order of the owner's pending order was sent (never twice; refused = mirror at market after the fill).</summary>
+    public bool MirrorOrderSent { get; set; }
 
     /// <summary>The owner gave the main a trailing stop: break-even stops of both legs trail (tm.md §5). Follows the main's
     /// switch whenever the main has a stop-loss.</summary>
@@ -98,7 +117,10 @@ internal sealed class TradeBook(string path)
         return book;
     }
 
-    public TradeState? Find(long mainId) => Trades.FirstOrDefault(t => t.MainId == mainId);
+    public TradeState? Find(long mainId) => Trades.FirstOrDefault(t => t.MainId == mainId && mainId != 0);
+
+    /// <summary>The trade that started from the owner's pending order <paramref name="orderId"/>.</summary>
+    public TradeState? FindOrder(long orderId) => Trades.FirstOrDefault(t => t.MainOrderId == orderId && orderId != 0);
 
     /// <summary>Writes the file if anything changed (temp file, then rename).</summary>
     public void Save()
@@ -124,6 +146,12 @@ internal abstract record TmAction(TradeState? Trade, string Role)
 }
 
 internal sealed record OpenMirror(TradeState Trade, int Dir, long Volume, double StopLoss) : TmAction(Trade, TmLabel.Mirror);
+
+/// <summary>The mirror of the owner's pending order: same type, side, volume and price; stop-loss at H, the owner's take-profit.</summary>
+internal sealed record PlaceMirrorOrder(TradeState Trade, Ord Like, double StopLoss, double? TakeProfit) : TmAction(Trade, TmLabel.Mirror);
+
+/// <summary>Brings the mirror order in line with the owner's order (price, volume, stop-loss at H, take-profit).</summary>
+internal sealed record AmendMirrorOrder(TradeState Trade, long OrderId, Ord Like, double StopLoss, double? TakeProfit) : TmAction(Trade, TmLabel.Mirror);
 
 /// <param name="Price">Stop price; null = at market (price already beyond H when no hedge existed yet).</param>
 internal sealed record PlaceHedge(TradeState Trade, string Role, int Dir, long Volume, double? Price) : TmAction(Trade, Role);

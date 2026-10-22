@@ -255,6 +255,63 @@ public sealed class CTraderSession : IAsyncDisposable
         return AcknowledgeAsync(req, timeout);
     }
 
+    /// <summary>
+    /// Places a pending STOP or LIMIT order with an optional stop-loss and take-profit (absolute prices) that its position
+    /// gets when it fills, and waits until the server accepts it. A stop sits beyond the price (buy above, sell below),
+    /// a limit before it (buy below, sell above). Returns the accepted order.
+    /// </summary>
+    public Task<ProtoOAOrder> PlacePendingOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOAOrderType type, ProtoOATradeSide side, long volume,
+        double price, double? stopLoss, double? takeProfit, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null)
+    {
+        var req = new ProtoOANewOrderReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            SymbolId = symbolId,
+            OrderType = type,
+            TradeSide = side,
+            Volume = volume,
+            Label = label,
+            ClientOrderId = clientOrderId,
+        };
+        SetPrice(req, type, price);
+        if (stopLoss is { } sl)
+            req.StopLoss = sl;
+        if (takeProfit is { } tp)
+            req.TakeProfit = tp;
+        if (!string.IsNullOrEmpty(comment))
+            req.Comment = comment.Length <= 512 ? comment : comment[..512];
+        return AcknowledgeAsync(req, timeout);
+    }
+
+    /// <summary>
+    /// Changes a pending STOP or LIMIT order: price, volume, stop-loss and take-profit together (null removes that one);
+    /// waits for the server's confirmation.
+    /// </summary>
+    public Task<ProtoOAOrder> AmendPendingOrderAsync(long ctidTraderAccountId, long orderId, ProtoOAOrderType type, long volume, double price,
+        double? stopLoss, double? takeProfit, TimeSpan? timeout = null)
+    {
+        var req = new ProtoOAAmendOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId, Volume = volume };
+        if (type == ProtoOAOrderType.Limit)
+            req.LimitPrice = price;
+        else
+            req.StopPrice = price;
+        if (stopLoss is { } sl)
+            req.StopLoss = sl;
+        if (takeProfit is { } tp)
+            req.TakeProfit = tp;
+        return AcknowledgeAsync(req, timeout);
+    }
+
+    private static void SetPrice(ProtoOANewOrderReq req, ProtoOAOrderType type, double price)
+    {
+        switch (type)
+        {
+            case ProtoOAOrderType.Stop: req.StopPrice = price; break;
+            case ProtoOAOrderType.Limit: req.LimitPrice = price; break;
+            default: throw new ArgumentException($"Not a pending order type: {type}", nameof(type));
+        }
+    }
+
     /// <summary>Moves a pending stop order to <paramref name="stopPrice"/>; waits for the server's confirmation.</summary>
     public Task<ProtoOAOrder> AmendStopOrderAsync(long ctidTraderAccountId, long orderId, double stopPrice, TimeSpan? timeout = null) =>
         AcknowledgeAsync(new ProtoOAAmendOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId, StopPrice = stopPrice }, timeout);

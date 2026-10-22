@@ -38,6 +38,7 @@ internal sealed class AccountManager(
 
     private readonly ILogger _log = log.ForAccount(account.AccountId);
     private readonly ConcurrentDictionary<long, double> _closePrices = new();
+    private readonly ConcurrentDictionary<long, long> _orderFills = new(); // pending orderId → the position it opened
     private readonly Dictionary<long, (DateOnly Day, double Distance)> _distances = new();
     private readonly SemaphoreSlim _wake = new(0);
     private volatile CTraderSession? _session;
@@ -53,7 +54,7 @@ internal sealed class AccountManager(
 
     private static List<string> Describe(TradeBook book, TmAccount account) =>
         book.Trades.Where(t => !t.Done)
-            .Select(t => $"{account.Broker} {t.Symbol} {(t.Dir > 0 ? "long" : "short")} P{t.MainId}")
+            .Select(t => $"{account.Broker} {t.Symbol} {(t.Dir > 0 ? "long" : "short")} {t.Name}{(t.Pending ? " (pending order)" : "")}")
             .ToList();
 
     /// <summary>After every (re)connect, once the symbols are resolved and subscribed.</summary>
@@ -72,6 +73,8 @@ internal sealed class AccountManager(
             return;
         if (e.Deal?.ClosePositionDetail is not null)
             _closePrices[e.Deal.PositionId] = e.Deal.ExecutionPrice;
+        if (e is { ExecutionType: ProtoOAExecutionType.OrderFilled, Order.OrderType: ProtoOAOrderType.Stop or ProtoOAOrderType.Limit, Position: not null })
+            _orderFills[e.Order.OrderId] = e.Position.PositionId;
         _dirty = true;
         _wake.Release();
     }
@@ -120,6 +123,7 @@ internal sealed class AccountManager(
             Quote = id => feed.Last(account.AccountId, id),
             Distance = id => _distances.TryGetValue(id, out var d) && d.Day == DateOnly.FromDateTime(now) ? d.Distance : null,
             ClosePrice = id => _closePrices.TryGetValue(id, out var p) ? p : null,
+            FilledPosition = id => _orderFills.TryGetValue(id, out var p) ? p : null,
         };
 
         var actions = Planner.Plan(book, _snapshot, env);
@@ -149,7 +153,7 @@ internal sealed class AccountManager(
         var t = action.Trade!;
         var s = symbols[t.SymbolId];
         var sent = DateTime.UtcNow;
-        var label = identity.Label(TmLabel.Leg(t.MainId, action.Role));
+        var label = identity.Label(action is PlaceMirrorOrder ? TmLabel.OrderLeg(t.MainOrderId) : TmLabel.Leg(t.MainId, action.Role));
         var comment = CTraderSession.SentComment(sent);
         string kind = action.GetType().Name, side = "", lots = "", requested = "";
         try
@@ -170,6 +174,15 @@ internal sealed class AccountManager(
                 case PlaceHedge h:
                     (side, lots, requested) = (SideText(h.Dir), Lots(s, h.Volume), Num(h.Price, s));
                     await session.PlaceStopOrderAsync(ctid, s.SymbolId, Snapshot.Side(h.Dir), h.Volume, h.Price!.Value, label, ClientId(), comment, OrderTimeout);
+                    break;
+                case PlaceMirrorOrder po:
+                    (side, lots, requested) = (SideText(po.Like.Dir), Lots(s, po.Like.Volume), $"{po.Like.Name} {Num(po.Like.Price, s)} {Protection(po.StopLoss, po.TakeProfit, s)}");
+                    await session.PlacePendingOrderAsync(ctid, s.SymbolId, po.Like.Type, Snapshot.Side(po.Like.Dir), po.Like.Volume, po.Like.Price,
+                        po.StopLoss, po.TakeProfit, label, ClientId(), comment, OrderTimeout);
+                    break;
+                case AmendMirrorOrder am:
+                    (lots, requested) = (Lots(s, am.Like.Volume), $"{am.Like.Name} {Num(am.Like.Price, s)} {Protection(am.StopLoss, am.TakeProfit, s)}");
+                    await session.AmendPendingOrderAsync(ctid, am.OrderId, am.Like.Type, am.Like.Volume, am.Like.Price, am.StopLoss, am.TakeProfit, OrderTimeout);
                     break;
                 case MoveOrder mo:
                     requested = Num(mo.Price, s);
@@ -198,7 +211,7 @@ internal sealed class AccountManager(
             Row(sent, t, s, action.Role, kind, side, lots, requested, null, ex.ErrorCode, $"{Target(action)} {ex.Message}".Trim());
             action.Failed?.Invoke(ex.ErrorCode);
             notify.Warning("TmActionFailed", $"{account.Broker} {s.Name}: {Describe(action)} refused",
-                $"Trade P{t.MainId}: {ex.ErrorCode} {ex.Message}. TM tries again next second if the rule still applies.", ctid);
+                $"Trade {t.Name}: {ex.ErrorCode} {ex.Message}. TM tries again next second if the rule still applies.", ctid);
         }
         return true;
     }
@@ -249,13 +262,14 @@ internal sealed class AccountManager(
         OrderFill? fill, string result, string detail) =>
         actionsCsv.Write(sent,
         [
-            CsvFormat.Time(sent), $"P{t.MainId}", s.Name, role, kind, side, lots, requested, Num(fill?.Price, s),
+            CsvFormat.Time(sent), t.Name, s.Name, role, kind, side, lots, requested, Num(fill?.Price, s),
             CsvFormat.Num(fill?.Latency.TotalMilliseconds, 0), result, detail,
         ]);
 
     private static string Target(TmAction a) => a switch
     {
         MoveOrder m => $"order {m.OrderId}",
+        AmendMirrorOrder m => $"order {m.OrderId}",
         CancelOrder c => $"order {c.OrderId}",
         SetProtection p => $"position {p.PositionId}",
         ClosePosition c => $"position {c.PositionId}",
@@ -265,6 +279,8 @@ internal sealed class AccountManager(
     private static string Describe(TmAction a) => a switch
     {
         OpenMirror => "opening the mirror",
+        PlaceMirrorOrder => "placing the mirror order",
+        AmendMirrorOrder => "moving the mirror order",
         PlaceHedge => "placing a hedge",
         MoveOrder => "moving a hedge",
         CancelOrder => "cancelling a hedge",
@@ -274,6 +290,7 @@ internal sealed class AccountManager(
     };
 
     private static string SideText(int dir) => dir > 0 ? "buy" : "sell";
+    private static string Protection(double? sl, double? tp, SymbolInfo s) => $"SL {(sl is null ? "none" : Num(sl, s))} TP {(tp is null ? "none" : Num(tp, s))}";
     private static string Lots(SymbolInfo s, long volume) => CsvFormat.Num(s.LotsForVolume(volume), 2);
     private static string Num(double? v, SymbolInfo s) => CsvFormat.Num(v, s.Digits);
     private static string ClientId() => "tm-" + Guid.NewGuid().ToString("N")[..12];

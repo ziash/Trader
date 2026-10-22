@@ -18,6 +18,7 @@ internal sealed class FakeBroker
     public List<Pos> Positions { get; } = [];
     public List<Ord> Orders { get; } = [];
     public Dictionary<long, double> ClosePrices { get; } = [];
+    public Dictionary<long, long> OrderFills { get; } = [];  // pending orderId → position (from the execution events)
     public List<TmAction> Log { get; } = [];
     public TradeBook Book { get; } = new("");
     public TmConfig Config { get; init; } = new([new TmAccount("brokerA", 1, ["EURUSD"])]);
@@ -58,12 +59,25 @@ internal sealed class FakeBroker
     }
 
     /// <summary>The owner places a pending stop order of their own (no label).</summary>
-    public Ord PlaceManualStop(int dir, double price, long volume = 50_000_000)
+    public Ord PlaceManualStop(int dir, double price, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null) =>
+        PlaceManual(false, dir, price, volume, stopLoss, takeProfit);
+
+    /// <summary>The owner places a pending stop or limit order of their own (no label).</summary>
+    public Ord PlaceManual(bool limit, int dir, double price, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, bool trailing = false)
     {
-        var o = new Ord(_nextId++, SymbolId, dir, volume, price, "");
+        var o = new Ord(_nextId++, SymbolId, dir, volume, price, "", limit, stopLoss, takeProfit, trailing);
         Orders.Add(o);
         return o;
     }
+
+    /// <summary>The owner changes their pending order (price, stop-loss, take-profit).</summary>
+    public void AmendManual(long orderId, double price, double? stopLoss, double? takeProfit)
+    {
+        var i = Orders.FindIndex(o => o.Id == orderId);
+        Orders[i] = Orders[i] with { Price = price, StopLoss = stopLoss, TakeProfit = takeProfit };
+    }
+
+    public void Cancel(long orderId) => Orders.RemoveAll(o => o.Id == orderId);
 
     public void SetTakeProfit(long positionId, double? tp)
     {
@@ -74,7 +88,7 @@ internal sealed class FakeBroker
     public void DragOrder(string role, double price)
     {
         var i = Orders.FindIndex(o => o.Label.EndsWith("-" + role));
-        Orders[i] = Orders[i] with { StopPrice = price };
+        Orders[i] = Orders[i] with { Price = price };
     }
 
     public Pos? Find(string role) => Positions.SingleOrDefault(p => p.Label.EndsWith("-" + role));
@@ -92,10 +106,13 @@ internal sealed class FakeBroker
     {
         foreach (var o in Orders.ToList())
         {
-            if (o.Dir > 0 ? Ask >= o.StopPrice : Bid <= o.StopPrice)
+            var market = o.Dir > 0 ? Ask : Bid;
+            if (o.Limit ? o.Dir * (market - o.Price) <= 0 : o.Dir * (market - o.Price) >= 0)
             {
                 Orders.Remove(o);
-                Positions.Add(new Pos(_nextId++, SymbolId, o.Dir, o.Volume, o.Dir > 0 ? Ask : Bid, null, null, o.Label, Now));
+                var p = new Pos(_nextId++, SymbolId, o.Dir, o.Volume, market, o.StopLoss, o.TakeProfit, o.Label, Now, o.Trailing);
+                Positions.Add(p);
+                OrderFills[o.Id] = p.Id;
             }
         }
         foreach (var p in Positions.ToList())
@@ -123,6 +140,7 @@ internal sealed class FakeBroker
                 Quote = _ => new Quote(1, SymbolId, Bid, Ask, Now),
                 Distance = _ => Distance,
                 ClosePrice = id => ClosePrices.TryGetValue(id, out var p) ? p : null,
+                FilledPosition = id => OrderFills.TryGetValue(id, out var p) ? p : null,
             };
             var actions = Planner.Plan(Book, new Snapshot(Positions.ToList(), Orders.ToList()), env);
             all.AddRange(actions);
@@ -162,9 +180,16 @@ internal sealed class FakeBroker
             case PlaceHedge h:
                 Orders.Add(new Ord(_nextId++, SymbolId, h.Dir, h.Volume, h.Price!.Value, Label(h.Trade!.MainId, h.Role)));
                 break;
+            case PlaceMirrorOrder po:
+                Orders.Add(po.Like with { Id = _nextId++, Label = $"TM-abcdef-{TmLabel.OrderLeg(po.Trade!.MainOrderId)}", StopLoss = po.StopLoss, TakeProfit = po.TakeProfit, Trailing = false });
+                break;
+            case AmendMirrorOrder am:
+                var k = Orders.FindIndex(o => o.Id == am.OrderId);
+                Orders[k] = Orders[k] with { Price = am.Like.Price, Volume = am.Like.Volume, StopLoss = am.StopLoss, TakeProfit = am.TakeProfit };
+                break;
             case MoveOrder mo:
                 var i = Orders.FindIndex(o => o.Id == mo.OrderId);
-                Orders[i] = Orders[i] with { StopPrice = mo.Price };
+                Orders[i] = Orders[i] with { Price = mo.Price };
                 break;
             case CancelOrder c:
                 Orders.RemoveAll(o => o.Id == c.OrderId);
