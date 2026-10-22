@@ -95,6 +95,7 @@ public sealed class AuditBotTests : IDisposable
 
         // The tick at 125 s belongs to the next interval.
         Assert.Equal(3, recorder.FlushInterval(End, End.AddMinutes(2)));
+        writer.Dispose();                  // that flush reopened the file; Windows cannot delete an open file
     }
 
     [Fact]
