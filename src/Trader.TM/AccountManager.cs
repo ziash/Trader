@@ -179,8 +179,8 @@ internal sealed class AccountManager(
                     await session.CancelOrderAsync(ctid, c.OrderId, OrderTimeout);
                     break;
                 case SetProtection sp:
-                    requested = $"SL {(sp.StopLoss is null ? "none" : Num(sp.StopLoss, s))} TP {(sp.TakeProfit is null ? "none" : Num(sp.TakeProfit, s))}";
-                    await session.AmendPositionProtectionAsync(ctid, sp.PositionId, sp.StopLoss, sp.TakeProfit, OrderTimeout);
+                    requested = $"SL {(sp.StopLoss is null ? "none" : Num(sp.StopLoss, s) + (sp.Trailing ? " trailing" : ""))} TP {(sp.TakeProfit is null ? "none" : Num(sp.TakeProfit, s))}";
+                    await session.AmendPositionProtectionAsync(ctid, sp.PositionId, sp.StopLoss, sp.TakeProfit, OrderTimeout, trailingStopLoss: sp.Trailing);
                     break;
                 case ClosePosition cp:
                     lots = Lots(s, cp.Volume);

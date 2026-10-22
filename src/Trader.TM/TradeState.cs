@@ -27,6 +27,10 @@ internal sealed class TradeState
 
     public bool MirrorRequested { get; set; }
 
+    /// <summary>The owner gave the main a trailing stop: break-even stops of both legs trail (tm.md §5). Follows the main's
+    /// switch whenever the main has a stop-loss.</summary>
+    public bool Trailing { get; set; }
+
     public LegState Main { get; set; } = new();
     public LegState? Mirror { get; set; }
 
@@ -128,8 +132,9 @@ internal sealed record MoveOrder(TradeState Trade, string Role, long OrderId, do
 
 internal sealed record CancelOrder(TradeState Trade, string Role, long OrderId) : TmAction(Trade, Role);
 
-/// <summary>Sets a position's stop-loss and take-profit (null removes it).</summary>
-internal sealed record SetProtection(TradeState Trade, string Role, long PositionId, double? StopLoss, double? TakeProfit) : TmAction(Trade, Role);
+/// <summary>Sets a position's stop-loss and take-profit (null removes it); <paramref name="Trailing"/>: the stop-loss trails.</summary>
+internal sealed record SetProtection(TradeState Trade, string Role, long PositionId, double? StopLoss, double? TakeProfit, bool Trailing = false)
+    : TmAction(Trade, Role);
 
 internal sealed record ClosePosition(TradeState Trade, string Role, long PositionId, long Volume) : TmAction(Trade, Role);
 

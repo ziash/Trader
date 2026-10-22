@@ -101,6 +101,7 @@ var stop = await session.PlaceStopOrderAsync(ctid, symbolId, ProtoOATradeSide.Bu
 await session.AmendStopOrderAsync(ctid, stop.OrderId, 1.16150);            // move a pending stop order
 await session.CancelOrderAsync(ctid, stop.OrderId);
 await session.AmendPositionProtectionAsync(ctid, positionId, stopLoss: 1.16, takeProfit: null); // null removes it
+await session.AmendPositionProtectionAsync(ctid, positionId, stopLoss: 1.16, takeProfit: null, trailingStopLoss: true); // the server trails it
 var days = await session.GetTrendbarsAsync(ctid, symbolId, ProtoOATrendbarPeriod.D1, from, to); // List<Candle>
 var atr = Candle.AverageTrueRange(days, 3);                                 // average daily range incl. gaps
 ```

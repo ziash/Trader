@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by the Audit Bot and TM |
-| Document version | v1.2 (21-Oct-2026) — history in §10 |
+| Document version | v1.3 (22-Oct-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -21,7 +21,7 @@ The functions every bot needs are written **once**; bots never copy them. Each b
 | Identity and labels | Instance ID (`<BotName>-<6hex>`), order labels, parsing labels back | `Hosting/BotIdentity` | all |
 | Instance registry | One Primary per bot per account; status files; slots (§6) | `Hosting/InstanceRegistry` | Audit Bot, TM |
 | Connection | Stay connected: heartbeat, dead-line ping, reconnect with backoff, account auth, token refresh (§3); since when it has been down (`DownSinceUtc`); demo host or a replay broker on localhost (§3) | `OpenApi/ConnectionManager`, `CTraderSession.ConnectAsync` | all (down time: TM) |
-| Requests | Market orders, **stop orders, moving and cancelling them, setting / removing a position's stop-loss and take-profit**, closing by `positionId`, reconcile, symbols, spots, live trendbars, **historical candles** | `OpenApi/CTraderSession` | Audit Bot (market, close, reconcile), TM (all) |
+| Requests | Market orders, **stop orders, moving and cancelling them, setting / removing a position's stop-loss (fixed or trailing) and take-profit**, closing by `positionId`, reconcile, symbols, spots, live trendbars, **historical candles** | `OpenApi/CTraderSession` | Audit Bot (market, close, reconcile), TM (all) |
 | Secrets and tokens | Reads `~/.config/trader/secrets.env`; refreshes tokens and saves them atomically under a lock | `Config/SecretsFile`, `TokenRefresher` | all |
 | Symbols and prices | Names → IDs and details (pip, lot, digits, schedule), currency conversion symbols, bid/ask quotes, trading hours | `MarketData/SymbolCatalog`, `PriceFeed`, `TradingSchedule`, `MarketHours` | Audit Bot, TM |
 | Candles | Daily / historical candles, average true range (ATR) | `MarketData/Candle` | TM |
@@ -117,3 +117,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](archive/plan-v1.22.md), Sections 5, 6.4, 10.9.7) under the name **Open Code Pieces**. Content unchanged |
 | v1.1 | 20 Oct 2026 | News calendar moved here from the Audit Bot (now used by TM too); `ConnectionManager.DownSinceUtc` for TM's disconnect pop-up |
 | v1.2 | 21 Oct 2026 | Replay environment (§3): `CTRADER_ENV=replay`, localhost only, for Rewind; `CTraderSession.ConnectAsync` takes the secrets; tested with `Trader.ListAccounts` and TM against Rewind |
+| v1.3 | 22 Oct 2026 | `AmendPositionProtectionAsync(…, trailingStopLoss:)`: optional; true = the server trails the stop-loss, false = fixed, not given = not sent (every bot unchanged). For TM's trailing break-even stops ([TM §5](bots/tm.md#5-protection-limits-and-closing-q4-q5-q11-q19)) |

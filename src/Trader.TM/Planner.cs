@@ -96,6 +96,7 @@ internal static class Planner
             H = h,
             StartedUtc = env.Now,
             NoMirror = env.Now - main.OpenUtc > TimeSpan.FromSeconds(env.Config.MirrorWithinSeconds),
+            Trailing = main.Trailing && main.StopLoss is not null,
             Main = new LegState { PositionId = main.Id, Entry = main.Entry, Volume = main.Volume, R = Math.Abs(h - main.Entry) },
         };
         book.Trades.Add(t);
@@ -105,7 +106,7 @@ internal static class Planner
             ? new Notify(t, "MAIN", NotificationLevel.Warning, "MirrorSkipped", $"{what} found late: hedges only",
                 $"Position {main.Id} opened {main.OpenUtc:HH:mm:ss}Z, before TM saw it. No mirror; hedge at {P(h, s)} ({source})")
             : new Notify(t, "MAIN", NotificationLevel.Info, "TradeTakenOver", $"{what} taken over",
-                $"Position {main.Id}: mirror + 2 hedges at {P(h, s)} ({source}); 1R = {P(t.Main.R, s)}"));
+                $"Position {main.Id}: mirror + 2 hedges at {P(h, s)} ({source}); 1R = {P(t.Main.R, s)}{(t.Trailing ? "; trailing stops from break-even" : "")}"));
     }
 
     /// <summary>A hedge level within a few spreads of the entry: every hedge cycle then costs about 1R in spread and slippage.</summary>
@@ -202,10 +203,25 @@ internal static class Planner
                 }
             }
 
+            TrailingSwitch();
             HedgeLevelChange();
             Leg(t.Main, mainPos, "MAIN", TmLabel.HedgeMain);
             if (t.Mirror is not null)
                 Leg(t.Mirror, mirPos, TmLabel.Mirror, TmLabel.HedgeMirror);
+        }
+
+        /// <summary>
+        /// The owner's trailing stop (tm.md §5): read from the main whenever it has a stop-loss — the owner's own before
+        /// 1R (TM removes it once hedged, as any stop-loss), TM's break-even stop after. Both legs' break-even stops follow it.
+        /// </summary>
+        private void TrailingSwitch()
+        {
+            if (mainPos?.StopLoss is null || mainPos.Trailing == t.Trailing)
+                return;
+            t.Trailing = mainPos.Trailing;
+            actions.Add(new Notify(t, "MAIN", NotificationLevel.Info, t.Trailing ? "TrailingOn" : "TrailingOff",
+                $"{t.Symbol}: trailing stop {(t.Trailing ? "on" : "off")}",
+                t.Trailing ? "Break-even stops trail the price (the hedge protects until 1R)" : "Break-even stops stay where they are"));
         }
 
         /// <summary>The owner moved the hedge level: a new stop-loss on the main, or a dragged hedge order (tm.md §4).</summary>
@@ -308,7 +324,7 @@ internal static class Planner
                 if (hPos is not null)
                     actions.Add(new ClosePosition(t, hedgeRole, hPos.Id, hPos.Volume));
                 var keep = pos.StopLoss is { } sl && t.Dir * (sl - leg.Entry) >= -_s.PipSize * 0.05 ? sl : leg.Entry;
-                Protect(pos, role, Math.Round(keep, _s.Digits), tp);
+                Protect(pos, role, Math.Round(keep, _s.Digits), tp, trailing: t.Trailing);
                 return;
             }
 
@@ -336,9 +352,9 @@ internal static class Planner
             // Break-even at 1R (R2): stop-loss first, the hedge is removed next time.
             if (AtLeast(profit, leg.R) && hPos is null)
             {
-                if (Protect(pos, role, Math.Round(leg.Entry, _s.Digits), tp, () => leg.Protected = true))
+                if (Protect(pos, role, Math.Round(leg.Entry, _s.Digits), tp, () => leg.Protected = true, t.Trailing))
                     actions.Add(new Notify(t, role, NotificationLevel.Info, "BreakEven", $"{t.Symbol} {name} at +1R: stop at break-even",
-                        $"Stop-loss {P(leg.Entry, _s)}; hedge removed"));
+                        $"Stop-loss {P(leg.Entry, _s)}{(t.Trailing ? ", trailing" : "")}; hedge removed"));
                 return;
             }
 
@@ -394,21 +410,23 @@ internal static class Planner
             {
                 if (hedged)
                     leg.StopCleared = true;
-                Protect(pos, role, pos.StopLoss, tp);
+                Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing);
             }
         }
 
         /// <summary>Plans a stop-loss / take-profit change if the position differs; false if nothing to do or already planned.</summary>
-        private bool Protect(Pos p, string role, double? stopLoss, double? takeProfit, Action? done = null)
+        /// <param name="trailing">The stop-loss trails (ignored without one).</param>
+        private bool Protect(Pos p, string role, double? stopLoss, double? takeProfit, Action? done = null, bool trailing = false)
         {
-            if (Same(p.StopLoss, stopLoss) && Same(p.TakeProfit, takeProfit))
+            trailing &= stopLoss is not null;
+            if (Same(p.StopLoss, stopLoss) && Same(p.TakeProfit, takeProfit) && p.Trailing == trailing)
             {
                 done?.Invoke();
                 return false;
             }
             if (!_touched.Add(p.Id))
                 return false;
-            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit) { Done = done is null ? null : _ => done() });
+            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit, trailing) { Done = done is null ? null : _ => done() });
             return true;
         }
 

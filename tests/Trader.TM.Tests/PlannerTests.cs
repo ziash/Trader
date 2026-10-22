@@ -168,6 +168,75 @@ public sealed class PlannerTests
     }
 
     [Fact]
+    public void Owners_pending_orders_are_left_alone_and_their_fill_is_taken_over()
+    {
+        var b = new FakeBroker();
+        var sellStop = b.PlaceManualStop(-1, 1.15950, Half);  // a breakdown entry, placed by hand
+        Assert.Empty(b.Run());
+        Assert.Equal(sellStop, b.Orders.Single());
+
+        b.MoveTo(1.15950);                                     // it fills: an unlabelled position, i.e. a main
+        Assert.Contains("TradeTakenOver", Events(b.Log));
+        Assert.Equal((-1, 1.15950), (b.Find(TmLabel.Mirror)!.Dir, b.Find(TmLabel.Mirror)!.Entry));
+        Assert.Equal(1.16050, b.Order(TmLabel.HedgeMain)!.StopPrice, 9); // default distance 10 pips above its fill
+    }
+
+    [Fact]
+    public void Snapshot_reads_trailing_stops_and_skips_limit_orders()
+    {
+        var res = new ProtoOAReconcileRes { CtidTraderAccountId = 1 };
+        res.Position.Add(new ProtoOAPosition
+        {
+            PositionId = 7, Price = 1.16, StopLoss = 1.161, TrailingStopLoss = true,
+            TradeData = new ProtoOATradeData { SymbolId = 1, Volume = Half, TradeSide = ProtoOATradeSide.Sell },
+        });
+        foreach (var (type, id) in new[] { (ProtoOAOrderType.Limit, 8L), (ProtoOAOrderType.Stop, 9L) })
+            res.Order.Add(new ProtoOAOrder
+            {
+                OrderId = id, OrderType = type, LimitPrice = 1.162, StopPrice = 1.158,
+                TradeData = new ProtoOATradeData { SymbolId = 1, Volume = Half, TradeSide = ProtoOATradeSide.Sell },
+            });
+        var snap = Snapshot.From(res);
+        Assert.True(snap.Positions.Single().Trailing);
+        Assert.Equal(9, snap.Orders.Single().Id); // the owner's limit orders are not TM's business
+    }
+
+    [Fact]
+    public void Trailing_stop_on_the_main_is_removed_while_hedged_and_returns_on_both_legs_at_break_even()
+    {
+        var b = new FakeBroker();
+        var main = b.OpenManual(-1, Half, stopLoss: 1.16100, trailing: true);
+        b.Run();
+        Assert.True(b.Book.Trades[0].Trailing);
+        Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);   // the hedge protects until 1R
+        Assert.False(b.Positions.Single(p => p.Id == main.Id).Trailing);
+
+        b.MoveTo(1.15890);                                                // 1R in profit
+        foreach (var leg in new[] { b.Positions.Single(p => p.Id == main.Id), b.Find(TmLabel.Mirror)! })
+            Assert.Equal((1.16000, true), (leg.StopLoss!.Value, leg.Trailing));
+        Assert.Contains(b.Log.OfType<SetProtection>(), a => a.Role == TmLabel.Mirror && a.Trailing);
+
+        b.SetTrailing(main.Id, false);                                    // the owner switches it off in cTrader
+        b.Run();
+        Assert.Contains("TrailingOff", Events(b.Log));
+        Assert.Equal((1.16000, false), (b.Find(TmLabel.Mirror)!.StopLoss!.Value, b.Find(TmLabel.Mirror)!.Trailing));
+    }
+
+    [Fact]
+    public void Trailing_switched_on_after_break_even_reaches_the_mirror()
+    {
+        var (b, main) = ShortWithStop();
+        b.MoveTo(1.15890);
+        Assert.False(b.Find(TmLabel.Mirror)!.Trailing);                   // no trailing asked for
+        b.SetStopLoss(main.Id, 1.15950);                                  // the owner tightens the main's stop …
+        b.SetTrailing(main.Id, true);                                     // … and lets it trail
+        b.Run();
+        Assert.Contains("TrailingOn", Events(b.Log));
+        Assert.Equal((1.15950, true), (b.Positions.Single(p => p.Id == main.Id).StopLoss!.Value, b.Positions.Single(p => p.Id == main.Id).Trailing));
+        Assert.Equal((1.16000, true), (b.Find(TmLabel.Mirror)!.StopLoss!.Value, b.Find(TmLabel.Mirror)!.Trailing));
+    }
+
+    [Fact]
     public void A_new_stop_loss_on_the_main_moves_both_hedges_and_is_removed_again()
     {
         var (b, main) = ShortWithStop();

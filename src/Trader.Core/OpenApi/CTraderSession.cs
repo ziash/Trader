@@ -267,13 +267,18 @@ public sealed class CTraderSession : IAsyncDisposable
     /// Sets a position's server-side stop-loss and take-profit (absolute prices). The request replaces both:
     /// null removes that one, so pass the current take-profit to keep it when changing only the stop-loss.
     /// </summary>
-    public Task<ProtoOAOrder> AmendPositionProtectionAsync(long ctidTraderAccountId, long positionId, double? stopLoss, double? takeProfit, TimeSpan? timeout = null)
+    /// <param name="trailingStopLoss">With a stop-loss: true makes it a trailing stop (the server moves it after the price,
+    /// at the distance it has now, only in the position's favour), false a fixed one. Null sends nothing (as before v1.3).</param>
+    public Task<ProtoOAOrder> AmendPositionProtectionAsync(long ctidTraderAccountId, long positionId, double? stopLoss, double? takeProfit, TimeSpan? timeout = null,
+        bool? trailingStopLoss = null)
     {
         var req = new ProtoOAAmendPositionSLTPReq { CtidTraderAccountId = ctidTraderAccountId, PositionId = positionId };
         if (stopLoss is { } sl)
             req.StopLoss = sl;
         if (takeProfit is { } tp)
             req.TakeProfit = tp;
+        if (stopLoss is not null && trailingStopLoss is { } trailing)
+            req.TrailingStopLoss = trailing;
         return AcknowledgeAsync(req, timeout);
     }
 

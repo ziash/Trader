@@ -30,9 +30,9 @@ internal sealed class FakeBroker
 
     private static string Label(long mainId, string role) => $"TM-abcdef-{TmLabel.Leg(mainId, role)}";
 
-    public Pos OpenManual(int dir, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, DateTime? openUtc = null)
+    public Pos OpenManual(int dir, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, DateTime? openUtc = null, bool trailing = false)
     {
-        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, "", openUtc ?? Now);
+        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, "", openUtc ?? Now, trailing);
         Positions.Add(p);
         return p;
     }
@@ -48,6 +48,21 @@ internal sealed class FakeBroker
     {
         var i = Positions.FindIndex(x => x.Id == positionId);
         Positions[i] = Positions[i] with { StopLoss = sl };
+    }
+
+    /// <summary>The owner switches a position's trailing stop on or off in cTrader.</summary>
+    public void SetTrailing(long positionId, bool trailing)
+    {
+        var i = Positions.FindIndex(x => x.Id == positionId);
+        Positions[i] = Positions[i] with { Trailing = trailing };
+    }
+
+    /// <summary>The owner places a pending stop order of their own (no label).</summary>
+    public Ord PlaceManualStop(int dir, double price, long volume = 50_000_000)
+    {
+        var o = new Ord(_nextId++, SymbolId, dir, volume, price, "");
+        Orders.Add(o);
+        return o;
     }
 
     public void SetTakeProfit(long positionId, double? tp)
@@ -156,7 +171,7 @@ internal sealed class FakeBroker
                 break;
             case SetProtection sp:
                 var j = Positions.FindIndex(p => p.Id == sp.PositionId);
-                Positions[j] = Positions[j] with { StopLoss = sp.StopLoss, TakeProfit = sp.TakeProfit };
+                Positions[j] = Positions[j] with { StopLoss = sp.StopLoss, TakeProfit = sp.TakeProfit, Trailing = sp.Trailing };
                 break;
             case ClosePosition cp:
                 Close(cp.PositionId);

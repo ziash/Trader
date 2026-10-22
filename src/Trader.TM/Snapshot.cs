@@ -3,10 +3,14 @@ using Trader.Core.Hosting;
 
 namespace Trader.TM;
 
-/// <summary>An open position, as TM needs it. <see cref="Dir"/>: +1 buy (long), -1 sell (short).</summary>
-internal sealed record Pos(long Id, long SymbolId, int Dir, long Volume, double Entry, double? StopLoss, double? TakeProfit, string Label, DateTime OpenUtc);
+/// <summary>An open position, as TM needs it. <see cref="Dir"/>: +1 buy (long), -1 sell (short); <see cref="Trailing"/>: its stop-loss trails.</summary>
+internal sealed record Pos(long Id, long SymbolId, int Dir, long Volume, double Entry, double? StopLoss, double? TakeProfit, string Label, DateTime OpenUtc,
+    bool Trailing = false);
 
-/// <summary>A pending stop order (TM's hedges are the only ones it manages).</summary>
+/// <summary>
+/// A pending stop order (TM's hedges are the only ones it manages). The owner's own pending orders — limit or stop —
+/// are left alone; once one fills, its position is a main like any other (tm.md §2).
+/// </summary>
 internal sealed record Ord(long Id, long SymbolId, int Dir, long Volume, double StopPrice, string Label);
 
 /// <summary>The account's positions and pending orders at one moment (from a reconcile).</summary>
@@ -15,7 +19,8 @@ internal sealed record Snapshot(IReadOnlyList<Pos> Positions, IReadOnlyList<Ord>
     public static Snapshot From(ProtoOAReconcileRes res) => new(
         res.Position.Select(p => new Pos(p.PositionId, p.TradeData.SymbolId, Dir(p.TradeData.TradeSide), p.TradeData.Volume, p.Price,
                 p.HasStopLoss && p.StopLoss > 0 ? p.StopLoss : null, p.HasTakeProfit && p.TakeProfit > 0 ? p.TakeProfit : null,
-                p.TradeData.Label ?? "", DateTimeOffset.FromUnixTimeMilliseconds(p.TradeData.OpenTimestamp).UtcDateTime))
+                p.TradeData.Label ?? "", DateTimeOffset.FromUnixTimeMilliseconds(p.TradeData.OpenTimestamp).UtcDateTime,
+                p.HasStopLoss && p.StopLoss > 0 && p.TrailingStopLoss))
             .ToList(),
         res.Order.Where(o => o.OrderType == ProtoOAOrderType.Stop && !o.ClosingOrder)
             .Select(o => new Ord(o.OrderId, o.TradeData.SymbolId, Dir(o.TradeData.TradeSide), o.TradeData.Volume, o.StopPrice, o.TradeData.Label ?? ""))

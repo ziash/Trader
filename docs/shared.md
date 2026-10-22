@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.2 (21-Oct-2026) — history in §10 |
+| Document version | v1.3 (22-Oct-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -125,9 +125,10 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | Webhook | An HTTP POST sent automatically by one system (e.g. TradingView) to a URL when an event fires. |
 | systemd service | Linux mechanism that keeps a program running in the background and restarts it on failure. |
 | Heartbeat | A periodic "I am alive" signal; missing heartbeats mean the instance is dead. |
-| Trailing stop | A stop-loss that follows price in your favour to lock in profit during a trend. |
+| Trailing stop | A stop-loss that follows price in your favour to lock in profit during a trend. In cTrader it is held by the broker's server (`trailingStopLoss = true` on the position): the stop keeps the distance it had when trailing was switched on and never moves back. |
 | Hedge | An opposite-side position on the same symbol that freezes the open loss of the real trade. |
-| Buy-stop / Sell-stop | Pending orders that open (or close) a position when price rises to / falls to a set level. |
+| Buy-stop / Sell-stop | Pending orders that open (or close) a position when price rises to / falls to a set level. Placed beyond the current price: a breakout (buy-stop above) or breakdown (sell-stop below) entry; TM's hedges are buy-/sell-stops. |
+| Buy-limit / Sell-limit | Pending orders placed *before* the price: a buy-limit below it fills when price falls to it (buy a pullback cheaper), a sell-limit above it when price rises to it (sell a rally). They fill at their price or better. A pending order may carry a stop-loss and take-profit that its position gets when it fills. |
 | Arming distance (A) | How far price must move beyond the hedge fill before the bot places the hedge's exit. |
 | Hedging vs netting account | Hedging allows long and short on the same symbol at once; netting keeps a single net position. |
 | Whipsaw | A sharp move one way quickly followed by a sharp move back. |
@@ -178,3 +179,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.0 | 20 Oct 2026 | Own document. The old plan was split into one project document per bot (Audit Bot, TM, Auto Bot), [Open Code Pieces](open-code-pieces.md) and this page (owner: "each bot is a project in itself"). Content unchanged |
 | v1.1 | 20 Oct 2026 | `news-releases.json` now shared by the Audit Bot and TM (§5) |
 | v1.2 | 21 Oct 2026 | Replay safety rule (§4); TM's status in §1 brought up to date (built, service) |
+| v1.3 | 22 Oct 2026 | Glossary: buy-/sell-limit, pending orders' stop-loss and take-profit, server-side trailing stop |
