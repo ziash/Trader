@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
-| Document version | v1.2 (21-Oct-2026) — history in §13 |
+| Document version | v1.3 (22-Oct-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -163,7 +163,10 @@ Run only one TM: stop the service before running it by hand in a terminal (`dotn
 ~/rewind/tm/run-tm.sh        # TM with Rewind's secrets, certificate and tm.json (account 9000001); Ctrl+C stops it
 ```
 
-Trades on Rewind are kept apart from the demo accounts by the broker name `rewind` (state `~/tradebot/run/tm/rewind-9000001.json`, logs `~/tradebot/logs/rewind/`). The demo service can run at the same time. TM's news and Friday pop-ups follow the real clock, not the replay's.
+Trades on Rewind are kept apart from the demo accounts by the broker name `rewind` (state `~/tradebot/run/tm/rewind-9000001.json`, logs `~/tradebot/logs/rewind/`). The demo service can run at the same time. TM's news and Friday pop-ups follow the real clock, not the replay's. On Rewind you open the positions in its browser page instead of cTrader.
+
+- **Exact mode** (Rewind's default): while TM is connected, each replayed price step of a symbol in a trade waits until TM has had its look (about 5 s per 5-minute candle), so TM acts as it would live at any replay speed.
+- **Results:** Rewind writes `tm-trades.csv` per session (`~/rewind/sessions/<name>/`): one row per leg with 1R, hedge cycles, break-even, the largest loss in R, who closed it (owner, TM's 3R rule, stop-loss, take-profit) and the result in R and USD — measured with TM's own formulas (Rewind spec §8).
 
 Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnings (2R, mirror skipped, refused orders, tight hedge, news, Friday close, connection down); everything is in the console and the logs.
 
@@ -192,7 +195,7 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 ## 12. Open items
 
 - Keep `news-releases.json` up to date (it lists releases to Feb 2027; shared with the Audit Bot).
-- Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits.
+- Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits. Rewind's `tm-trades.csv` (§10) gives the per-leg data for this (replayed trades with TM unchanged); rule values can be tried in `~/rewind/tm/tm.json` without touching the demo config.
 - Trailing (R3) needs the exact M5 swing definition ("last lower high") and the stop buffer — the same open question as [Auto Bot §9](auto-bot.md#9-open-questions).
 - A partial close of a main does not yet resize its pending hedge (the hedge keeps the original volume).
 
@@ -205,3 +208,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Section 10.9) and the former TM page. Content unchanged |
 | v1.1 | 20 Oct 2026 | Step 6 done: news / Friday / disconnect pop-ups (§6, decision 8), systemd service `trader-tm` and `scripts/deploy-tm.sh` (§10). TM is built |
 | v1.2 | 21 Oct 2026 | TM tested unchanged on Rewind's replayed prices (§10): take-over with mirror and both hedges, SL removed once hedged, hedges filled at H, hedge stops at ½R, re-hedge, 2R warning; clean-up after close all |
+| v1.3 | 22 Oct 2026 | §10: Rewind's exact mode and its per-leg results file `tm-trades.csv`. A replayed week (17–21 Mar 2025, 11 trades on EURUSD, GBPJPY, BTCUSD) with TM unchanged: 150 orders, all accepted; Rewind's results matched TM's logs leg for leg (hedge cycles 0–5, break-even, 2R warnings, one 3R close). Seen there: chop around H (accepted risk, §8) — 3 hedge cycles cost 2.6R on one EURUSD trade, 5 cycles led to the 3R close on another. §12: Rewind as the backtest tool for the rule values |
