@@ -152,7 +152,9 @@ public sealed class ReportTests : IDisposable
         var info = AuditLogs.LoadBrokerInfo(repoConfig);
         Assert.Equal("IC Markets", info["brokerA"].Name);
         Assert.Equal("Pepperstone", info["brokerB"].Name);
-        Assert.Equal(["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"], info["brokerA"].Symbols);
+        Assert.Equal(
+            ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "USDJPY", "GBPUSD", "BTCUSD", "ETHUSD", "SOLUSD", "XAUUSD", "XAGUSD", "XPTUSD", "XTIUSD", "XBRUSD", "XNGUSD", "US500", "USTEC", "DE40"],
+            info["brokerA"].Symbols);
         Assert.Empty(AuditLogs.LoadBrokerInfo(Path.Combine(_dir, "missing")));
     }
 }

@@ -5,7 +5,8 @@ namespace Trader.AuditBot;
 
 /// <summary>
 /// Alert limits (audit-bot.md §2.4): a spread or a probe fill beyond these is logged as a warning (journal and events.csv).
-/// Forex limits are in pips; crypto (everything that is not forex) in USD per lot, because a crypto "pip" differs by broker.
+/// Forex limits are in pips; everything that is not forex (crypto, metals, energies, indices) in USD per lot, because
+/// their "pip" can differ by broker. The "crypto…" defaults apply to all non-forex symbols (the name dates from v1.0).
 /// Optional "alerts" section of audit.&lt;broker&gt;.json; anything left out keeps its default:
 /// <code>
 /// "alerts": {
@@ -50,7 +51,7 @@ public sealed record AlertLimits(
     }
 }
 
-/// <summary>Per-symbol override; use the pips fields for forex, the USD fields for crypto.</summary>
+/// <summary>Per-symbol override; use the pips fields for forex, the USD fields for everything else.</summary>
 public sealed record SymbolLimits(double? SpreadPips = null, double? SlipPips = null, double? SpreadUsd = null, double? SlipUsd = null);
 
 /// <summary>Spread and slippage limits for one symbol, and how to print values in its unit.</summary>

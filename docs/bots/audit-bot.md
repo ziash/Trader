@@ -5,11 +5,11 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 | Item | Value |
 |---|---|
 | Status | **Built and finished; running** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7) |
-| Document version | v1.0 (20-Oct-2026) — history in §10 |
+| Document version | v1.1 (24-Oct-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
-| Symbols | AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD |
+| Symbols | 18 (§2.1): forex AUDJPY, EURGBP, EURUSD, GBPJPY, USDJPY, GBPUSD; crypto BTCUSD, ETHUSD, SOLUSD; metals XAUUSD, XAGUSD, XPTUSD; energies XTIUSD, XBRUSD, XNGUSD; indices US500, USTEC, DE40 |
 | Bot name / labels | `AuditBot` — orders labelled `AuditBot-<6hex>` (instance ID) |
 | Config | [`config/audit.brokerA.json`](../../config/audit.brokerA.json), [`audit.brokerB.json`](../../config/audit.brokerB.json), [`news-releases.json`](../../config/news-releases.json) — live copies in `~/tradebot/config/` |
 | Services | `trader-auditbot` (the bot), `trader-auditreport.timer` (report, daily 00:15 UTC) — [`deploy/`](../../deploy) |
@@ -31,10 +31,27 @@ Run the same measurements on two brokers in parallel for at least 2 weeks on dem
 
 ### 2.1 Symbols
 
-**AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD** — same names at both brokers, all enabled for trading on both demo accounts (checked 17-Oct-2026 through the API). Replaces the v1.0 draft list (EURUSD, GBPUSD, USDJPY, XAUUSD, US500, BTCUSD).
+Probed in this order (config order; forex first, closest to the window start):
 
-- Crypto trades 24/7, so BTCUSD and ETHUSD also show weekend spread and feed behaviour while forex is closed.
-- USDJPY and GBPUSD are subscribed **for currency conversion only** (JPY and GBP spread costs → USD); they are not logged or probed.
+| Market | Symbols | Pepperstone name, where different | Since |
+|---|---|---|---|
+| Forex | AUDJPY, EURGBP, EURUSD, GBPJPY | | 18-Oct-2026 |
+| Forex | USDJPY, GBPUSD | | v1.1 |
+| Crypto | BTCUSD, ETHUSD | | 18-Oct-2026 |
+| Crypto | SOLUSD | | v1.1 |
+| Metals | XAUUSD (gold), XAGUSD (silver), XPTUSD (platinum) | | v1.1 |
+| Energies | XTIUSD (WTI oil), XBRUSD (Brent oil), XNGUSD (natural gas) | `SpotCrude`, `SpotBrent`, `NatGas` | v1.1 |
+| Indices | US500 (S&P 500), USTEC (Nasdaq 100), DE40 (DAX) | USTEC = `NAS100`, DE40 = `GER40` | v1.1 |
+
+All enabled for trading on both demo accounts. The first six were checked 17-Oct-2026 through the API (they replaced the draft list EURUSD, GBPUSD, USDJPY, XAUUSD, US500, BTCUSD). The v1.1 additions are the top three per market that both brokers offer, chosen 23-Oct-2026 from a read-only scan of both symbol lists through the API (IC Markets 352 symbols, Pepperstone 1,942):
+
+- **Same lot size at both brokers** is required, so USD per lot compares like with like. Left out for that reason: XRPUSD (1 lot = 1 coin at IC Markets, 100 at Pepperstone) and JP225 (1 vs 100 contracts). **Exception: XAGUSD**, 1 lot = 1,000 oz at IC Markets but 5,000 oz at Pepperstone — compare silver by the **pip** columns (pip = 0.01 at both), not USD per lot; its alert limits differ per broker for the same reason.
+- **Gold:** pip = 0.01 at IC Markets, 0.1 at Pepperstone; lot = 100 oz at both — compare by USD per lot.
+- **Not offered at both:** single shares (Pepperstone ~770, IC Markets none on cTrader), farm goods, copper, US Treasury futures, the dollar index (Pepperstone only).
+- **Smallest order is larger than 0.01 lot** on some symbols, so their probe is the broker's minimum (§2.2): indices 0.1 lot at both; SOLUSD 1 coin at both; XNGUSD 0.5 lot at IC Markets (0.01 at Pepperstone). Slippage and USD figures are per lot, so they stay comparable.
+- Non-USD quotes are converted to USD automatically (DE40: EUR → EURUSD).
+- Crypto trades 24/7, so BTCUSD, ETHUSD and SOLUSD also show weekend spread and feed behaviour while the other markets are closed. Indices, metals and energies have daily breaks per the broker's schedule; a closed symbol is skipped (§2.2, §2.3).
+- USDJPY and GBPUSD also serve currency conversion (JPY and GBP spread costs → USD); before v1.1 they were subscribed for that only.
 - Crypto check, 17-Oct-2026: IC Markets lists 105 crypto symbols, Pepperstone 53; 25 are enabled at both (22 under the same name; Avalanche, Chainlink and Sonic under different names). The bot looks symbols up by name per broker, with a per-broker name map for any that differ.
 
 ### 2.2 Probe windows and probes
@@ -52,7 +69,7 @@ Per window, each symbol gets one buy probe and one sell probe, a few seconds apa
 
 *(built in step 5)* How a probe runs:
 - **Who:** only the instance that is **Primary** on the account (§4). Accounts run in parallel; within an account one probe at a time, symbols in config order, buy then sell, 2 s apart. A symbol whose market is closed is skipped. A window more than 60 s late (computer asleep, bot busy) is skipped and logged.
-- **Order:** market order of **0.01 lot** (forex 1,000 units; crypto 0.01 coin), labelled with the instance ID, with a wide server-side **backup stop-loss**: 50 pips for forex, 2 % of the price for crypto. Then closed at once **by its `positionId`** (ownership rule, [Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)). Both the open and the close are written to `probes.csv`.
+- **Order:** market order of **0.01 lot** (forex 1,000 units; crypto 0.01 coin), or the broker's minimum where that is larger (§2.1), labelled with the instance ID, with a wide server-side **backup stop-loss**: 50 pips for forex, 2 % of the price for everything else. Then closed at once **by its `positionId`** (ownership rule, [Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)). Both the open and the close are written to `probes.csv`.
 - **Measured:** requested price = ask for a buy, bid for a sell, at the moment of sending; fill price from the fill message; latency = request sent → fill message received on this machine; commission from the fill.
 - **Left-overs:** before every window, after every connect and on becoming Primary, the bot asks the server for all open positions (reconcile) and closes any with an `AuditBot-…` label. Tested 18-Oct-2026 by killing the bot (`kill -9`) while a probe was open: the next start closed it. Positions without the label are never touched; their number is logged (`ForeignPositions`), and fills of foreign orders are logged once (`ForeignTrade`).
 - **Close failures:** retried up to 3 times; if the position is still open the bot logs `ProbeCloseFailed`, the backup stop-loss stays on the server, and the clean-up retries before the next window.
@@ -70,16 +87,31 @@ Each row summarises all ticks in its interval (min / average / median / 95th-per
 
 ### 2.4 Alerts and probe summary
 
-Wide spreads and bad fills are **reported as warnings** (journal and `events.csv`), not only kept in the CSV rows. Limits are per broker in `audit.<broker>.json` (`"alerts"`, optional; defaults below). Forex in **pips**; crypto in **USD per lot**, because a crypto "pip" differs by broker (IC BTCUSD pip = $0.01, Pepperstone $0.10) and cannot be compared or averaged across symbols.
+Wide spreads and bad fills are **reported as warnings** (journal and `events.csv`), not only kept in the CSV rows. Limits are per broker in `audit.<broker>.json` (`"alerts"`, optional; defaults below). Forex in **pips**; everything else (crypto, metals, energies, indices) in **USD per lot**, because their "pip" can differ by broker (IC BTCUSD pip = $0.01, Pepperstone $0.10) and cannot be compared or averaged across symbols. The config's `cryptoSpreadUsd` / `cryptoSlipUsd` are the defaults for **all** non-forex symbols (name kept from v1.0).
 
 | Alert | Event | Fires when | Default limit |
 |---|---|---|---|
-| Spread wide | `SpreadWide` (warning), then `SpreadNormal` (info) | A `spreads.csv` row's **average** spread is above the limit. Raised once; cleared once when back under the limit, with duration and peak (like an alarm raise/clear) | Forex 2 pips; crypto $50/lot; ETHUSD $10/lot |
-| Slippage high | `SlippageHigh` (warning) | One probe fill (open or close) **worse** than requested by more than the limit. Better-than-requested fills are not alerted | Forex 1 pip; crypto $10/lot; ETHUSD $3/lot |
+| Spread wide | `SpreadWide` (warning), then `SpreadNormal` (info) | A `spreads.csv` row's **average** spread is above the limit. Raised once; cleared once when back under the limit, with duration and peak (like an alarm raise/clear) | Forex 2 pips; non-forex $50/lot; per-symbol below |
+| Slippage high | `SlippageHigh` (warning) | One probe fill (open or close) **worse** than requested by more than the limit. Better-than-requested fills are not alerted | Forex 1 pip; non-forex $10/lot; per-symbol below |
 
-Defaults chosen from the first day of data (19-Oct-2026): forex averages under 1 pip on both brokers, BTCUSD $5–15, ETHUSD $2–3 per lot. Spreads above 2 pips were seen only around the Sunday reopen; the daily break around 17:00 New York will also raise `SpreadWide` — this is real and is reported.
+Defaults chosen from the first day of data (19-Oct-2026): forex averages under 1 pip on both brokers, BTCUSD $5–15, ETHUSD $2–3 per lot.
 
-**Probe window summary** (`ProbeWindowDone`, `ProbeSlippage`): fills, latency average and maximum; then one line per asset class with average slippage, the **worst fill by name**, and how many fills were over the limit, e.g. `forex: slippage avg +0.06 pips, worst -0.30 pips (AUDJPY close buy); 0 of 16 fills over the alert limit`. A single average over all symbols is not used: it mixed units and let good and bad fills cancel out.
+Per-symbol limits (USD per lot, spread / slippage). Those added in v1.1 are **first estimates** from typical raw-account spreads, to be checked against the first days of data (§9):
+
+| Symbol | Spread | Slippage |
+|---|---|---|
+| ETHUSD | $10 | $3 |
+| SOLUSD | $2 | $1 |
+| XAUUSD | $50 | $30 |
+| XAGUSD | $60 IC Markets / $300 Pepperstone (lot 1,000 vs 5,000 oz) | $30 / $150 |
+| XPTUSD | $600 | $300 |
+| XTIUSD, XBRUSD | $10 | $5 |
+| XNGUSD | $150 | $100 |
+| US500 | $2 | $2 |
+| USTEC | $5 | $5 |
+| DE40 | $6 | $5 | Spreads above 2 pips were seen only around the Sunday reopen; the daily break around 17:00 New York will also raise `SpreadWide` — this is real and is reported.
+
+**Probe window summary** (`ProbeWindowDone`, `ProbeSlippage`): fills, latency average and maximum; then one line for forex (pips) and one for everything else (`non-forex`, USD per lot; `crypto` before v1.1) with average slippage, the **worst fill by name**, and how many fills were over the limit, e.g. `forex: slippage avg +0.06 pips, worst -0.30 pips (AUDJPY close buy); 0 of 16 fills over the alert limit`. A single average over all symbols is not used: it mixed units and let good and bad fills cancel out.
 
 ## 3. Logs on disk
 
@@ -175,7 +207,7 @@ The [instance registry](../open-code-pieces.md#6-instance-registry-one-primary-p
 | Probes | `orders`, `filled`, `rejected`, `order_errors`; `slip_avg_pips`, `slip_worst_pips`, `slip_avg_usd`, `slip_worst_usd` (negative = worse for us); `latency_avg_ms`, `latency_median_ms`, `latency_max_ms`; `commission_usd` |
 | Reliability (`ALL` row) | `instances`, `connection_drops`, `spread_alerts`, `slippage_alerts`, `missed_windows`, `log_warnings`, `log_errors` |
 
-- **Spread figures** come from the interval rows: median and p95 of the rows' average spread, each row weighted by its length (half / 95 % of the time the spread averaged at or below it); max = largest single spread seen. **Crypto: compare by the USD columns** — pips differ by broker (§2.4). The `ALL` row leaves slippage out, because averaging it over forex and crypto would mix units.
+- **Spread figures** come from the interval rows: median and p95 of the rows' average spread, each row weighted by its length (half / 95 % of the time the spread averaged at or below it); max = largest single spread seen. **Non-forex: compare by the USD columns** — pips differ by broker (§2.4); except XAGUSD, compared by pips (§2.1). The `ALL` row leaves slippage out, because averaging it over forex and the rest would mix units.
 - **Connection drops** are counted per broker, but both brokers share one connection, so a drop shows on both.
 
 ## 6. Run and operate
@@ -238,6 +270,8 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 
 - **Choose the broker** from the final summary (`--from 2026-10-18 --to <end>`) at the end of the audit run, and record it here. Weigh in the regulation note in [shared §8](../shared.md#8-open-items).
 - Monitoring while the bot runs: a status script with a systemd timer and desktop alerts (Claude only on alerts) — deferred by the owner on 18-Oct-2026. The bot's `SpreadWide` / `SlippageHigh` warnings (§2.4) are what such a script would look for; the shared notifications could now carry them as pop-ups.
+- **Review the alert limits of the v1.1 symbols** (§2.4) after the first few days of their data; they are estimates.
+- With 18 symbols a probe window takes about 1.5–2 minutes per account (one probe at a time, §2.2), so in `NewsRelease+5s` only the first symbols are probed within seconds of the release.
 - Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
 
 ## 10. History
@@ -249,3 +283,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | — | 19 Oct 2026 | (old plan v1.15–v1.17) Spread and slippage alerts; daily report tool and timer — built and finished; Pepperstone demo confirmed Razor |
 | — | 20 Oct 2026 | (old plan v1.22) Report reads only Audit Bot folders; 19-Oct report rebuilt |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Sections 6, 7, 8.1) and the former Audit Bot page. Content unchanged |
+| v1.1 | 24 Oct 2026 | **12 more symbols** (owner): USDJPY, GBPUSD, SOLUSD, XAUUSD, XAGUSD, XPTUSD, XTIUSD, XBRUSD, XNGUSD, US500, USTEC, DE40 — top three per market offered at both brokers with the same lot size (§2.1); Pepperstone name map; per-symbol alert limits (estimates, §2.4); probe summary line `crypto` renamed `non-forex`. TM unchanged. Takes effect at the next restart of `trader-auditbot`; the audit run's data for the first six symbols continues |

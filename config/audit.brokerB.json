@@ -3,18 +3,38 @@
   "broker": "brokerB",
   "brokerName": "Pepperstone",
   "accountId": 49124666,
-  "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"],
-  // Only where the broker's symbol name differs from ours, e.g. "AVAXUSD": "AVAXUSD"
-  "symbolNames": {},
+  // Probed in this order (audit-bot.md §2.2): forex first, so it is closest to the window start.
+  "symbols": [
+    "AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "USDJPY", "GBPUSD",
+    "BTCUSD", "ETHUSD", "SOLUSD",
+    "XAUUSD", "XAGUSD", "XPTUSD",
+    "XTIUSD", "XBRUSD", "XNGUSD",
+    "US500", "USTEC", "DE40"
+  ],
+  // Only where the broker's symbol name differs from ours (audit-bot.md §2.1)
+  "symbolNames": { "XTIUSD": "SpotCrude", "XBRUSD": "SpotBrent", "XNGUSD": "NatGas", "USTEC": "NAS100", "DE40": "GER40" },
   // Alert limits (audit-bot.md §2.4): a warning in the journal and events.csv when crossed.
   // Spread = average over one spreads.csv row; slippage = one probe fill worse than requested.
-  // Forex in pips; crypto in USD per lot (1 coin). Normal on 19-Oct: forex under 1 pip,
-  // BTCUSD $5-15, ETHUSD $2-3, hence the ETHUSD override.
+  // Forex in pips; everything else in USD per lot. Normal on 19-Oct: forex under 1 pip,
+  // BTCUSD $5-15, ETHUSD $2-3. Limits for the symbols added on 24-Oct are first estimates,
+  // to be checked against the first days of data (audit-bot.md §9).
   "alerts": {
     "forexSpreadPips": 2,
     "forexSlipPips": 1,
-    "cryptoSpreadUsd": 50,
+    "cryptoSpreadUsd": 50,   // default for every non-forex symbol, not only crypto
     "cryptoSlipUsd": 10,
-    "symbols": { "ETHUSD": { "spreadUsd": 10, "slipUsd": 3 } }
+    "symbols": {
+      "ETHUSD": { "spreadUsd": 10, "slipUsd": 3 },
+      "SOLUSD": { "spreadUsd": 2, "slipUsd": 1 },
+      "XAUUSD": { "spreadUsd": 50, "slipUsd": 30 },
+      "XAGUSD": { "spreadUsd": 300, "slipUsd": 150 },   // 1 lot = 5,000 oz here (1,000 at IC Markets)
+      "XPTUSD": { "spreadUsd": 600, "slipUsd": 300 },
+      "XTIUSD": { "spreadUsd": 10, "slipUsd": 5 },
+      "XBRUSD": { "spreadUsd": 10, "slipUsd": 5 },
+      "XNGUSD": { "spreadUsd": 150, "slipUsd": 100 },
+      "US500": { "spreadUsd": 2, "slipUsd": 2 },
+      "USTEC": { "spreadUsd": 5, "slipUsd": 5 },
+      "DE40": { "spreadUsd": 6, "slipUsd": 5 }
+    }
   }
 }

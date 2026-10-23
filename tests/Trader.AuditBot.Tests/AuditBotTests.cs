@@ -171,7 +171,9 @@ public sealed class AuditBotTests : IDisposable
         var repoConfig = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "config");
         var configs = AuditConfig.LoadAll(repoConfig);
         Assert.Equal([49123893L, 49124666L], configs.Select(c => c.AccountId));
-        Assert.All(configs, c => Assert.Equal(["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"], c.Symbols));
+        Assert.All(configs, c => Assert.Equal(
+            ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "USDJPY", "GBPUSD", "BTCUSD", "ETHUSD", "SOLUSD", "XAUUSD", "XAGUSD", "XPTUSD", "XTIUSD", "XBRUSD", "XNGUSD", "US500", "USTEC", "DE40"], c.Symbols));
+        Assert.Equal("NAS100", configs[1].BrokerSymbolNames["USTEC"]); // Pepperstone's own name
     }
     private sealed class ListSink : ILogEventSink
     {
@@ -275,7 +277,7 @@ public sealed class AuditBotTests : IDisposable
         Assert.Equal(
         [
             "forex: slippage avg -0.47 pips, worst -1.20 pips (GBPJPY open sell); 1 of 3 fills over the alert limit",
-            "crypto: slippage avg +$3.87/lot, worst -$6.91/lot (BTCUSD open buy); 0 of 2 fills over the alert limit",
+            "non-forex: slippage avg +$3.87/lot, worst -$6.91/lot (BTCUSD open buy); 0 of 2 fills over the alert limit",
         ], lines);
         Assert.Equal(["forex: slippage avg +0.10 pips, no fill worse than requested; 0 of 1 fills over the alert limit"],
             ProbeRunner.SlippageSummary([R("EURUSD", "open", "buy", fx, 0.1)]));

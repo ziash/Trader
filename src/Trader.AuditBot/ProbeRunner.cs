@@ -169,7 +169,7 @@ public sealed class ProbeRunner(
 
     /// <summary>
     /// One result per order sent. <see cref="Slip"/> is in the symbol's alert unit: pips for forex, USD per lot
-    /// for crypto (a crypto "pip" differs by broker, so pips cannot be compared or averaged across symbols).
+    /// for everything else (a crypto, metal or index "pip" can differ by broker, so pips cannot be compared or averaged across symbols).
     /// </summary>
     internal sealed record ProbeResult(string Result, double LatencyMs, string Symbol, string Action, string Side, Limit Limit, double? Slip)
     {
@@ -177,7 +177,7 @@ public sealed class ProbeRunner(
     }
 
     /// <summary>
-    /// One line per asset class (forex in pips, crypto in USD per lot): average, the worst fill by name,
+    /// One line for forex (pips) and one for everything else (USD per lot): average, the worst fill by name,
     /// and how many fills were worse than their alert limit. Averages alone would hide one bad fill.
     /// </summary>
     internal static IEnumerable<string> SlippageSummary(IReadOnlyList<ProbeResult> filled)
@@ -189,7 +189,7 @@ public sealed class ProbeRunner(
             var worstText = worst.Slip < 0
                 ? $"worst {unit.ShowSigned(worst.Slip!.Value)} ({worst.Symbol} {worst.Action} {worst.Side})"
                 : "no fill worse than requested";
-            yield return $"{(group.Key ? "forex" : "crypto")}: slippage avg {unit.ShowSigned(group.Average(r => r.Slip!.Value))}, {worstText}; " +
+            yield return $"{(group.Key ? "forex" : "non-forex")}: slippage avg {unit.ShowSigned(group.Average(r => r.Slip!.Value))}, {worstText}; " +
                          $"{group.Count(r => r.OverLimit)} of {group.Count()} fills over the alert limit";
         }
     }
