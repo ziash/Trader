@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
-| Document version | v1.5 (22-Oct-2026) — history in §13 |
+| Document version | v1.6 (24-Oct-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -13,7 +13,7 @@
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only |
 | Symbols | AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (per account in `tm.json`) |
 | Bot name / labels | `TM` — `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN`, `-HMIR` (hedges); `TM-<6hex>-O<yourOrderId>-MIR` (mirror order of your pending order) |
-| Takes over | Positions and pending orders **without a label** on a **listed symbol** (your manual trades: market entries, and buy/sell limit and stop orders). Unlisted symbols and other bots' positions are never touched |
+| Takes over | Positions and pending orders whose **label is in `takeOver`** (§2; default: **without a label** = your manual trades: market entries, and buy/sell limit and stop orders) on a **listed symbol**. Unlisted symbols and positions with other labels are never touched |
 | Directions | Longs and shorts (for a long everything is mirrored: the hedge is a sell-stop below) |
 
 ## At a glance (example: you open 0.5 lot short)
@@ -43,7 +43,7 @@ The owner opens every position **by hand in the cTrader app** (desktop, web or m
 
 | Term | Meaning |
 |---|---|
-| Main | The owner's manual position (no label) |
+| Main | The position TM takes over: the owner's manual position (no label), or one whose label is in `takeOver` (§2) |
 | Mirror | TM's copy: same symbol, side and volume, opened at market just after the main is seen |
 | Hedge | A pending stop order on the opposite side, one per short/long leg (main and mirror each have their own), same volume as its leg; becomes a position when it fills |
 | E | A leg's own entry price (main and mirror differ by the fill difference) |
@@ -59,9 +59,28 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 
 - Accounts: **both demos**, IC Markets 49123893 and Pepperstone 49124666, each managed separately with its own symbol list in TM's config.
 - Symbols: per account in the config; at first the Audit Bot's six (AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD).
-- TM takes over **positions without a label on a listed symbol**. Positions on unlisted symbols stay fully the owner's. Positions with another bot's label (e.g. Audit Bot probes) are never touched.
-- **The owner's pending orders** (buy-limit, sell-limit, buy-stop, sell-stop, without a label) get a **mirror order** (§3.1); TM never changes the owner's order itself.
-- **Exception to the ownership rule ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)), owner's decision:** TM modifies the main (removes or copies its stop-loss and take-profit) — the only case in which a bot touches a position it did not open. TM never closes the main except under the 3R rule (§5).
+- TM takes over **positions whose label is in the take-over list, on a listed symbol**. Positions on unlisted symbols stay fully the owner's; positions with any other label (e.g. Audit Bot probes, while `AuditBot-` is not in the list) are never touched.
+- **The owner's pending orders** (buy-limit, sell-limit, buy-stop, sell-stop, label in the list) get a **mirror order** (§3.1); TM never changes the owner's order itself.
+
+### 2.1 Take-over list (v1.6, owner, 24-Oct-2026)
+
+`"takeOver"` in `tm.json` lists the labels TM takes over; positions and pending orders are matched the same way.
+
+| Entry | Matches | Example |
+|---|---|---|
+| `""` | No label — the owner's manual trades | |
+| any other text | Labels that **start with** it (case-sensitive). Bot labels end with an instance ID that changes on every restart, so an exact match would stop working | `"AuditBot-"` matches `AuditBot-77fbd8` |
+
+| You want | `"takeOver"` |
+|---|---|
+| Only manual trades (the default when the entry is missing) | `[""]` |
+| Manual trades and ABC | `["", "ABC"]` |
+| Only ABC | `["ABC"]` |
+
+- TM refuses to start if the list is empty or an entry would match TM's own labels (`TM-…`), so TM never takes over its own mirrors and hedges. It logs the list at start (`Takes over: …`).
+- A main with a label is handled exactly like a manual one (§3–§5): mirror, hedges, its stop-loss removed once hedged, TP copied, 3R close. This is the ownership-rule exception below, extended to the listed labels.
+- **Live setting: `[""]`** (unchanged behaviour). Adding another bot's label is a separate decision: that bot's own closing (e.g. Audit Bot probes close within ~1 s) then interacts with TM's rules (§12).
+- **Exception to the ownership rule ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)), owner's decision:** TM modifies the main (also a main with a listed label, §2.1) (removes or copies its stop-loss and take-profit) — the only case in which a bot touches a position it did not open. TM never closes the main except under the 3R rule (§5).
 
 ## 3. Trade start (Q3, Q4, Q7)
 
@@ -215,8 +234,11 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 8 | Connection-down pop-up only after 60 s, Critical; "connected again" as Warning. News / Friday pop-ups also when no TM trade is open | Routine reconnects (~7 s) would be noise; a long outage leaves trades unmanaged. A heads-up before news is useful before opening a trade too |
 | 9 | A trailing stop on the main makes both legs' break-even stops trail; before 1R the hedge protects, as for any stop-loss (owner, 22-Oct-2026) | Trailing is kept as the owner's wish without a stop that would close the main at the hedge level |
 | 10 | The owner's pending order gets a mirror order of the same type at the same price (stop-loss at H, the owner's take-profit), following the owner's changes; hedges once both fill (owner, 22-Oct-2026; replaces v1.4's "pending orders left alone, mirror at market after the fill") | Main and mirror enter at the same price, as with a market entry; hedges cannot sit at H before the entry (§3.1) |
+| 11 | Which labels TM takes over is configurable: `"takeOver"` in `tm.json`, `""` = no label, other entries match by the start of the label; default and live `[""]` (owner, 24-Oct-2026) | The owner decides per label, without code changes; prefix matching survives bot restarts (instance IDs change) |
 
 ## 12. Open items
+
+- **Before adding another bot's label to `takeOver`** (e.g. `AuditBot-`): decide what TM does when that bot closes its own main — today the mirror and its hedge carry on as a TM trade (§5). Audit Bot probes close within ~1 s, so each would leave a mirror.
 
 - Keep `news-releases.json` up to date (it lists releases to Feb 2027; shared with the Audit Bot).
 - Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits. Rewind's `tm-trades.csv` (§10) gives the per-leg data for this (replayed trades with TM unchanged); rule values can be tried in `~/rewind/tm/tm.json` without touching the demo config.
@@ -237,3 +259,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.3 | 22 Oct 2026 | §10: Rewind's exact mode and its per-leg results file `tm-trades.csv`. A replayed week (17–21 Mar 2025, 11 trades on EURUSD, GBPJPY, BTCUSD) with TM unchanged: 150 orders, all accepted; Rewind's results matched TM's logs leg for leg (hedge cycles 0–5, break-even, 2R warnings, one 3R close). Seen there: chop around H (accepted risk, §8) — 3 hedge cycles cost 2.6R on one EURUSD trade, 5 cycles led to the 3R close on another. §12: Rewind as the backtest tool for the rule values |
 | v1.4 | 22 Oct 2026 | Owner's pending orders (buy/sell limit and stop) and trailing stops (§2, §5, decision 9): pending orders untouched, a fill taken over like a market entry; a main's trailing stop makes both legs' break-even stops server-side trailing stops, following the main's switch. Code: `Pos.Trailing`, `TradeState.Trailing`, `SetProtection.Trailing`; Trader.Core's SL call takes the trailing flag ([Open Code Pieces](../open-code-pieces.md) v1.3); 4 new tests. Tested on Rewind (§9) |
 | v1.5 | 22 Oct 2026 | **Mirror orders** (§3.1, decision 10, owner): the owner's buy/sell limit or stop order gets a mirror order of the same type at the same price, stop-loss at H, the owner's take-profit; it follows the owner's changes and is cancelled with the order; hedges once both fill (they cannot be placed at H before). Labels `TM-<6hex>-O<orderId>-MIR` (§7). Code: `Planner` (pending trades), `TradeState.MainOrderId`, `Ord` with type and protection; Trader.Core `PlacePendingOrderAsync` / `AmendPendingOrderAsync` ([Open Code Pieces](../open-code-pieces.md) v1.4); TM tests: 36 (3 new, 2 rewritten). Tested on Rewind (§9) |
+| v1.6 | 24 Oct 2026 | **Take-over list** (§2.1, decision 11, owner): `"takeOver"` in `tm.json` sets which labels TM takes over (`""` = no label; others by prefix); default and live `[""]`, so behaviour is unchanged. TM refuses a list that is empty or matches its own labels; logs the list at start. Code: `TmConfig.TakeOver` / `TakesOver`, `Planner` (mains); TM tests: 47 (11 new) |

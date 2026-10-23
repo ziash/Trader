@@ -19,9 +19,23 @@ public sealed record TmConfig(
     int MirrorWithinSeconds = 60,      // a main older than this when first seen gets hedges only, no mirror (tm.md §6)
     int AlertMinutesBefore = 10,       // pop-up this long before each NFP/CPI release and the Friday close (tm.md §6)
     int DisconnectAlertSeconds = 60,   // pop-up when the connection has been down this long (tm.md §6)
-    IReadOnlyDictionary<string, double>? FallbackDistance = null) // per symbol, in price, when the candle history is unavailable
+    IReadOnlyDictionary<string, double>? FallbackDistance = null, // per symbol, in price, when the candle history is unavailable
+    IReadOnlyList<string>? TakeOver = null) // labels whose positions and pending orders TM takes over as mains (tm.md §2)
 {
     public const string FileName = "tm.json";
+
+    /// <summary>TM's own bot name, the start of all its labels (tm.md §7).</summary>
+    public const string BotName = "TM";
+
+    /// <summary>The take-over list; [""] (the owner's unlabelled trades only) when the file has none.</summary>
+    public IReadOnlyList<string> TakeOverLabels => TakeOver ?? [""];
+
+    /// <summary>
+    /// True if a position or pending order with this label is a main for TM (tm.md §2): "" in the list matches
+    /// no label; any other entry matches labels that start with it, e.g. "AuditBot-" matches "AuditBot-77fbd8".
+    /// </summary>
+    public bool TakesOver(string label) =>
+        TakeOverLabels.Any(t => t.Length == 0 ? label.Length == 0 : label.StartsWith(t, StringComparison.Ordinal));
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -62,6 +76,12 @@ public sealed record TmConfig(
             throw new TmConfigException($"{FileName}: rule values must be above 0, and closeR above warnR");
         if (AlertMinutesBefore < 1 || DisconnectAlertSeconds < 1)
             throw new TmConfigException($"{FileName}: alertMinutesBefore and disconnectAlertSeconds must be at least 1");
+        if (TakeOver is { Count: 0 } || TakeOver?.Any(t => t is null) == true)
+            throw new TmConfigException($"{FileName}: \"takeOver\" must list at least one label (\"\" = no label, the owner's trades)");
+        // TM's own orders (TM-<6hex>-…) must never be taken over as mains, or TM would mirror its own mirrors and hedges.
+        foreach (var t in TakeOverLabels.Where(t => t.Length > 0))
+            if ($"{BotName}-".StartsWith(t, StringComparison.Ordinal) || t.StartsWith($"{BotName}-", StringComparison.Ordinal))
+                throw new TmConfigException($"{FileName}: \"takeOver\" entry \"{t}\" would match TM's own labels ({BotName}-…)");
         return this;
     }
 

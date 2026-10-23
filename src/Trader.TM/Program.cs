@@ -39,7 +39,7 @@ catch (Exception ex) when (ex is TmConfigException or NewsCalendarException)
     return BotRunner.ExitFatal;
 }
 
-return await BotRunner.RunAsync("TM", args, async (bot, ct) =>
+return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
 {
     string Folder(TmAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
     string DayFile(TmAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
@@ -64,6 +64,8 @@ return await BotRunner.RunAsync("TM", args, async (bot, ct) =>
     bot.LogTap.Add(events);
     bot.Log.Information("Rules: hedge {Pct} % of the {Days}-day range (min {Floor} × spread), arm {Arm}R, hedge stop {Stop}R, warn {Warn}R, close {Close}R",
         config.RangePercent, config.RangeDays, config.SpreadFloor, config.ArmR, config.HedgeStopR, config.WarnR, config.CloseR);
+    bot.Log.Information("Takes over: {Labels} (tm.md §2)",
+        string.Join(", ", config.TakeOverLabels.Select(t => t.Length == 0 ? "no label (owner's trades)" : $"labels starting \"{t}\"")));
 
     var upcoming = news.Where(n => n.Utc > DateTime.UtcNow).ToList();
     if (upcoming.Count > 0)

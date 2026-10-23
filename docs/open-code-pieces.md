@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by the Audit Bot and TM |
-| Document version | v1.5 (23-Oct-2026) — history in §10 |
+| Document version | v1.6 (24-Oct-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -68,7 +68,7 @@ The owner may run up to ~10 bots at the same time. The pieces of §2 are therefo
   - A bot **only modifies or closes positions and orders that carry its own label**, and always closes **by `positionId`**, never "close all on a symbol".
   - Everything else is **foreign** — the owner's manual trades, other apps with access to the account, broker actions such as a stop-out: never modified, logged to `events.csv` when seen, but **counted for risk** (margin, exposure), because it uses the same account money.
   - This works because the accounts are **Hedging** ([shared §2](shared.md#2-brokers-and-accounts)): every order is its own position, so a manual trade and a bot trade on the same pair and side never merge. Other clients of the same broker are other accounts, which the bot cannot see at all.
-  - **Exception — TM** *(owner's decision)*: TM takes over unlabelled positions on the symbols listed in its config (the owner's manual trades meant for TM): it removes or copies their stop-loss and take-profit, and closes one only under its 3R loss limit ([TM §5](bots/tm.md#5-protection-limits-and-closing-q4-q5-q11-q19)). Unlisted symbols and other bots' positions stay foreign to TM.
+  - **Exception — TM** *(owner's decision)*: TM takes over positions on the symbols listed in its config whose label is in its take-over list — by default unlabelled ones, the owner's manual trades meant for TM ([TM §2.1](bots/tm.md#21-take-over-list-v16-owner-24-oct-2026)): it removes or copies their stop-loss and take-profit, and closes one only under its 3R loss limit ([TM §5](bots/tm.md#5-protection-limits-and-closing-q4-q5-q11-q19)). Unlisted symbols and positions with labels not in the list stay foreign to TM.
   - Limit: the label is plain text, so someone with access to the account could type a bot-style label on a manual order. The recorded `positionId`s catch this during a run; if manual labels are ever used, the post-restart rule becomes "label matches **and** `positionId` is in the bot's saved list".
 
 ## 5. Adding a bot
@@ -120,3 +120,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.3 | 22 Oct 2026 | `AmendPositionProtectionAsync(…, trailingStopLoss:)`: optional; true = the server trails the stop-loss, false = fixed, not given = not sent (every bot unchanged). For TM's trailing break-even stops ([TM §5](bots/tm.md#5-protection-limits-and-closing-q4-q5-q11-q19)) |
 | v1.4 | 22 Oct 2026 | `PlacePendingOrderAsync` (stop or limit, absolute stop-loss / take-profit) and `AmendPendingOrderAsync` (price, volume, stop-loss, take-profit together), for TM's mirror orders ([TM §3.1](bots/tm.md#31-entry-by-a-pending-order-owner-22-oct-2026)). Existing calls unchanged |
 | v1.5 | 23 Oct 2026 | Replay on Windows (§3): optional `CTRADER_CA_FILE` (replay only) names the replay broker's certificate authority; `ReplayClient` (own TLS client, trusts only that authority) is used for it instead of Spotware's `OpenClient`, so TM runs against Rewind on Windows too without importing a certificate. Demo connections unchanged |
+| v1.6 | 24 Oct 2026 | Ownership rule (§4): TM's exception now covers the labels in its take-over list ([TM v1.6](bots/tm.md#21-take-over-list-v16-owner-24-oct-2026)); default unchanged (unlabelled only). No code change here |

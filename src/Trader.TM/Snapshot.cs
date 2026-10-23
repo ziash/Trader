@@ -9,8 +9,8 @@ internal sealed record Pos(long Id, long SymbolId, int Dir, long Volume, double 
 
 /// <summary>
 /// A pending order: stop (TM's hedges; the owner's breakout entries) or limit (<see cref="Limit"/>), at <see cref="Price"/>,
-/// with the stop-loss, take-profit and trailing switch its position gets when it fills. The owner's own (unlabelled)
-/// ones are mirrored by TM (tm.md §3).
+/// with the stop-loss, take-profit and trailing switch its position gets when it fills. The owner's own (those with a
+/// label in the take-over list, by default unlabelled) are mirrored by TM (tm.md §2, §3).
 /// </summary>
 internal sealed record Ord(long Id, long SymbolId, int Dir, long Volume, double Price, string Label, bool Limit = false,
     double? StopLoss = null, double? TakeProfit = null, bool Trailing = false)

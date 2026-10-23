@@ -18,6 +18,10 @@
   "warnR": 2,         // pop-up warning
   "closeR": 3,        // leg and its hedge closed
 
+  // Labels TM takes over as mains (tm.md §2.1): "" = no label (your manual trades); any other entry matches
+  // labels that start with it, e.g. "AuditBot-". Example: ["", "ABC"]. Default when missing: [""].
+  "takeOver": [""],
+
   "mirrorWithinSeconds": 60,   // a position older than this when TM first sees it: hedges only, no mirror
 
   // Pop-ups (tm.md §6): before each NFP/CPI release in news-releases.json and the Friday close (17:00 New York),

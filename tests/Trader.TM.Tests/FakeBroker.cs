@@ -31,9 +31,11 @@ internal sealed class FakeBroker
 
     private static string Label(long mainId, string role) => $"TM-abcdef-{TmLabel.Leg(mainId, role)}";
 
-    public Pos OpenManual(int dir, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, DateTime? openUtc = null, bool trailing = false)
+    /// <summary>The owner opens a position (no label); or, with <paramref name="label"/>, another bot does.</summary>
+    public Pos OpenManual(int dir, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, DateTime? openUtc = null, bool trailing = false,
+        string label = "")
     {
-        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, "", openUtc ?? Now, trailing);
+        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, label, openUtc ?? Now, trailing);
         Positions.Add(p);
         return p;
     }
@@ -62,10 +64,11 @@ internal sealed class FakeBroker
     public Ord PlaceManualStop(int dir, double price, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null) =>
         PlaceManual(false, dir, price, volume, stopLoss, takeProfit);
 
-    /// <summary>The owner places a pending stop or limit order of their own (no label).</summary>
-    public Ord PlaceManual(bool limit, int dir, double price, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, bool trailing = false)
+    /// <summary>The owner places a pending stop or limit order of their own (no label); or, with <paramref name="label"/>, another bot does.</summary>
+    public Ord PlaceManual(bool limit, int dir, double price, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, bool trailing = false,
+        string label = "")
     {
-        var o = new Ord(_nextId++, SymbolId, dir, volume, price, "", limit, stopLoss, takeProfit, trailing);
+        var o = new Ord(_nextId++, SymbolId, dir, volume, price, label, limit, stopLoss, takeProfit, trailing);
         Orders.Add(o);
         return o;
     }

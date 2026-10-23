@@ -47,8 +47,9 @@ internal static class Planner
         foreach (var o in snap.Orders)
             if (TmLabel.TryParse(o.Label, env.BotName, out var id, out var role, out var byOrder))
                 if (byOrder) mirrorOrd[id] = o; else tmOrd[(id, role)] = o;
-        var mains = snap.Positions.Where(p => p.Label.Length == 0 && env.Symbol(p.SymbolId) is not null).ToDictionary(p => p.Id);
-        var mainOrders = snap.Orders.Where(o => o.Label.Length == 0 && env.Symbol(o.SymbolId) is not null).ToDictionary(o => o.Id);
+        // Mains: positions and pending orders whose label is in the take-over list (tm.md §2), on a listed symbol.
+        var mains = snap.Positions.Where(p => env.Config.TakesOver(p.Label) && env.Symbol(p.SymbolId) is not null).ToDictionary(p => p.Id);
+        var mainOrders = snap.Orders.Where(o => env.Config.TakesOver(o.Label) && env.Symbol(o.SymbolId) is not null).ToDictionary(o => o.Id);
 
         // The owner's pending orders (tm.md §3) first: one that filled becomes its trade's main before the take-over below.
         foreach (var order in mainOrders.Values.Where(o => book.FindOrder(o.Id) is null))
