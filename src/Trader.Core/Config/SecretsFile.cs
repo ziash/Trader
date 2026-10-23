@@ -16,6 +16,7 @@ public static class SecretsFile
     public const string EnvKey = "CTRADER_ENV";
     public const string HostKey = "CTRADER_HOST"; // replay only
     public const string PortKey = "CTRADER_PORT"; // replay only
+    public const string CaFileKey = "CTRADER_CA_FILE"; // replay only, optional: the replay broker's certificate authority (PEM)
     /// <summary>Written by the bot after each token refresh (UTC, ISO 8601). Absent until the first refresh.</summary>
     public const string ExpiresKey = "CTRADER_ACCESS_TOKEN_EXPIRES_UTC";
 
@@ -61,19 +62,20 @@ public static class SecretsFile
                 : throw new SecretsException($"{key} is not set in the secrets file");
 
         var env = ParseEnvironment(values.GetValueOrDefault(EnvKey));
-        string? host = null;
+        string? host = null, caFile = null;
         var port = 0;
         if (env == ApiEnvironment.Replay)
         {
+            caFile = values.GetValueOrDefault(CaFileKey) is { Length: > 0 } ca ? ca : null;
             host = Required(HostKey);
             if (!TraderSecrets.IsLocalHost(host))
                 throw new SecretsException($"{HostKey} must be localhost, 127.0.0.1 or ::1 for {EnvKey}=replay");
             if (!int.TryParse(Required(PortKey), NumberStyles.None, CultureInfo.InvariantCulture, out port) || port is < 1 or > 65535)
                 throw new SecretsException($"{PortKey} must be a port number (1–65535)");
         }
-        else if (values.ContainsKey(HostKey) || values.ContainsKey(PortKey))
+        else if (values.ContainsKey(HostKey) || values.ContainsKey(PortKey) || values.ContainsKey(CaFileKey))
         {
-            throw new SecretsException($"{HostKey} and {PortKey} are only used with {EnvKey}=replay; demo always uses the demo host");
+            throw new SecretsException($"{HostKey}, {PortKey} and {CaFileKey} are only used with {EnvKey}=replay; demo always uses the demo host");
         }
 
         return new TraderSecrets(
@@ -84,7 +86,8 @@ public static class SecretsFile
             env,
             ParseExpiry(values.GetValueOrDefault(ExpiresKey)),
             host,
-            port);
+            port,
+            caFile);
     }
 
     internal static DateTime? ParseExpiry(string? value) =>

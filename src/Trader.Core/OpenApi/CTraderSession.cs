@@ -40,7 +40,7 @@ public sealed class CTraderSession : IAsyncDisposable
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
 
-    private readonly OpenClient _client;
+    private readonly IOpenApiClient _client;
     private readonly ILogger _log;
     private readonly IDisposable _subscription;
     // Requests waiting for replies, by clientMsgId. OnMessage returns true when the request needs no more replies.
@@ -51,7 +51,7 @@ public sealed class CTraderSession : IAsyncDisposable
     private long _lastReceivedTicks = DateTime.UtcNow.Ticks;
     private volatile bool _disposing;
 
-    private CTraderSession(OpenClient client, ILogger log)
+    private CTraderSession(IOpenApiClient client, ILogger log)
     {
         _client = client;
         _log = log;
@@ -81,10 +81,15 @@ public sealed class CTraderSession : IAsyncDisposable
             _ => throw new InvalidOperationException($"Environment {secrets.Environment} with host {secrets.Host} is not allowed"),
         };
 
-        // maxRequestPerSecond: Spotware allows 50/s per connection; stay well under it.
-        var client = new OpenClient(host, port, Heartbeat, maxRequestPerSecond: 40, useWebSocket: false);
+        // A replay broker's own certificate authority, when the secrets file names it, is trusted by our own client;
+        // otherwise Spotware's, which trusts what the system trusts. maxRequestPerSecond: Spotware allows 50/s per
+        // connection; stay well under it.
+        IOpenApiClient client = secrets is { Environment: ApiEnvironment.Replay, CaFile: { } caFile }
+            ? new ReplayClient(host, port, caFile, Heartbeat)
+            : new SpotwareClient(new OpenClient(host, port, Heartbeat, maxRequestPerSecond: 40, useWebSocket: false));
         var session = new CTraderSession(client, log);
-        log.Event("Connecting").Information("Connecting to {Host}:{Port} (TLS)", host, port);
+        log.Event("Connecting").Information("Connecting to {Host}:{Port} (TLS{Trust})", host, port,
+            client is ReplayClient ? ", replay authority " + secrets.CaFile : "");
         try
         {
             await client.Connect();

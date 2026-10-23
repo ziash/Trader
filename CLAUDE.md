@@ -44,7 +44,7 @@ A semi-automated short-to-mid-term trend-trading bot. The human (Zeeshan, owner)
 | Broker B | Pepperstone demo **5357135** — Hedging, Razor, USD, 1:200 — `ctidTraderAccountId` 49124666 |
 | Demo endpoint | `demo.ctraderapi.com:5035` (Protobuf over TLS) |
 | Live endpoint | `live.ctraderapi.com:5035` — **do not use** before Phase 5 |
-| Replay | Rewind (`~/code/Rewind`, a separate project) on `localhost:5036`; `CTRADER_ENV=replay`, localhost only; secrets in `~/rewind/tm/secrets.env` (fake), run with `~/rewind/tm/run-tm.sh` |
+| Replay | Rewind (`~/code/Rewind`, a separate project) on `localhost:5036`; `CTRADER_ENV=replay`, localhost only; secrets in `~/rewind/tm/secrets.env` (fake), run with `~/rewind/tm/run-tm.sh` (Windows: `run-tm.ps1`; Rewind's certificate authority via `CTRADER_CA_FILE`) |
 | Rate limits | 50 req/s, 5 req/s for historical data (per connection) |
 | Heartbeat | every 10 s |
 

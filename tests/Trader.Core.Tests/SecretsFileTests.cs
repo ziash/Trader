@@ -71,6 +71,18 @@ public class SecretsFileTests
         Assert.Throws<SecretsException>(() => SecretsFile.Parse(Replay("CTRADER_HOST=127.0.0.1", $"CTRADER_PORT={port}")));
 
     [Fact]
+    public void Replay_reads_an_optional_certificate_authority_file()
+    {
+        Assert.Null(SecretsFile.Parse(Replay("CTRADER_HOST=localhost", "CTRADER_PORT=5036")).CaFile);
+        var s = SecretsFile.Parse(Replay("CTRADER_HOST=localhost", "CTRADER_PORT=5036", @"CTRADER_CA_FILE=C:\Users\Zeeshan Zia\rewind\certs\ca.pem"));
+        Assert.Equal(@"C:\Users\Zeeshan Zia\rewind\certs\ca.pem", s.CaFile);
+    }
+
+    [Fact]
+    public void Certificate_authority_file_is_refused_with_demo() =>
+        Assert.Contains("replay", Assert.Throws<SecretsException>(() => SecretsFile.Parse(ValidLines.Append("CTRADER_CA_FILE=/tmp/ca.pem"))).Message);
+
+    [Fact]
     public void Host_and_port_are_refused_with_demo() =>
         Assert.Contains("replay", Assert.Throws<SecretsException>(() => SecretsFile.Parse(ValidLines.Append("CTRADER_HOST=localhost"))).Message);
 

@@ -183,6 +183,8 @@ Run only one TM: stop the service before running it by hand in a terminal (`dotn
 ~/rewind/tm/run-tm.sh        # TM with Rewind's secrets, certificate and tm.json (account 9000001); Ctrl+C stops it
 ```
 
+On Windows: `powershell -ExecutionPolicy Bypass -File "$HOME\rewind\tm\run-tm.ps1"` (Rewind's certificate is trusted through `CTRADER_CA_FILE`, open-code-pieces.md §3).
+
 Trades on Rewind are kept apart from the demo accounts by the broker name `rewind` (state `~/tradebot/run/tm/rewind-9000001.json`, logs `~/tradebot/logs/rewind/`). The demo service can run at the same time. TM's news and Friday pop-ups follow the real clock, not the replay's. On Rewind you open the positions in its browser page instead of cTrader.
 
 - **Exact mode** (Rewind's default): while TM is connected, each replayed price step of a symbol in a trade waits until TM has had its look (about 5 s per 5-minute candle), so TM acts as it would live at any replay speed.

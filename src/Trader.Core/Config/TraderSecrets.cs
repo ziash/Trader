@@ -22,7 +22,8 @@ public sealed record TraderSecrets(
     ApiEnvironment Environment,
     DateTime? AccessTokenExpiresUtc = null,
     string? Host = null,
-    int Port = 0)
+    int Port = 0,
+    string? CaFile = null)
 {
     /// <summary>The only hosts a <see cref="ApiEnvironment.Replay"/> connection may use.</summary>
     public static bool IsLocalHost(string? host) => host is "localhost" or "127.0.0.1" or "::1";
@@ -36,5 +37,5 @@ public sealed record TraderSecrets(
         $"TraderSecrets {{ ClientId = {Mask(ClientId)}, ClientSecret = {Mask(ClientSecret)}, " +
         $"AccessToken = {Mask(AccessToken)}, RefreshToken = {Mask(RefreshToken)}, Environment = {Environment}, " +
         $"AccessTokenExpiresUtc = {AccessTokenExpiresUtc?.ToString("u") ?? "unknown"}" +
-        (Host is null ? "" : $", Host = {Host}:{Port}") + " }";
+        (Host is null ? "" : $", Host = {Host}:{Port}") + (CaFile is null ? "" : $", CaFile = {CaFile}") + " }";
 }
