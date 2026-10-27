@@ -55,6 +55,8 @@ systemctl --user enable --now trader-tm             # start now and at every log
 
 TM on past prices: [Rewind](https://github.com/ziash/Rewind) (separate project) replays history with a simulated broker; with Rewind running, `~/rewind/tm/run-tm.sh` (Windows: `run-tm.ps1`) starts TM against it (`CTRADER_ENV=replay`, localhost only — [open-code-pieces.md §3](docs/open-code-pieces.md#3-connection-and-tokens)).
 
+The day's expected range and options-positioning levels on the TradingView chart: [Levels](https://github.com/ziash/Levels) (separate project; never trades, shares no code with Trader).
+
 Daily report (runs by itself every day at 00:15 UTC; reports in `~/tradebot/reports/`, open in Google Sheets):
 
 ```bash
