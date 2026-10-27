@@ -42,6 +42,7 @@ public sealed class ProbeRunner(
     private static readonly TimeSpan PauseBetweenProbes = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan SlotOffset = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MaxLateness = TimeSpan.FromSeconds(60);
+    internal static readonly TimeSpan WaitStep = TimeSpan.FromSeconds(30);
     private const int CloseAttempts = 3;
 
     private readonly Func<DateTime> _utcNow = utcNow ?? (() => DateTime.UtcNow);
@@ -353,10 +354,17 @@ public sealed class ProbeRunner(
         await Task.Delay(TimeSpan.FromSeconds(3), ct); // let first prices arrive
     }
 
-    private async Task DelayUntil(DateTime utc, CancellationToken ct)
+    private Task DelayUntil(DateTime utc, CancellationToken ct) => DelayUntilAsync(utc, _utcNow, Task.Delay, ct);
+
+    /// <summary>
+    /// Waits until <paramref name="utc"/> on the wall clock, in steps of at most <see cref="WaitStep"/>. .NET timers run on a
+    /// clock that stops while the computer is suspended, so one long delay would end as many hours late as the computer slept
+    /// (24–26 Oct 2026: a 55 h wait outlasted a 65 h sleep by two days); re-reading the wall clock each step ends the wait
+    /// within one step of waking, and the window is then logged as missed (audit-bot.md §2.2).
+    /// </summary>
+    internal static async Task DelayUntilAsync(DateTime utc, Func<DateTime> utcNow, Func<TimeSpan, CancellationToken, Task> delay, CancellationToken ct)
     {
-        var wait = utc - _utcNow();
-        if (wait > TimeSpan.Zero)
-            await Task.Delay(wait, ct);
+        while (utc - utcNow() is var wait && wait > TimeSpan.Zero)
+            await delay(wait < WaitStep ? wait : WaitStep, ct);
     }
 }

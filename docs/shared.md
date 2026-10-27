@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.3 (22-Oct-2026) — history in §10 |
+| Document version | v1.4 (27-Oct-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -42,7 +42,7 @@ Broker login numbers differ from the `ctidTraderAccountId` the API uses (`dotnet
 | Setup check | `scripts/check-env.sh` — read-only check of OS, .NET, Git, VS Code, clock, port 5035, folders, secrets |
 | Version control | Private Git repository [github.com/ziash/Trader](https://github.com/ziash/Trader) — the project documents and the code |
 | Clock | NTP sync enabled; all logs in UTC |
-| Laptop during the audit | Automatic suspend off (Settings → Power), lid closing must not suspend, mains power; a sleeping laptop records nothing and probe windows are logged as missed. User services start at login; to run without anyone logged in: `loginctl enable-linger` (owner's choice). |
+| Laptop during the audit | Automatic suspend off (Settings → Power) for **both** "Plugged In" and "On Battery Power" — on 27-Oct-2026 only plugged-in was off, and on battery the laptop suspended after 15 min (24–26 Oct gap, [Audit Bot §7](bots/audit-bot.md#7-build-steps-and-the-audit-run)); lid closing must not suspend; mains power. A sleeping laptop records nothing and probe windows are logged as missed. User services start at login (`Linger=no` on 27-Oct-2026); to run without anyone logged in: `loginctl enable-linger` (owner's choice). |
 | Later | Small Linux VPS near broker servers (London / New York); same container |
 
 **Bots run as systemd user services** (one unit per bot), each from a **published Release build** in `~/tradebot/bin/<Bot>/`, so code changes never affect a running bot until it is redeployed and restarted. Each bot's document says how it is run.
@@ -180,3 +180,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.1 | 20 Oct 2026 | `news-releases.json` now shared by the Audit Bot and TM (§5) |
 | v1.2 | 21 Oct 2026 | Replay safety rule (§4); TM's status in §1 brought up to date (built, service) |
 | v1.3 | 22 Oct 2026 | Glossary: buy-/sell-limit, pending orders' stop-loss and take-profit, server-side trailing stop |
+| v1.4 | 27 Oct 2026 | §3: suspend must be off on battery too (the 24–26 Oct Audit Bot gap); linger is off |

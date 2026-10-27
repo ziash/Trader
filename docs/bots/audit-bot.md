@@ -5,7 +5,7 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 | Item | Value |
 |---|---|
 | Status | **Built and finished; running** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7) |
-| Document version | v1.1 (24-Oct-2026) — history in §10 |
+| Document version | v1.2 (27-Oct-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
@@ -68,7 +68,8 @@ Probe orders (0.01 lot) open and close immediately. Each probe row in `probes.cs
 Per window, each symbol gets one buy probe and one sell probe, a few seconds apart; instances on the same account are staggered (§4). For `NewsRelease`, probes run just before, just after and about 5 minutes after the release .
 
 *(built in step 5)* How a probe runs:
-- **Who:** only the instance that is **Primary** on the account (§4). Accounts run in parallel; within an account one probe at a time, symbols in config order, buy then sell, 2 s apart. A symbol whose market is closed is skipped. A window more than 60 s late (computer asleep, bot busy) is skipped and logged.
+- **Who:** only the instance that is **Primary** on the account (§4). Accounts run in parallel; within an account one probe at a time, symbols in config order, buy then sell, 2 s apart. A symbol whose market is closed is skipped. A window more than 60 s late (computer asleep, bot busy) is skipped and logged (`ProbeWindowMissed`, one per window, counted in the report's `missed_windows`).
+- **Waiting for a window:** the bot waits in steps of at most 30 s and re-reads the wall clock after each (v1.2). .NET timers run on a clock that stops while the computer is suspended, so the earlier single long wait ended as many hours late as the laptop had slept; now the missed windows are logged within 30 s of waking and the next window is probed on time.
 - **Order:** market order of **0.01 lot** (forex 1,000 units; crypto 0.01 coin), or the broker's minimum where that is larger (§2.1), labelled with the instance ID, with a wide server-side **backup stop-loss**: 50 pips for forex, 2 % of the price for everything else. Then closed at once **by its `positionId`** (ownership rule, [Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)). Both the open and the close are written to `probes.csv`.
 - **Measured:** requested price = ask for a buy, bid for a sell, at the moment of sending; fill price from the fill message; latency = request sent → fill message received on this machine; commission from the fill.
 - **Left-overs:** before every window, after every connect and on becoming Primary, the bot asks the server for all open positions (reconcile) and closes any with an `AuditBot-…` label. Tested 18-Oct-2026 by killing the bot (`kill -9`) while a probe was open: the next start closed it. Positions without the label are never touched; their number is logged (`ForeignPositions`), and fills of foreign orders are logged once (`ForeignTrade`).
@@ -253,6 +254,8 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 
 **The audit run:** 2 brokers × 2 weeks on demo; daily reports; choose the broker. Started 18-Oct-2026 (before step 6, by the owner's decision; test logs from the build were deleted first, so everything in `~/tradebot/logs` from 18-Oct-2026 ~17:10 UTC is real audit data). Running to mid-November covers the UK and US clock changes (25-Oct, 1-Nov) and the NFP (6-Nov) and CPI (10-Nov) releases. First full day (19-Oct-2026): all 3 windows × 24 orders filled on both brokers; one connection drop (44 s, reconnected automatically).
 
+**Gap, 24–28 Oct 2026:** the laptop was on battery and suspended itself after 15 min idle (Sat 24-Oct 04:32 UTC) until the lid was opened (Mon 26-Oct 21:17 UTC). Nothing was recorded in between: the 25-Oct and 26-Oct reports show empty spread rows (`gap_rows`), and 26-Oct's main session has no data. Spread logging resumed within 3 minutes of waking. Probes did not: the long-wait bug fixed in v1.2 (§2.2) kept the running build (`AuditBot-77fbd8`, started 23-Oct) waiting about 46 h more, so it sends no probes on 27–28 Oct unless restarted with the v1.2 build. Instance `AuditBot-77fbd8` has no `probes.csv` at all; probe data for the v1.1 symbols starts with the first window after that.
+
 ## 8. Decisions
 
 | # | Decision | Why |
@@ -272,6 +275,7 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 - Monitoring while the bot runs: a status script with a systemd timer and desktop alerts (Claude only on alerts) — deferred by the owner on 18-Oct-2026. The bot's `SpreadWide` / `SlippageHigh` warnings (§2.4) are what such a script would look for; the shared notifications could now carry them as pop-ups.
 - **Review the alert limits of the v1.1 symbols** (§2.4) after the first few days of their data; they are estimates.
 - With 18 symbols a probe window takes about 1.5–2 minutes per account (one probe at a time, §2.2), so in `NewsRelease+5s` only the first symbols are probed within seconds of the release.
+- **Keep the laptop awake for the rest of the run** ([shared §3](../shared.md#3-machine-and-services)): the 24–26 Oct gap came from the 15-minute suspend **on battery**, which was still on.
 - Add NFP/CPI dates after 11-Feb-2027 to `news-releases.json` (BLS publishes them yearly) if the Audit Bot is still running then.
 
 ## 10. History
@@ -284,3 +288,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | — | 20 Oct 2026 | (old plan v1.22) Report reads only Audit Bot folders; 19-Oct report rebuilt |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Sections 6, 7, 8.1) and the former Audit Bot page. Content unchanged |
 | v1.1 | 24 Oct 2026 | **12 more symbols** (owner): USDJPY, GBPUSD, SOLUSD, XAUUSD, XAGUSD, XPTUSD, XTIUSD, XBRUSD, XNGUSD, US500, USTEC, DE40 — top three per market offered at both brokers with the same lot size (§2.1); Pepperstone name map; per-symbol alert limits (estimates, §2.4); probe summary line `crypto` renamed `non-forex`. TM unchanged. Takes effect at the next restart of `trader-auditbot`; the audit run's data for the first six symbols continues |
+| v1.2 | 27 Oct 2026 | **Probe waits survive a suspended laptop** (§2.2): `ProbeRunner` waits in ≤ 30 s steps on the wall clock instead of one long timer, which had kept the bot from probing for two days after the 24–26 Oct sleep. Gap recorded in §7; open item to keep the laptop awake (§9). 3 new tests. Takes effect at the next restart of `trader-auditbot` |

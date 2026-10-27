@@ -42,6 +42,47 @@ public sealed class ProbeTests : IDisposable
     }
 
     [Fact]
+    public async Task Wait_for_a_window_rereads_the_wall_clock_every_step()
+    {
+        var now = Utc(2026, 10, 26, 2, 58);
+        var steps = new List<TimeSpan>();
+        Task Delay(TimeSpan span, CancellationToken _) { steps.Add(span); now += span; return Task.CompletedTask; }
+
+        await ProbeRunner.DelayUntilAsync(Utc(2026, 10, 26, 3, 0), () => now, Delay, CancellationToken.None);
+
+        Assert.Equal(Utc(2026, 10, 26, 3, 0), now);
+        Assert.Equal(4, steps.Count);
+        Assert.All(steps, s => Assert.Equal(ProbeRunner.WaitStep, s));
+    }
+
+    [Fact]
+    public async Task Wait_ends_one_step_after_waking_when_the_computer_slept_past_the_window()
+    {
+        // 24–26 Oct 2026: the bot waited from Friday evening for Monday's QuietHour; the laptop slept 65 h during the wait.
+        var now = Utc(2026, 10, 23, 19, 58);
+        var steps = 0;
+        Task Delay(TimeSpan span, CancellationToken _)
+        {
+            now += ++steps == 1000 ? span + TimeSpan.FromHours(65) : span; // asleep during one step, 8 h 20 min in
+            return Task.CompletedTask;
+        }
+
+        await ProbeRunner.DelayUntilAsync(Utc(2026, 10, 26, 3, 0), () => now, Delay, CancellationToken.None);
+
+        Assert.Equal(1000, steps); // no further waiting after waking
+        Assert.True(now > Utc(2026, 10, 26, 3, 0));
+    }
+
+    [Fact]
+    public async Task Wait_for_a_past_window_returns_at_once()
+    {
+        var calls = 0;
+        await ProbeRunner.DelayUntilAsync(Utc(2026, 10, 26, 3, 0), () => Utc(2026, 10, 26, 21, 17),
+            (_, _) => { calls++; return Task.CompletedTask; }, CancellationToken.None);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
     public void News_release_gives_three_windows_around_08_30_New_York()
     {
         var schedule = new ProbeSchedule([new NewsRelease(new DateTime(2026, 11, 6, 8, 30, 0), "NFP")]);
