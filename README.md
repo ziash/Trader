@@ -57,6 +57,8 @@ TM on past prices: [Rewind](https://github.com/ziash/Rewind) (separate project) 
 
 The day's expected range and options-positioning levels on the TradingView chart: [Levels](https://github.com/ziash/Levels) (separate project; never trades, shares no code with Trader).
 
+The owner's "pause, then stop order" setup marked and alerted on TradingView: Scout (separate project, `~/code/Scout`). Its indicator Scout_Pine never trades; orders placed by hand in cTrader are taken over by TM as usual. A Scout bot that places orders is a later phase.
+
 Daily report (runs by itself every day at 00:15 UTC; reports in `~/tradebot/reports/`, open in Google Sheets):
 
 ```bash
