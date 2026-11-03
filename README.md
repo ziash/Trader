@@ -9,8 +9,9 @@ Trading bots for cTrader (C# / .NET 10, Ubuntu). **Each bot is a project of its 
 |---|---|---|---|
 | **Audit Bot** | Compares spreads, slippage, latency and reliability at two brokers with tiny probe orders; daily report | Built and finished; running (audit run since 18-Oct-2026) | [docs/bots/audit-bot.md](docs/bots/audit-bot.md) |
 | **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`) | [docs/bots/tm.md](docs/bots/tm.md) |
+| **Scout** | Finds the owner's pause-then-stop setup and places the first stop order; TM manages it | Trial on demo from 03-Nov-2026 (`trader-scout`) | [docs/bots/scout.md](docs/bots/scout.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [docs/bots/auto-bot.md](docs/bots/auto-bot.md) |
-| **Open Code Pieces** | The reusable code all bots are built from (`src/Trader.Core`) | In use by the Audit Bot and TM | [docs/open-code-pieces.md](docs/open-code-pieces.md) |
+| **Open Code Pieces** | The reusable code all bots are built from (`src/Trader.Core`) | In use by the Audit Bot, TM and Scout | [docs/open-code-pieces.md](docs/open-code-pieces.md) |
 
 - **Shared by all projects** — brokers and accounts, machine, safety rules, folders, file format, glossary: [docs/shared.md](docs/shared.md)
 - **New bot** — a document from [docs/bots/_template.md](docs/bots/_template.md) and a row here ([how](docs/bots/README.md#adding-a-bot))
@@ -57,7 +58,7 @@ TM on past prices: [Rewind](https://github.com/ziash/Rewind) (separate project) 
 
 The day's expected range and options-positioning levels on the TradingView chart: [Levels](https://github.com/ziash/Levels) (separate project; never trades, shares no code with Trader).
 
-The owner's "pause, then stop order" setup marked and alerted on TradingView: [Scout](https://github.com/ziash/Scout) (separate project). Its indicator Scout_Pine never trades; orders placed by hand in cTrader are taken over by TM as usual. A Scout bot that places orders is a later phase.
+The owner's "pause, then stop order" setup: rules, Scout_Pine (the TradingView indicator) and research in [Scout](https://github.com/ziash/Scout) (separate project); the bot that places the first orders is `src/Trader.Scout` here ([docs/bots/scout.md](docs/bots/scout.md)), and TM manages them.
 
 Daily report (runs by itself every day at 00:15 UTC; reports in `~/tradebot/reports/`, open in Google Sheets):
 

@@ -265,8 +265,11 @@ public sealed class CTraderSession : IAsyncDisposable
     /// gets when it fills, and waits until the server accepts it. A stop sits beyond the price (buy above, sell below),
     /// a limit before it (buy below, sell above). Returns the accepted order.
     /// </summary>
+    /// <param name="trailingStopLoss">With a stop-loss: true makes the position's stop-loss a trailing stop once it fills.</param>
+    /// <param name="expiresUtc">When set, the server cancels the order at this time if it has not filled (good till date).</param>
     public Task<ProtoOAOrder> PlacePendingOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOAOrderType type, ProtoOATradeSide side, long volume,
-        double price, double? stopLoss, double? takeProfit, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null)
+        double price, double? stopLoss, double? takeProfit, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null,
+        bool trailingStopLoss = false, DateTime? expiresUtc = null)
     {
         var req = new ProtoOANewOrderReq
         {
@@ -283,6 +286,13 @@ public sealed class CTraderSession : IAsyncDisposable
             req.StopLoss = sl;
         if (takeProfit is { } tp)
             req.TakeProfit = tp;
+        if (stopLoss is not null && trailingStopLoss)
+            req.TrailingStopLoss = true;
+        if (expiresUtc is { } expires)
+        {
+            req.TimeInForce = ProtoOATimeInForce.GoodTillDate;
+            req.ExpirationTimestamp = new DateTimeOffset(DateTime.SpecifyKind(expires, DateTimeKind.Utc)).ToUnixTimeMilliseconds();
+        }
         if (!string.IsNullOrEmpty(comment))
             req.Comment = comment.Length <= 512 ? comment : comment[..512];
         return AcknowledgeAsync(req, timeout);

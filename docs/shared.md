@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.4 (27-Oct-2026) — history in §10 |
+| Document version | v1.5 (03-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -15,8 +15,9 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 |---|---|---|---|
 | **Audit Bot** | Compares two brokers' spreads, slippage, latency and reliability with tiny probe orders; daily report | Built and finished; running (audit run since 18-Oct-2026) | [bots/audit-bot.md](bots/audit-bot.md) |
 | **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`); can also trade replayed prices on Rewind | [bots/tm.md](bots/tm.md) |
+| **Scout** | Finds the owner's pause-then-stop setup on many charts and places the first stop order; TM manages it (setup rules: [Scout repository](https://github.com/ziash/Scout)) | Trial on demo from 03-Nov-2026 (`trader-scout`) | [bots/scout.md](bots/scout.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [bots/auto-bot.md](bots/auto-bot.md) |
-| **Open Code Pieces** | The reusable code all bots are built from | In use by the Audit Bot and TM | [open-code-pieces.md](open-code-pieces.md) |
+| **Open Code Pieces** | The reusable code all bots are built from | In use by the Audit Bot, TM and Scout | [open-code-pieces.md](open-code-pieces.md) |
 
 ## 2. Brokers and accounts
 
@@ -181,3 +182,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.2 | 21 Oct 2026 | Replay safety rule (§4); TM's status in §1 brought up to date (built, service) |
 | v1.3 | 22 Oct 2026 | Glossary: buy-/sell-limit, pending orders' stop-loss and take-profit, server-side trailing stop |
 | v1.4 | 27 Oct 2026 | §3: suspend must be off on battery too (the 24–26 Oct Audit Bot gap); linger is off |
+| v1.5 | 03 Nov 2026 | Scout added to the projects (§1); Audit Bot no longer started at login (audit-bot.md v1.3) |

@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10) |
-| Document version | v1.6 (24-Oct-2026) — history in §13 |
+| Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout.md)'s orders (`takeOver`, decision 12) |
+| Document version | v1.7 (03-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -235,16 +235,17 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 9 | A trailing stop on the main makes both legs' break-even stops trail; before 1R the hedge protects, as for any stop-loss (owner, 22-Oct-2026) | Trailing is kept as the owner's wish without a stop that would close the main at the hedge level |
 | 10 | The owner's pending order gets a mirror order of the same type at the same price (stop-loss at H, the owner's take-profit), following the owner's changes; hedges once both fill (owner, 22-Oct-2026; replaces v1.4's "pending orders left alone, mirror at market after the fill") | Main and mirror enter at the same price, as with a market entry; hedges cannot sit at H before the entry (§3.1) |
 | 11 | Which labels TM takes over is configurable: `"takeOver"` in `tm.json`, `""` = no label, other entries match by the start of the label; default and live `[""]` (owner, 24-Oct-2026) | The owner decides per label, without code changes; prefix matching survives bot restarts (instance IDs change) |
+| 12 | **`"Scout-"` in the live `takeOver`** (`["", "Scout-"]`, owner, 03-Nov-2026): Scout places the first stop order of each setup, TM manages it like the owner's own pending order (mirror order, hedges at its stop-loss, break-even, trailing — Scout sets the trailing switch). Scout never closes a position; it only cancels its own unfilled orders, and TM then cancels the mirror (§3.1) | The owner's rule: Scout makes the entry, TM does the rest ([scout.md §2.4](scout.md#24-with-tm)). The open item below about bots that close their own mains does not arise for Scout |
 
 ## 12. Open items
 
-- **Before adding another bot's label to `takeOver`** (e.g. `AuditBot-`): decide what TM does when that bot closes its own main — today the mirror and its hedge carry on as a TM trade (§5). Audit Bot probes close within ~1 s, so each would leave a mirror.
+- **Before adding another bot's label to `takeOver`** (e.g. `AuditBot-`; done for `Scout-`, decision 12): decide what TM does when that bot closes its own main — today the mirror and its hedge carry on as a TM trade (§5). Audit Bot probes close within ~1 s, so each would leave a mirror.
 
 - Keep `news-releases.json` up to date (it lists releases to Feb 2027; shared with the Audit Bot).
 - Parameters to tune with a backtest: 15 % of the 3-day range, spread floor 5 ×, A = 1R, B = ½R, 2R / 3R limits. Rewind's `tm-trades.csv` (§10) gives the per-leg data for this (replayed trades with TM unchanged); rule values can be tried in `~/rewind/tm/tm.json` without touching the demo config.
 - Trailing (R3) needs the exact M5 swing definition ("last lower high") and the stop buffer — the same open question as [Auto Bot §9](auto-bot.md#9-open-questions).
 - A partial close of a main does not yet resize its pending hedge (the hedge keeps the original volume).
-- Mirror orders (§3.1) are tested on Rewind only: check once on a cTrader demo that a limit / stop order with an absolute stop-loss and take-profit is accepted, that an amend with price, volume, stop-loss and take-profit replaces them, and that the fill's execution event carries the order's type and the new `positionId`.
+- Mirror orders (§3.1) are tested on Rewind only (Scout's trial from 03-Nov-2026 is the first demo use): check once on a cTrader demo that a limit / stop order with an absolute stop-loss and take-profit is accepted, that an amend with price, volume, stop-loss and take-profit replaces them, and that the fill's execution event carries the order's type and the new `positionId`.
 - Trailing stops set over the Open API (§5, decision 9) are tested on Rewind only: check once on a cTrader demo that `trailingStopLoss` on an amended stop-loss is accepted, shown in the reconcile, and trails at the distance it had when set.
 
 ## 13. History
@@ -260,3 +261,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.4 | 22 Oct 2026 | Owner's pending orders (buy/sell limit and stop) and trailing stops (§2, §5, decision 9): pending orders untouched, a fill taken over like a market entry; a main's trailing stop makes both legs' break-even stops server-side trailing stops, following the main's switch. Code: `Pos.Trailing`, `TradeState.Trailing`, `SetProtection.Trailing`; Trader.Core's SL call takes the trailing flag ([Open Code Pieces](../open-code-pieces.md) v1.3); 4 new tests. Tested on Rewind (§9) |
 | v1.5 | 22 Oct 2026 | **Mirror orders** (§3.1, decision 10, owner): the owner's buy/sell limit or stop order gets a mirror order of the same type at the same price, stop-loss at H, the owner's take-profit; it follows the owner's changes and is cancelled with the order; hedges once both fill (they cannot be placed at H before). Labels `TM-<6hex>-O<orderId>-MIR` (§7). Code: `Planner` (pending trades), `TradeState.MainOrderId`, `Ord` with type and protection; Trader.Core `PlacePendingOrderAsync` / `AmendPendingOrderAsync` ([Open Code Pieces](../open-code-pieces.md) v1.4); TM tests: 36 (3 new, 2 rewritten). Tested on Rewind (§9) |
 | v1.6 | 24 Oct 2026 | **Take-over list** (§2.1, decision 11, owner): `"takeOver"` in `tm.json` sets which labels TM takes over (`""` = no label; others by prefix); default and live `[""]`, so behaviour is unchanged. TM refuses a list that is empty or matches its own labels; logs the list at start. Code: `TmConfig.TakeOver` / `TakesOver`, `Planner` (mains); TM tests: 47 (11 new) |
+| v1.7 | 03 Nov 2026 | **TM manages Scout's orders** (decision 12, owner): live `takeOver` = `["", "Scout-"]` in `tm.json`; TM restarted with it on both demos for the Scout trial ([scout.md](scout.md)). No TM code change |

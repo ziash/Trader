@@ -1,0 +1,34 @@
+{
+  // Scout (docs/bots/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Live copy: ~/tradebot/config/scout.json
+  // Each chart: symbol, timeframe (H1, H4, D1) and mode: "watch" = alerts only, "trade" = Scout places the first stop
+  // order of each setup and TM takes it over ("Scout-" in tm.json's takeOver).
+  // Trial run from 03-Nov-2026 (Scout spec §4.6): trade, 1H, TM's six symbols, both demos.
+  "accounts": [
+    { "broker": "brokerA", "accountId": 49123893, "charts": [
+      { "symbol": "AUDJPY", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "EURGBP", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "EURUSD", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "GBPJPY", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "BTCUSD", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "ETHUSD", "timeframe": "H1", "mode": "trade" }
+    ] },
+    { "broker": "brokerB", "accountId": 49124666, "charts": [
+      { "symbol": "AUDJPY", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "EURGBP", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "EURUSD", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "GBPJPY", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "BTCUSD", "timeframe": "H1", "mode": "trade" },
+      { "symbol": "ETHUSD", "timeframe": "H1", "mode": "trade" }
+    ] }
+  ],
+
+  "lots": 0.1,            // per Scout order; TM's mirror adds the same
+  "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
+  "historyDays": 30,      // past candles read at start to rebuild the state
+
+  // Scout spec §3.2, the same defaults as Scout_Pine; leave out to use them.
+  "setup": {
+    "pushBody": 0.6, "minMove": 1.5, "minPause": 2, "maxPause": 16, "maxPauseHeight": 3.0, "maxRetrace": 0.6,
+    "reversalAfter": 4, "flipAtr": 3.0, "channel": 20, "atrLength": 14, "level": "smart", "wickTolerance": 0.6, "offset": 0
+  }
+}

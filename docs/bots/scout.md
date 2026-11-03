@@ -1,0 +1,107 @@
+# Scout
+
+**Watches the owner's charts for the "pause, then stop order" setup and places the first stop order of each one; TM manages everything after.** The setup rules, modes and decisions are in Scout's own spec ([github.com/ziash/Scout](https://github.com/ziash/Scout), `docs/spec.md` — the source of truth for *what* Scout looks for); this document covers how the bot runs here. A project of its own; it uses the [Open Code Pieces](../open-code-pieces.md).
+
+| Item | Value |
+|---|---|
+| Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, 0.1 lot, six symbols on both demos; review after one week (≈ 10-Nov-2026) |
+| Document version | v1.0 (03-Nov-2026) — history in §8 |
+| Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account) |
+| Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events) |
+| Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
+| Symbols | Trial: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD on 1H — `config/scout.json` (TM must list the same symbols in `tm.json`) |
+| Bot name / labels | `Scout` — `Scout-<6hex>-<tf>-<pause start yyyyMMddHHmm>-M` (main stop) / `-R` (reversal stop), e.g. `Scout-3f9a1c-H1-202611031500-M` |
+| Config | [`config/scout.json`](../../config/scout.json) (accounts, charts and modes, lots, expiry, setup settings) — live copy `~/tradebot/config/scout.json`; pop-ups: `notifications.json` |
+| Memory | `~/tradebot/run/scout/<broker>-<ctid>.json` (setups that already got an order or alert; survives restarts) |
+| Service | `trader-scout` (systemd user service, from `~/tradebot/bin/Scout`) |
+
+## 1. Goal
+
+The owner takes every pause in a running trend with a stop order beyond it (Scout spec §2). Scout does this on many charts at once: it finds the pause on the broker's own candles and places the order the owner would place by hand, so TM can mirror, hedge, protect and trail it. Scout's job ends with that first order.
+
+## 2. Rules
+
+### 2.1 Modes (Scout spec §4.1)
+
+Per chart (symbol × timeframe) in `scout.json`: `"watch"` sends an alert for each new stop level; `"trade"` places the order.
+
+### 2.2 Candles and the detector
+
+- Every chart's **closed** candles come from the broker (`ProtoOAGetTrendbarsReq`), asked for once a candle should have closed; a candle that does not come (market closed) is asked for every 30 s for 10 minutes, then once per candle length. At start, 30 days of candles rebuild the state (their events are not acted on).
+- The detector runs Scout_Pine's rules (Scout spec §3.1, §3.2) unchanged; the next timeframe up (1H ← 4H) runs its own detector for the tag *with / against / unknown* (Scout spec §4.4 I1). The tag is logged and shown, never used to skip.
+
+### 2.3 Orders (Trade mode; Scout spec §4.2, §4.4)
+
+| When | Scout |
+|---|---|
+| A pause gets its stop level (2nd candle) | Places a **Buy Stop / Sell Stop** at the level: 0.1 lot, **stop-loss at the far side of the pause**, **trailing switch on**, **expiry 16 candles** later on the server (good till date), label as above |
+| The pause rolls over (reversal stop, Scout spec §2.1 rule 5) | Places the reversal stop the same way, its stop-loss at the main level |
+| One order of a pause fills | Cancels the other one (one cancels the other) |
+| The setup ends unfilled (trend turned, pause too long or too deep) | Cancels its own unfilled order(s) |
+| A level moves on later candles | Nothing: Scout never moves or amends an order |
+| A position opened from its order | Nothing: TM manages it (mirror, hedges at H = the stop-loss, break-even at 1R, trailing) |
+
+- Each setup role (pause × main/reversal) gets **at most one order, ever**: the memory file keeps it across restarts. A refused order (e.g. the price is already beyond the level) is logged and not retried.
+- After a restart, Scout's pending orders are found by label (`Scout-` + timeframe + pause start), whatever instance placed them.
+- Acts only while Primary on the account (open-code-pieces.md §6); a second copy only watches.
+
+### 2.4 With TM
+
+TM takes over orders whose label starts with `"Scout-"` (`takeOver` in `tm.json`, [tm.md §2.1](tm.md#21-take-over-list-v16-owner-24-oct-2026), decision 12): a mirror order of the same size beside Scout's, hedges once both fill. When Scout cancels its order or it expires, TM cancels the mirror ([tm.md §3.1](tm.md#31-entry-by-a-pending-order-owner-22-oct-2026)). Scout never closes a position, so TM's open item about bots that close their own mains does not arise.
+
+## 3. Logs and outputs
+
+`~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/`:
+
+| File | One row per |
+|---|---|
+| `setups.csv` | detector event: `NewStop`, `StopMoved`, `NewReversal`, `ReversalMoved`, `StopFilled`, `ReversalFilled`, `Cancelled` (with reason), `TrendTurned` — with level, far side, pause start, pause candles, pause height and move in ATR, pull-back, ATR, higher-timeframe trend and *with / against* |
+| `orders.csv` | order action or result: `place` (ok / refused), `cancel` (with reason), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode) |
+| `events.csv` | every log line with an event name (shared format, open-code-pieces.md §8) |
+
+Pop-ups: "order placed" and Watch-mode setups (`notifications.json`: a desktop channel for Scout's `OrderPlaced` and `Setup`), refused orders and stops as warnings. TM's own `actions.csv` shows the mirrors, hedges and stops; its mirror labels carry Scout's order ID (`TM-…-O<orderId>-MIR`), which links the two logs for the trial review.
+
+## 4. Run and operate
+
+```bash
+systemctl --user enable --now trader-scout   # start now and at every login
+systemctl --user status trader-scout         # running?
+journalctl --user -u trader-scout -f         # live console output
+systemctl --user restart trader-scout        # switch to a newly deployed build
+systemctl --user stop trader-scout           # stop (pending orders stay and expire by themselves)
+scripts/deploy-scout.sh                      # publish a new build (does not restart; copies scout.json on the first deploy)
+```
+
+By hand (stop the service first, so only one Scout acts): `dotnet run --project src/Trader.Scout -- --dry-run` (no orders, logs what it would do).
+
+## 5. Tools
+
+| Option | Does |
+|---|---|
+| `--dry-run` | Runs normally but places and cancels nothing |
+| `--test-order` | One far-away EURUSD Buy Stop (0.01 lot, stop-loss, trailing, 1-hour expiry) on the first account, read back, cancelled. Run with TM stopped (TM would mirror it) |
+| `--candles <SYMBOL> <TF> <from> <file.csv>` | Writes the first account's closed candles to a file (read-only); used for the tests and the review |
+| `--replay <file.csv>` | Runs the detector on such a file and prints its events (no connection) |
+
+## 6. Build steps
+
+| Step | Content | Status |
+|---|---|---|
+| 1 | Detector (Scout_Pine's rules) + higher-timeframe tag; tests: made-up charts, identical events to the prototype on IC Markets EURUSD, GBPJPY, BTCUSD 1H (Aug–Nov 2026) | **Done 03-Nov-2026** — 14 tests |
+| 2 | Trader.Core: pending orders with trailing switch and expiry ([Open Code Pieces](../open-code-pieces.md) v1.7) | **Done 03-Nov-2026** — `--test-order` on IC Markets demo: Buy Stop with SL, trailing `True`, `GoodTillDate`, expiry kept by the server; cancelled |
+| 3 | Live loop, orders, one-cancels-other, memory, logs, pop-ups; service and deploy script | **Done 03-Nov-2026** — dry run on both demos: 30 days rebuilt on all 12 charts, the same GBPJPY Buy Stop found at both brokers |
+| 4 | Trial run with TM (Scout spec §4.6) | **Running from 03-Nov-2026** |
+
+## 7. Decisions and open items
+
+Decisions are in Scout spec §4 and §7 (v1.2). Open here:
+
+- Not yet seen on a demo: a Scout order **filled** and taken over by TM (mirror at the same price, hedges at the stop-loss, trailing from break-even); the first fills of the trial will show it.
+- The laptop suspends: no candles, no orders while asleep; pending orders stay on the server and expire. Same as TM (audit-bot.md §9 keeps-awake item).
+- A Buy Stop triggers on the ask, the detector reads bid candles: a real fill can come a little before the detector sees the level reached. One cancels the other uses the real fill.
+
+## 8. History
+
+| Version | Date | Change |
+|---|---|---|
+| v1.0 | 03 Nov 2026 | First issue: Scout built (detector, Trade/Watch modes, orders with stop-loss, trailing and expiry, one cancels the other, logs) and started on both demos for a one-week trial with TM; `"Scout-"` added to TM's `takeOver` ([TM](tm.md) v1.7) |

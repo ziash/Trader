@@ -1,0 +1,222 @@
+// Scout (docs/bots/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Watches the owner's charts for the
+// "pause, then stop order" setup on the broker's own closed candles. Watch mode alerts; Trade mode places the first
+// stop order of each setup (label Scout-<6hex>-<tf>-<pause start>-M/R) and TM takes it over. Demo accounts only.
+// - Reads ~/tradebot/config/scout.json and notifications.json.
+// - Remembers what it did in ~/tradebot/run/scout/<broker>-<ctid>.json.
+// - Logs to ~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/events.csv, setups.csv and orders.csv.
+// - Acts on an account only while it is Primary there (open-code-pieces.md §6).
+//
+// Options: --config-dir <dir> (default ~/tradebot/config); --dry-run (no orders: logs what it would do);
+// --test-order (places one far-away EURUSD Buy Stop with stop-loss, trailing and expiry on the first account,
+// reads it back, cancels it and exits); --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
+// closed candles to a file and exits; read-only); --replay <file.csv> (runs the detector on such a file and prints
+// its events; no connection); plus the common ones (--help, --test-notification).
+
+using Trader.Core.Csv;
+using Trader.Core.Hosting;
+using Trader.Core.Logging;
+using Trader.Core.MarketData;
+using Trader.Core.OpenApi;
+using Trader.Scout;
+
+var configDir = TradebotPaths.Config;
+if (Array.IndexOf(args, "--config-dir") is var dirIndex and >= 0)
+{
+    if (dirIndex + 1 >= args.Length)
+    {
+        Console.Error.WriteLine("--config-dir needs a folder");
+        return BotRunner.ExitUsage;
+    }
+    configDir = args[dirIndex + 1];
+}
+var dryRun = args.Contains("--dry-run");
+var testOrder = args.Contains("--test-order");
+var candlesAt = Array.IndexOf(args, "--candles");
+if (candlesAt >= 0 && candlesAt + 4 >= args.Length)
+{
+    Console.Error.WriteLine("--candles needs <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv>");
+    return BotRunner.ExitUsage;
+}
+
+if (Array.IndexOf(args, "--replay") is var replayAt and >= 0)
+{
+    if (replayAt + 1 >= args.Length)
+    {
+        Console.Error.WriteLine("--replay needs <file.csv>");
+        return BotRunner.ExitUsage;
+    }
+    var detector = new Detector();
+    foreach (var c in CandleFile.Read(args[replayAt + 1]))
+        foreach (var e in detector.Add(c))
+            Console.WriteLine($"{e.CandleUtc:yyyy-MM-dd HH:mm} {e.Kind,-14} {(e.Dir == 1 ? "BUY " : "SELL")} {e.Level:0.#####} far {e.FarSide:0.#####} pause {e.PauseStartUtc:MM-dd HH:mm} {e.Reason}");
+    return BotRunner.ExitOk;
+}
+
+ScoutConfig config;
+try
+{
+    config = ScoutConfig.Load(Path.Combine(configDir, ScoutConfig.FileName));
+}
+catch (ScoutConfigException ex)
+{
+    Console.Error.WriteLine($"Config problem: {ex.Message}");
+    return BotRunner.ExitFatal;
+}
+
+return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
+{
+    if (candlesAt >= 0)
+    {
+        await CandlesAsync(bot, config.Accounts[0], args[candlesAt + 1], args[candlesAt + 2], DateTime.Parse(args[candlesAt + 3], null,
+            System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal), args[candlesAt + 4], ct);
+        return;
+    }
+    if (testOrder)
+    {
+        await TestOrderAsync(bot, config.Accounts[0], ct);
+        return;
+    }
+
+    string Folder(ScoutAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
+    string DayFile(ScoutAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
+
+    var events = new CsvEventSink();
+    var registry = new InstanceRegistry(TradebotPaths.Instances, bot.Identity, bot.Log);
+    var writers = new List<DailyCsvWriter>();
+    var scouts = new List<AccountScout>();
+    foreach (var a in config.Accounts)
+    {
+        var eventsCsv = new DailyCsvWriter(d => DayFile(a, d, "events.csv"), CsvEventSink.Header);
+        var setupsCsv = new DailyCsvWriter(d => DayFile(a, d, "setups.csv"), AccountScout.SetupsHeader);
+        var ordersCsv = new DailyCsvWriter(d => DayFile(a, d, "orders.csv"), AccountScout.OrdersHeader);
+        writers.AddRange([eventsCsv, setupsCsv, ordersCsv]);
+        events.AddAccount(a.AccountId, eventsCsv);
+        registry.Register(a.Broker, a.AccountId, a.Charts.Select(c => c.Symbol).Distinct().ToList());
+        var state = ScoutState.Load(Path.Combine(TradebotPaths.Root, "run", "scout", $"{a.Broker}-{a.AccountId}.json"));
+        scouts.Add(new AccountScout(a, config, bot.Identity, bot.Log, bot.Notify, registry, state, setupsCsv, ordersCsv, dryRun));
+        bot.Log.Information("{Broker} (account {Ctid}): {Charts}; {Roles} remembered setup order(s) → {Folder}",
+            a.Broker, a.AccountId, string.Join(", ", a.Charts.Select(c => $"{c.Symbol} {c.Timeframe} {c.Mode}")), state.Roles.Count, Folder(a));
+    }
+    bot.LogTap.Add(events);
+    var s = config.SetupSettings;
+    bot.Log.Information("Setup (Scout spec §3.2): strong {Push}×ATR, move {Move}×ATR, pause {Min}–{Max} candles, ≤ {H}×ATR, pull-back ≤ {R}, reversal after {Rev}, turn {Flip}×ATR / {Ch} candles, level {Level}",
+        s.PushBody, s.MinMove, s.MinPause, s.MaxPause, s.MaxPauseHeight, s.MaxRetrace, s.ReversalAfter, s.FlipAtr, s.Channel, s.Level);
+    bot.Log.Information("Orders: {Lots} lot, stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
+        config.Lots, config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
+
+    bot.Connection.MessageReceived += m =>
+    {
+        foreach (var scout in scouts)
+            scout.OnMessage(m);
+    };
+
+    bot.Connection.OnReady = async (session, accounts, _) =>
+    {
+        foreach (var a in config.Accounts.Where(a => accounts.Any(x => x.CtidTraderAccountId == a.AccountId)))
+        {
+            var log = bot.Log.ForAccount(a.AccountId);
+            var catalog = await SymbolCatalog.LoadAsync(session, a.AccountId);
+            var symbols = await catalog.GetDetailsAsync(session, a.BrokerSymbolNames);
+            foreach (var missing in a.BrokerSymbolNames.Where(n => symbols.All(x => x.Name != n.Key)))
+                log.Event("SymbolMissing").Warning("{Broker}: symbol {Symbol} not found; its charts are skipped", a.Broker, missing.Key);
+            scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, symbols);
+            log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
+        }
+    };
+
+    bot.Notify.Info("Started", "Scout started", $"{string.Join(", ", config.Accounts.Select(a => a.Broker))}{(dryRun ? " (dry run)" : "")}");
+    try
+    {
+        await BotRunner.RunTogetherAsync(ct, [registry.RunAsync, bot.Connection.RunAsync, .. scouts.Select(x => (Func<CancellationToken, Task>)x.RunAsync)]);
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+    {
+        bot.Notify.Warning("Stopped", "Scout stopped", "Its pending orders stay on the server and expire by themselves; TM manages the filled ones.");
+        throw;
+    }
+    catch (Exception ex)
+    {
+        bot.Notify.Critical("Stopped", "Scout stopped with an error", $"{ex.Message}. Pending orders stay on the server and expire by themselves.");
+        throw;
+    }
+    finally
+    {
+        registry.Dispose();
+        events.Dispose();
+        foreach (var w in writers)
+            w.Dispose();
+    }
+}, new BotOptions { AccountIds = testOrder || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
+
+// One far-away EURUSD Buy Stop (0.01 lot, 3 % above the price) with stop-loss, trailing switch and a 1-hour expiry:
+// checks that the server accepts and keeps all three (scout.md §5), then cancels it.
+static async Task TestOrderAsync(BotContext bot, ScoutAccount a, CancellationToken ct)
+{
+    var done = new TaskCompletionSource();
+    bot.Connection.OnReady = async (session, _, _) =>
+    {
+        try
+        {
+            var catalog = await SymbolCatalog.LoadAsync(session, a.AccountId);
+            var sym = (await catalog.GetDetailsAsync(session, new Dictionary<string, string> { ["EURUSD"] = "EURUSD" })).Single();
+            var last = (await session.GetTrendbarsAsync(a.AccountId, sym.SymbolId, ProtoOATrendbarPeriod.H1, DateTime.UtcNow.AddDays(-5), DateTime.UtcNow))[^1];
+            var price = Math.Round(last.Close * 1.03, sym.Digits);
+            var sl = Math.Round(last.Close * 1.02, sym.Digits);
+            var expires = DateTime.UtcNow.AddHours(1);
+            var order = await session.PlacePendingOrderAsync(a.AccountId, sym.SymbolId, ProtoOAOrderType.Stop, ProtoOATradeSide.Buy, sym.VolumeForLots(0.01),
+                price, sl, null, bot.Identity.Label("TEST"), Guid.NewGuid().ToString("N")[..16], "Scout test order", TimeSpan.FromSeconds(10),
+                trailingStopLoss: true, expiresUtc: expires);
+            var seen = (await session.ReconcileAsync(a.AccountId)).Order.Single(o => o.OrderId == order.OrderId);
+            bot.Log.Information("Test order {OrderId}: Buy Stop {Price}, SL {Sl}, trailing {Trailing}, time in force {Tif}, expires {Expires:yyyy-MM-dd HH:mm:ss}Z, label {Label}",
+                seen.OrderId, seen.StopPrice, seen.StopLoss, seen.TrailingStopLoss, seen.TimeInForce,
+                DateTimeOffset.FromUnixTimeMilliseconds(seen.ExpirationTimestamp).UtcDateTime, seen.TradeData.Label);
+            await session.CancelOrderAsync(a.AccountId, order.OrderId, TimeSpan.FromSeconds(10));
+            bot.Log.Information("Test order {OrderId} cancelled", order.OrderId);
+            done.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            done.TrySetException(ex);
+        }
+    };
+    await BotRunner.RunTogetherAsync(ct, [bot.Connection.RunAsync, async c => await done.Task.WaitAsync(c)]);
+}
+
+// Closed candles of one symbol from the first account, oldest first, as CSV (time_utc,open,high,low,close), in
+// 30-day requests. For the detector tests and the trial review (scout.md §5).
+static async Task CandlesAsync(BotContext bot, ScoutAccount a, string symbol, string tf, DateTime fromUtc, string file, CancellationToken ct)
+{
+    var done = new TaskCompletionSource();
+    bot.Connection.OnReady = async (session, _, _) =>
+    {
+        try
+        {
+            var catalog = await SymbolCatalog.LoadAsync(session, a.AccountId);
+            var name = a.SymbolNames?.GetValueOrDefault(symbol) ?? symbol;
+            var sym = (await catalog.GetDetailsAsync(session, new Dictionary<string, string> { [symbol] = name })).Single();
+            var len = Timeframes.Length(tf);
+            var now = DateTime.UtcNow;
+            var all = new SortedDictionary<DateTime, Candle>();
+            for (var from = fromUtc; from < now; from += TimeSpan.FromDays(30))
+            {
+                foreach (var c in await session.GetTrendbarsAsync(a.AccountId, sym.SymbolId, Timeframes.Period(tf), from, Min(from + TimeSpan.FromDays(30), now)))
+                    if (c.OpenUtc + len <= now)
+                        all[c.OpenUtc] = c;
+                await Task.Delay(300, ct);
+            }
+            var f = "F" + sym.Digits;
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            File.WriteAllLines(file, ["time_utc,open,high,low,close", .. all.Values.Select(c =>
+                $"{CsvFormat.Time(c.OpenUtc)},{c.Open.ToString(f, inv)},{c.High.ToString(f, inv)},{c.Low.ToString(f, inv)},{c.Close.ToString(f, inv)}")]);
+            bot.Log.Information("{Count} {Symbol} {Tf} candles → {File}", all.Count, symbol, tf, file);
+            done.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            done.TrySetException(ex);
+        }
+    };
+    await BotRunner.RunTogetherAsync(ct, [bot.Connection.RunAsync, async c => await done.Task.WaitAsync(c)]);
+}
+
+static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
