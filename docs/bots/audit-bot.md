@@ -4,8 +4,8 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 
 | Item | Value |
 |---|---|
-| Status | **Built and finished; running** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7) |
-| Document version | v1.2 (27-Oct-2026) — history in §10 |
+| Status | **Built and finished; running, no longer started at login** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7); testing judged enough by the owner on 03-Nov-2026, so `trader-auditbot` is disabled at boot and stops at the next reboot (§6) |
+| Document version | v1.3 (03-Nov-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
@@ -235,8 +235,8 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 
 **Services** (installed by the deploy scripts; see [shared §3](../shared.md#3-machine-and-services) for the laptop settings):
 
-- `trader-auditbot` — a systemd user service (`deploy/trader-auditbot.service`) running the published Release build in `~/tradebot/bin/AuditBot/`, so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs (it does not restart). Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal.
-- `trader-auditreport.timer` — daily at 00:15 UTC (catches up after the laptop was off), starting `trader-auditreport.service` with the published build in `~/tradebot/bin/AuditReport/`; `scripts/deploy-auditreport.sh` publishes, installs and enables it.
+- `trader-auditbot` — a systemd user service (`deploy/trader-auditbot.service`) running the published Release build in `~/tradebot/bin/AuditBot/`, so code changes never affect the running bot; `scripts/deploy-auditbot.sh` publishes and installs (it does not restart). Restarts 30 s after a crash; does not restart after a fatal problem the bot reports itself (exit 1/2 — needs a human). Console output in the journal. **Disabled since 03-Nov-2026** (owner): not started at login any more; the running copy carries on until it is stopped or the laptop restarts. Start it by hand with `systemctl --user start trader-auditbot`, or again at every login with `systemctl --user enable trader-auditbot`.
+- `trader-auditreport.timer` — daily at 00:15 UTC (catches up after the laptop was off), starting `trader-auditreport.service` with the published build in `~/tradebot/bin/AuditReport/`; `scripts/deploy-auditreport.sh` publishes, installs and enables it. Still enabled: it makes the reports for the days the bot ran and finds nothing to do after.
 - **During the audit run, the bot is not stopped or restarted, and nothing in `~/tradebot/logs` is deleted, without the owner's OK.**
 
 ## 7. Build steps and the audit run
@@ -289,3 +289,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Sections 6, 7, 8.1) and the former Audit Bot page. Content unchanged |
 | v1.1 | 24 Oct 2026 | **12 more symbols** (owner): USDJPY, GBPUSD, SOLUSD, XAUUSD, XAGUSD, XPTUSD, XTIUSD, XBRUSD, XNGUSD, US500, USTEC, DE40 — top three per market offered at both brokers with the same lot size (§2.1); Pepperstone name map; per-symbol alert limits (estimates, §2.4); probe summary line `crypto` renamed `non-forex`. TM unchanged. Takes effect at the next restart of `trader-auditbot`; the audit run's data for the first six symbols continues |
 | v1.2 | 27 Oct 2026 | **Probe waits survive a suspended laptop** (§2.2): `ProbeRunner` waits in ≤ 30 s steps on the wall clock instead of one long timer, which had kept the bot from probing for two days after the 24–26 Oct sleep. Gap recorded in §7; open item to keep the laptop awake (§9). 3 new tests. Takes effect at the next restart of `trader-auditbot` |
+| v1.3 | 03 Nov 2026 | **Not started at login any more** (owner: enough testing done): `systemctl --user disable trader-auditbot`; the running bot (AuditBot-62828b) was not stopped and carries on until the next reboot. Daily report timer unchanged (§6). No code change |
