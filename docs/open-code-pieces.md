@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by the Audit Bot and TM |
-| Document version | v1.7 (03-Nov-2026) — history in §10 |
+| Document version | v1.8 (03-Nov-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -122,3 +122,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.5 | 23 Oct 2026 | Replay on Windows (§3): optional `CTRADER_CA_FILE` (replay only) names the replay broker's certificate authority; `ReplayClient` (own TLS client, trusts only that authority) is used for it instead of Spotware's `OpenClient`, so TM runs against Rewind on Windows too without importing a certificate. Demo connections unchanged |
 | v1.6 | 24 Oct 2026 | Ownership rule (§4): TM's exception now covers the labels in its take-over list ([TM v1.6](bots/tm.md#21-take-over-list-v16-owner-24-oct-2026)); default unchanged (unlabelled only). No code change here |
 | v1.7 | 03 Nov 2026 | `PlacePendingOrderAsync` takes two optional arguments, for [Scout](bots/scout.md): `trailingStopLoss` (the position's stop-loss trails once it fills) and `expiresUtc` (good till date: the server cancels the order then). Checked on IC Markets demo (scout.md §6 step 2). Existing calls unchanged |
+| v1.8 | 03 Nov 2026 | A request sent while the connection closes now fails with an `IOException` ("Connection closed while sending …") instead of the library's `ChannelClosedException`, so the bots' loops retry it after the reconnect. Before, TM and Scout stopped with exit code 3 on the 17:58Z network drop of 03-Nov-2026 and systemd restarted them 30 s later ([scout.md §7](bots/scout.md#7-decisions-and-open-items)) |

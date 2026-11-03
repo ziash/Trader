@@ -5,7 +5,7 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 | Item | Value |
 |---|---|
 | Status | **Built and finished; running, no longer started at login** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7); testing judged enough by the owner on 03-Nov-2026, so `trader-auditbot` is disabled at boot and stops at the next reboot (§6) |
-| Document version | v1.3 (03-Nov-2026) — history in §10 |
+| Document version | v1.4 (03-Nov-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
@@ -290,3 +290,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | v1.1 | 24 Oct 2026 | **12 more symbols** (owner): USDJPY, GBPUSD, SOLUSD, XAUUSD, XAGUSD, XPTUSD, XTIUSD, XBRUSD, XNGUSD, US500, USTEC, DE40 — top three per market offered at both brokers with the same lot size (§2.1); Pepperstone name map; per-symbol alert limits (estimates, §2.4); probe summary line `crypto` renamed `non-forex`. TM unchanged. Takes effect at the next restart of `trader-auditbot`; the audit run's data for the first six symbols continues |
 | v1.2 | 27 Oct 2026 | **Probe waits survive a suspended laptop** (§2.2): `ProbeRunner` waits in ≤ 30 s steps on the wall clock instead of one long timer, which had kept the bot from probing for two days after the 24–26 Oct sleep. Gap recorded in §7; open item to keep the laptop awake (§9). 3 new tests. Takes effect at the next restart of `trader-auditbot` |
 | v1.3 | 03 Nov 2026 | **Not started at login any more** (owner: enough testing done): `systemctl --user disable trader-auditbot`; the running bot (AuditBot-62828b) was not stopped and carries on until the next reboot. Daily report timer unchanged (§6). No code change |
+| v1.4 | 03 Nov 2026 | **Crash and automatic restart 17:36:50Z**: `System.Diagnostics.Process` could not be loaded — the .NET runtime (now 10.0.14) had been updated on disk under the 4-day-old process, and new bot instances (Scout's first runs) made the instance registry load that file for the first time. Exit code 3; systemd restarted it 30 s later as AuditBot-992f56 (≈ 30 s without data). Lesson: restart the bots after a .NET update. Not redeployed (its build has no fix to take) |

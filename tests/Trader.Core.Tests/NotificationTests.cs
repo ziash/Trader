@@ -155,7 +155,9 @@ public sealed class NotificationTests : IDisposable
         var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "config", NotificationConfig.FileName);
         var c = NotificationConfig.Load(path);
         Assert.Equal(60, c.RepeatSeconds);
-        Assert.Equal("desktop", Assert.Single(c.Channels!).Type);
+        Assert.All(c.Channels!, ch => Assert.Equal("desktop", ch.Type));
+        // Warnings from every bot; Scout's placed orders and Watch-mode setups as Info (scout.md §3)
+        Assert.Equal([NotificationLevel.Warning, NotificationLevel.Info], c.Channels!.Select(ch => ch.MinLevel));
     }
 
     [Theory]

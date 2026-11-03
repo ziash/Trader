@@ -113,7 +113,8 @@ internal sealed class AccountScout(
             _loaded = true;
         }
 
-        HandleExecutions();
+        if (HandleExecutions() && !dryRun)
+            state.Save(DateTime.UtcNow);
 
         var now = DateTime.UtcNow;
         foreach (var chart in _charts)
@@ -227,12 +228,17 @@ internal sealed class AccountScout(
             if (KeyOf(o.TradeData.Label, o.TradeData.SymbolId) is { } k)
                 ourOrders[k] = o;
         var ourPositions = new Dictionary<string, ProtoOAPosition>();
+        var changed = false;
         foreach (var p in rec.Position)
             if (KeyOf(p.TradeData.Label, p.TradeData.SymbolId) is { } k)
             {
                 ourPositions[k] = p;
                 if (state.Roles.TryGetValue(k, out var r) && r.PositionId is null)
+                {
                     r.PositionId = p.PositionId;
+                    r.Result = "filled";
+                    changed = true;
+                }
             }
 
         var wants = new Dictionary<string, Want>();
@@ -263,7 +269,6 @@ internal sealed class AccountScout(
             await CancelAsync(session, key, order, reason);
         }
 
-        var changed = false;
         foreach (var want in wants.Values)
         {
             if (state.Roles.ContainsKey(want.Key) || ourOrders.ContainsKey(want.Key) || ourPositions.ContainsKey(want.Key))
@@ -375,8 +380,10 @@ internal sealed class AccountScout(
     }
 
     // ── Execution events: fills, expiries and closes of what Scout started (for the review, Scout spec §4.6) ────────
-    private void HandleExecutions()
+    /// <returns>True when the memory changed (a fill).</returns>
+    private bool HandleExecutions()
     {
+        var changed = false;
         while (_executions.TryDequeue(out var e))
         {
             var now = DateTime.UtcNow;
@@ -390,6 +397,7 @@ internal sealed class AccountScout(
                         {
                             r.PositionId = e.Position.PositionId;
                             r.Result = "filled";
+                            changed = true;
                         }
                         var slip = (e.Deal.ExecutionPrice - o.StopPrice) * (o.TradeData.TradeSide == ProtoOATradeSide.Buy ? 1 : -1) / s.PipSize;
                         ExecRow(now, s, parts, "filled", o, e.Position.PositionId, Num(e.Deal.ExecutionPrice, s), CsvFormat.Num(slip, 1), "", "", "");
@@ -428,6 +436,7 @@ internal sealed class AccountScout(
                     account.Broker, ps.Name, deal.PositionId, Lots(ps, deal.FilledVolume), Num(deal.ExecutionPrice, ps), Money(close.GrossProfit), net);
             }
         }
+        return changed;
     }
 
     private void ExecRow(DateTime now, SymbolInfo s, string[] parts, string action, ProtoOAOrder o, long? positionId, string fill, string slip, string gross, string net, string detail) =>

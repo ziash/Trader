@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, 0.1 lot, six symbols on both demos; review after one week (≈ 10-Nov-2026) |
-| Document version | v1.0 (03-Nov-2026) — history in §8 |
+| Document version | v1.1 (03-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account) |
 | Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
@@ -96,7 +96,8 @@ By hand (stop the service first, so only one Scout acts): `dotnet run --project 
 
 Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 
-- Not yet seen on a demo: a Scout order **filled** and taken over by TM (mirror at the same price, hedges at the stop-loss, trailing from break-even); the first fills of the trial will show it.
+- **Seen on both demos, 03-Nov-2026 17:46Z:** the first Scout orders (GBPJPY 1H Buy Stop 212.686 / 212.683) filled and TM took them over: mirror filled at the same price, both hedges at Scout's stop-loss, "trailing stops from break-even".
+- **Network drop 03-Nov-2026 ≈ 17:57–17:59Z:** Scout and TM stopped with exit code 3 (`ChannelClosedException` from a request in flight); systemd restarted both after 30 s and both picked up their state (TM's two GBPJPY trades, Scout's orders). Fixed in Trader.Core ([Open Code Pieces](../open-code-pieces.md) v1.8): such a request now fails as an I/O error and is retried after the reconnect.
 - The laptop suspends: no candles, no orders while asleep; pending orders stay on the server and expire. Same as TM (audit-bot.md §9 keeps-awake item).
 - A Buy Stop triggers on the ask, the detector reads bid candles: a real fill can come a little before the detector sees the level reached. One cancels the other uses the real fill.
 
@@ -105,3 +106,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 03 Nov 2026 | First issue: Scout built (detector, Trade/Watch modes, orders with stop-loss, trailing and expiry, one cancels the other, logs) and started on both demos for a one-week trial with TM; `"Scout-"` added to TM's `takeOver` ([TM](tm.md) v1.7) |
+| v1.1 | 03 Nov 2026 | First fills seen and taken over by TM (§7); Scout saves its memory right after a fill (before: only with the next order); dropped-connection fix in Trader.Core (open-code-pieces v1.8) deployed with TM and Scout |

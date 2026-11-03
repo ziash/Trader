@@ -85,9 +85,12 @@ public sealed class TakeOverTests
     }
 
     [Fact]
-    public void Repo_config_takes_over_only_the_owners_trades()
+    public void Repo_config_takes_over_the_owners_trades_and_Scouts_orders()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "config", TmConfig.FileName);
-        Assert.Equal([""], TmConfig.Load(path).TakeOverLabels);
+        var config = TmConfig.Load(path);
+        Assert.Equal(["", "Scout-"], config.TakeOverLabels); // tm.md decision 12
+        Assert.True(config.TakesOver("Scout-3f9a1c-H1-202611031500-M"));
+        Assert.False(config.TakesOver("AuditBot-3f9a1c"));
     }
 }

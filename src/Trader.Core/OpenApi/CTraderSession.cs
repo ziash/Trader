@@ -455,6 +455,12 @@ public sealed class CTraderSession : IAsyncDisposable
         {
             throw new TimeoutException($"No reply to {name} within {wait.TotalSeconds:0} s");
         }
+        catch (System.Threading.Channels.ChannelClosedException ex)
+        {
+            // The connection closed while this request was going out (e.g. the network dropped): an I/O problem the
+            // bots retry after the reconnect, not a bug that stops them (scout.md §7, 03-Nov-2026).
+            throw new IOException($"Connection closed while sending {name}", ex);
+        }
         finally
         {
             _pending.TryRemove(id, out _);
