@@ -67,14 +67,16 @@ public static class OrderChart
                 sb.Append($"<text x=\"{N(endX + 6)}\" y=\"{N(y + 4)}\" font-size=\"11\" fill=\"{Muted}\">{Price(v, p)}</text>\n");
         }
 
-        // A line and the date at each new day.
-        for (var i = 0; i < shown.Count; i++)
-            if (i > 0 && shown[i].OpenUtc.Date != shown[i - 1].OpenUtc.Date)
-            {
-                var x = Left + i * slot;
-                sb.Append($"<line x1=\"{N(x)}\" x2=\"{N(x)}\" y1=\"{N(Top)}\" y2=\"{N(H - Bottom)}\" stroke=\"{Grid}\"/>\n");
-                sb.Append($"<text x=\"{N(x + 3)}\" y=\"{N(H - 7)}\" font-size=\"11\" fill=\"{Muted}\">{shown[i].OpenUtc.ToString("dd MMM", CultureInfo.InvariantCulture)}</text>\n");
-            }
+        // A line and the date at each new day; a date too close to the next one (a short day before a weekend gap) is left out.
+        var days = Enumerable.Range(1, Math.Max(0, shown.Count - 1)).Where(i => shown[i].OpenUtc.Date != shown[i - 1].OpenUtc.Date).ToList();
+        for (var k = 0; k < days.Count; k++)
+        {
+            var x = Left + days[k] * slot;
+            sb.Append($"<line x1=\"{N(x)}\" x2=\"{N(x)}\" y1=\"{N(Top)}\" y2=\"{N(H - Bottom)}\" stroke=\"{Grid}\"/>\n");
+            if (k + 1 < days.Count && (days[k + 1] - days[k]) * slot < 48)
+                continue;
+            sb.Append($"<text x=\"{N(x + 3)}\" y=\"{N(H - 7)}\" font-size=\"11\" fill=\"{Muted}\">{shown[days[k]].OpenUtc.ToString("dd MMM", CultureInfo.InvariantCulture)}</text>\n");
+        }
 
         // The pause: from its first candle to the moment of the order, between its high and low.
         var ps = shown.FindIndex(c => c.OpenUtc >= p.PauseStartUtc);

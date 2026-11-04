@@ -512,7 +512,8 @@ internal sealed class AccountScout(
                 continue;
             }
             var p = new OrderPicture(s.Name, o.Timeframe, s.Digits, s.PipSize, account.Broker, account.AccountId, o.OrderId, o.Dir, o.Reversal,
-                o.Price, o.StopLoss, o.TimeUtc, o.ExpiresUtc ?? o.TimeUtc + config.ExpiryCandles * chart.Length, o.SetupUtc, chart.HigherTimeframe, o.WithHigher);
+                o.Price, o.StopLoss, o.TimeUtc, o.ExpiresUtc ?? o.TimeUtc + config.ExpiryCandles * chart.Length, o.SetupUtc, chart.HigherTimeframe,
+                o.WithHigher != "unknown" ? o.WithHigher : TaggedEvent.Compare(chart.HigherTrendAt(o.TimeUtc), o.Dir));
             if (DrawChart(chart, p) is not { Length: > 0 } path)
                 continue;
             record.Chart = path;
@@ -530,11 +531,7 @@ internal sealed class AccountScout(
             state.Save(DateTime.UtcNow);
     }
 
-    private static string WithHigher(Want w)
-    {
-        var t = w.Chart.Higher?.Trend ?? 0;
-        return t == 0 ? "unknown" : t == w.Dir ? "with" : "against";
-    }
+    private static string WithHigher(Want w) => TaggedEvent.Compare(w.Chart.Higher?.Trend ?? 0, w.Dir);
 
     private static string SetupTime(string compact) =>
         DateTime.TryParseExact(compact, "yyyyMMddHHmm", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t)

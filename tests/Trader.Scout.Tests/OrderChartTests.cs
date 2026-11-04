@@ -111,6 +111,25 @@ public sealed class OrderChartTests
     }
 
     [Fact]
+    public void Higher_trend_worked_out_later_matches_what_Scout_saw_live()
+    {
+        var h1 = CandleFile.Read(Path.Combine(AppContext.BaseDirectory, "Data", "EURUSD-H1.csv"));
+        var h4 = h1.GroupBy(c => c.OpenUtc.Date.AddHours(c.OpenUtc.Hour / 4 * 4))
+            .Select(g => new Candle(g.Key, g.First().Open, g.Max(c => c.High), g.Min(c => c.Low), g.Last().Close)).ToList();
+        var tracker = new ChartTracker(new ScoutChart("EURUSD", "H1"), new DetectorSettings());
+        var live = new List<(DateTime Now, int Trend)>();
+        foreach (var c in h1)
+        {
+            var now = c.OpenUtc.AddHours(1).AddSeconds(10);
+            tracker.Feed(h1.Where(x => x.OpenUtc <= c.OpenUtc).TakeLast(3).ToList(), h4.Where(x => x.OpenUtc <= c.OpenUtc).TakeLast(2).ToList(), now);
+            live.Add((now, tracker.Higher!.Trend));
+        }
+        Assert.Contains(live, x => x.Trend == 1);
+        Assert.Contains(live, x => x.Trend == -1);
+        Assert.All(live.Where((_, i) => i % 7 == 0), x => Assert.Equal(x.Trend, tracker.HigherTrendAt(x.Now)));
+    }
+
+    [Fact]
     public void The_picture_path_survives_a_restart()
     {
         var path = Path.Combine(Path.GetTempPath(), $"scout-state-{Guid.NewGuid():N}.json");

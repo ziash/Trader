@@ -6,7 +6,10 @@ namespace Trader.Scout;
 public sealed record TaggedEvent(SetupEvent Event, int HigherTrend)
 {
     /// <summary>"with", "against" or "unknown": the order's side compared with the higher timeframe's trend.</summary>
-    public string WithHigher => HigherTrend == 0 ? "unknown" : HigherTrend == Event.Dir ? "with" : "against";
+    public string WithHigher => Compare(HigherTrend, Event.Dir);
+
+    /// <summary>"with", "against" or "unknown" for an order side (+1 buy, −1 sell) and a higher-timeframe trend.</summary>
+    public static string Compare(int higherTrend, int dir) => higherTrend == 0 ? "unknown" : higherTrend == dir ? "with" : "against";
 }
 
 /// <summary>
@@ -22,6 +25,20 @@ public sealed class ChartTracker(ScoutChart chart, DetectorSettings settings)
     public string? HigherTimeframe => Timeframes.Higher(Chart.Timeframe);
 
     public TimeSpan Length => Timeframes.Length(Chart.Timeframe);
+
+    /// <summary>
+    /// The higher timeframe's trend as it stood at <paramref name="utc"/>, worked out again from its candles closed by
+    /// then (for pictures of earlier orders whose tag was not logged, scout.md §3.1). 0 when unknown.
+    /// </summary>
+    public int HigherTrendAt(DateTime utc)
+    {
+        if (Higher is null || HigherTimeframe is not { } h)
+            return 0;
+        var replay = new Detector(settings);
+        foreach (var c in Higher.Candles.Where(c => c.OpenUtc + Timeframes.Length(h) <= utc))
+            replay.Add(c);
+        return replay.Trend;
+    }
 
     /// <summary>
     /// Adds the closed candles that are newer than those already seen (the lists may overlap earlier ones and may
