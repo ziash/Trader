@@ -2,13 +2,16 @@ using System.Text.Json;
 
 namespace Trader.Scout;
 
-/// <summary>What Scout did for one setup role (scout.md §2.3): the order it placed (0 = not placed: refused, or Watch mode).</summary>
+/// <summary>What Scout did for one setup role (scout.md §2.3): the order it placed (0 = not placed: refused, or Watch mode) and its picture.</summary>
 public sealed class RoleRecord
 {
     public DateTime FirstSeenUtc { get; set; }
     public long OrderId { get; set; }
     public long? PositionId { get; set; }
     public string Result { get; set; } = "";
+
+    /// <summary>The order's picture, relative to ~/tradebot/logs (scout.md §3.1); null until drawn.</summary>
+    public string? Chart { get; set; }
 }
 
 /// <summary>

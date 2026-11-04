@@ -93,7 +93,7 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         events.AddAccount(a.AccountId, eventsCsv);
         registry.Register(a.Broker, a.AccountId, a.Charts.Select(c => c.Symbol).Distinct().ToList());
         var state = ScoutState.Load(Path.Combine(TradebotPaths.Root, "run", "scout", $"{a.Broker}-{a.AccountId}.json"));
-        scouts.Add(new AccountScout(a, config, bot.Identity, bot.Log, bot.Notify, registry, state, setupsCsv, ordersCsv, dryRun));
+        scouts.Add(new AccountScout(a, config, bot.Identity, bot.Log, bot.Notify, registry, state, setupsCsv, ordersCsv, Folder(a), dryRun));
         bot.Log.Information("{Broker} (account {Ctid}): {Charts}; {Roles} remembered setup order(s) → {Folder}",
             a.Broker, a.AccountId, string.Join(", ", a.Charts.Select(c => $"{c.Symbol} {c.Timeframe} {c.Mode}")), state.Roles.Count, Folder(a));
     }

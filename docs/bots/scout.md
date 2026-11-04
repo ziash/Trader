@@ -5,9 +5,9 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, 0.1 lot, six symbols on both demos; review after one week (≈ 10-Nov-2026) |
-| Document version | v1.1 (03-Nov-2026) — history in §8 |
-| Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account) |
-| Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events) |
+| Document version | v1.2 (04-Nov-2026) — history in §8 |
+| Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
+| Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
 | Symbols | Trial: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD on 1H — `config/scout.json` (TM must list the same symbols in `tm.json`) |
 | Bot name / labels | `Scout` — `Scout-<6hex>-<tf>-<pause start yyyyMMddHHmm>-M` (main stop) / `-R` (reversal stop), e.g. `Scout-3f9a1c-H1-202611031500-M` |
@@ -56,10 +56,27 @@ TM takes over orders whose label starts with `"Scout-"` (`takeOver` in `tm.json`
 | File | One row per |
 |---|---|
 | `setups.csv` | detector event: `NewStop`, `StopMoved`, `NewReversal`, `ReversalMoved`, `StopFilled`, `ReversalFilled`, `Cancelled` (with reason), `TrendTurned` — with level, far side, pause start, pause candles, pause height and move in ATR, pull-back, ATR, higher-timeframe trend and *with / against* |
-| `orders.csv` | order action or result: `place` (ok / refused), `cancel` (with reason), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode) |
+| `orders.csv` | order action or result: `place` (ok / refused), `cancel` (with reason), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode), `chart` (a picture drawn later for an earlier order, §3.1). Column `chart`: the order's picture (§3.1), on its `place` or `chart` row |
 | `events.csv` | every log line with an event name (shared format, open-code-pieces.md §8) |
+| `charts/*.svg` | one picture per order Scout placed (§3.1) |
 
 Pop-ups: "order placed" and Watch-mode setups (`notifications.json`: a desktop channel for Scout's `OrderPlaced` and `Setup`), refused orders and stops as warnings. TM's own `actions.csv` shows the mirrors, hedges and stops; its mirror labels carry Scout's order ID (`TM-…-O<orderId>-MIR`), which links the two logs for the trial review.
+
+### 3.1 Order pictures (owner, 04-Nov-2026)
+
+For a later web dashboard that shows Scout's entries by date: when Scout places an order (Trade mode, and in a dry run), it also draws a small picture of the chart as it stood at that moment.
+
+| Item | Value |
+|---|---|
+| Shows | The last 60 closed candles, the pause (shaded), the stop level and stop-loss (dashed, with price tags), the moment of the order and the room up to its expiry (right edge, grey). Title: symbol, timeframe, side, level, stop-loss and its distance in pips, main or reversal stop; under it: broker, account, placed and expiry times, higher-timeframe trend (*with / against*), order ID |
+| Candles | Scout's own, from the broker; only those closed by the moment of the order, so a picture drawn later is the same picture |
+| Format | SVG (a vector picture any web browser opens): 720 × 400, ≈ 13 KB, sharp at any size; numbers always with '.' |
+| File | `<date placed>/charts/<symbol>-<tf>-<pause start>-<M/R>-<order ID>.svg` in the instance's log folder, e.g. `brokerA/49123893/Scout-99c603/2026-11-03/charts/GBPJPY-H1-202611031500-M-1035054512.svg` |
+| Link | `orders.csv` column `chart`: the path relative to `~/tradebot/logs`, on the order's `place` row; the memory file keeps it too (`Chart`) |
+| Earlier orders | At start, after the history is loaded, Scout draws the missing pictures of the orders it remembers (from the same candles and the order's `place` row in any Scout log of the account) and writes a `chart` row for each in today's `orders.csv` — earlier log files are never changed |
+| Safety | Drawn only after the order is placed; a picture that cannot be drawn is logged (`ScoutChartError`) and skipped, never in the way of an order |
+
+TM's actions on the same order join by order ID (TM's mirror label `TM-…-O<orderId>-MIR`), so one picture serves both bots.
 
 ## 4. Run and operate
 
@@ -91,6 +108,7 @@ By hand (stop the service first, so only one Scout acts): `dotnet run --project 
 | 2 | Trader.Core: pending orders with trailing switch and expiry ([Open Code Pieces](../open-code-pieces.md) v1.7) | **Done 03-Nov-2026** — `--test-order` on IC Markets demo: Buy Stop with SL, trailing `True`, `GoodTillDate`, expiry kept by the server; cancelled |
 | 3 | Live loop, orders, one-cancels-other, memory, logs, pop-ups; service and deploy script | **Done 03-Nov-2026** — dry run on both demos: 30 days rebuilt on all 12 charts, the same GBPJPY Buy Stop found at both brokers |
 | 4 | Trial run with TM (Scout spec §4.6) | **Running from 03-Nov-2026** |
+| 5 | Order pictures (§3.1) | **Done 04-Nov-2026** — tests on real EURUSD and BTCUSD candles; the trial's earlier orders drawn at the next start |
 
 ## 7. Decisions and open items
 
@@ -107,3 +125,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 |---|---|---|
 | v1.0 | 03 Nov 2026 | First issue: Scout built (detector, Trade/Watch modes, orders with stop-loss, trailing and expiry, one cancels the other, logs) and started on both demos for a one-week trial with TM; `"Scout-"` added to TM's `takeOver` ([TM](tm.md) v1.7) |
 | v1.1 | 03 Nov 2026 | First fills seen and taken over by TM (§7); Scout saves its memory right after a fill (before: only with the next order); dropped-connection fix in Trader.Core (open-code-pieces v1.8) deployed with TM and Scout |
+| v1.2 | 04 Nov 2026 | Order pictures (§3.1, owner): an SVG chart of every Scout order next to the logs, linked from the new `chart` column of `orders.csv`; earlier orders drawn at start (`chart` rows) |

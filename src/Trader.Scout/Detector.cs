@@ -83,6 +83,8 @@ public sealed class Detector(DetectorSettings? settings = null)
     public DateTime? PauseStartUtc => _ps is { } ps ? _c[ps].OpenUtc : null;
     public DateTime? LastCandleUtc => _c.Count > 0 ? _c[^1].OpenUtc : null;
     public int Count => _c.Count;
+    /// <summary>Every closed candle added so far, oldest first (for the order pictures, scout.md §3.1).</summary>
+    public IReadOnlyList<Candle> Candles => _c;
 
     /// <summary>ATR of the last closed candle, or null while there are fewer than ATR-length candles.</summary>
     public double? Atr => _atr.Count > 0 ? _atr[^1] : null;

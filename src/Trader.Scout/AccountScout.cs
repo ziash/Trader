@@ -27,6 +27,7 @@ internal sealed class AccountScout(
     ScoutState state,
     DailyCsvWriter setupsCsv,
     DailyCsvWriter ordersCsv,
+    string logFolder,
     bool dryRun)
 {
     public static readonly string[] SetupsHeader =
@@ -38,7 +39,7 @@ internal sealed class AccountScout(
     public static readonly string[] OrdersHeader =
     [
         "time_utc", "symbol", "timeframe", "setup_utc", "role", "action", "side", "lots", "price_req", "stop_loss", "expires_utc",
-        "order_id", "position_id", "price_fill", "slip_pips", "gross", "net", "result", "detail",
+        "order_id", "position_id", "price_fill", "slip_pips", "gross", "net", "result", "detail", "chart",
     ];
 
     private static readonly TimeSpan Cycle = TimeSpan.FromSeconds(5);
@@ -111,6 +112,7 @@ internal sealed class AccountScout(
         {
             await LoadHistoryAsync(session, symbols);
             _loaded = true;
+            DrawMissingCharts(symbols);
         }
 
         if (HandleExecutions() && !dryRun)
@@ -318,7 +320,7 @@ internal sealed class AccountScout(
         var comment = $"{CTraderSession.SentComment(now)} Scout {s.Name} {w.Chart.Chart.Timeframe} {(w.Reversal ? "reversal" : "main")} {w.Chart.HigherTimeframe}:{WithHigher(w)}";
         if (dryRun)
         {
-            OrderRow(now, w, "place", 0, sl, expires, null, "dry run", label, volume);
+            OrderRow(now, w, "place", 0, sl, expires, null, "dry run", label, volume, DrawChart(w.Chart, Picture(w, 0, price, sl, now, expires)));
             _log.Information("{Broker} {Symbol}: would place {Side} Stop {Price} SL {Sl} ({Label})", account.Broker, s.Name, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), label);
             return;
         }
@@ -332,7 +334,8 @@ internal sealed class AccountScout(
                 trailingStopLoss: sl is not null, expiresUtc: expires);
             record.OrderId = order.OrderId;
             record.Result = "placed";
-            OrderRow(now, w, "place", order.OrderId, sl, expires, null, "ok", label, volume);
+            record.Chart = DrawChart(w.Chart, Picture(w, order.OrderId, price, sl, now, expires));
+            OrderRow(now, w, "place", order.OrderId, sl, expires, null, "ok", label, volume, record.Chart);
             _log.Event("ScoutOrder").Information("{Broker} {Symbol} {Tf}: placed {Side} Stop {Price} SL {Sl} {Lots} lot, expires {Expires:HH:mm}Z, order {OrderId} ({Label})",
                 account.Broker, s.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), config.Lots, expires, order.OrderId, label);
             notify.Info("OrderPlaced", $"Scout: {s.Name} {w.Chart.Chart.Timeframe} {Side(w.Dir)} Stop {Num(price, s)}",
@@ -375,7 +378,7 @@ internal sealed class AccountScout(
         ordersCsv.Write(now,
         [
             CsvFormat.Time(now), s.Name, parts[1], SetupTime(parts[2]), parts[3], "cancel", SideOf(order.TradeData.TradeSide), Lots(s, order.TradeData.Volume),
-            Num(order.StopPrice, s), order.HasStopLoss ? Num(order.StopLoss, s) : "", "", order.OrderId.ToString(CultureInfo.InvariantCulture), "", "", "", "", "", result, reason,
+            Num(order.StopPrice, s), order.HasStopLoss ? Num(order.StopLoss, s) : "", "", order.OrderId.ToString(CultureInfo.InvariantCulture), "", "", "", "", "", result, reason, "",
         ]);
     }
 
@@ -430,7 +433,7 @@ internal sealed class AccountScout(
                 [
                     CsvFormat.Time(now), ps.Name, parts[1], SetupTime(parts[2]), parts[3], "closed", SideOf(deal.TradeSide == ProtoOATradeSide.Buy ? ProtoOATradeSide.Sell : ProtoOATradeSide.Buy),
                     Lots(ps, deal.FilledVolume), "", "", "", deal.OrderId.ToString(CultureInfo.InvariantCulture), deal.PositionId.ToString(CultureInfo.InvariantCulture),
-                    Num(deal.ExecutionPrice, ps), "", CsvFormat.Num(Money(close.GrossProfit), digits), CsvFormat.Num(net, digits), "ok", "",
+                    Num(deal.ExecutionPrice, ps), "", CsvFormat.Num(Money(close.GrossProfit), digits), CsvFormat.Num(net, digits), "ok", "", "",
                 ]);
                 _log.Event("ScoutClosed").Information("{Broker} {Symbol}: position {PositionId} closed {Lots} lot at {Price}, gross {Gross}, net {Net}",
                     account.Broker, ps.Name, deal.PositionId, Lots(ps, deal.FilledVolume), Num(deal.ExecutionPrice, ps), Money(close.GrossProfit), net);
@@ -444,16 +447,88 @@ internal sealed class AccountScout(
         [
             CsvFormat.Time(now), s.Name, parts[1], SetupTime(parts[2]), parts[3], action, SideOf(o.TradeData.TradeSide), Lots(s, o.TradeData.Volume),
             Num(o.StopPrice, s), o.HasStopLoss ? Num(o.StopLoss, s) : "", "", o.OrderId.ToString(CultureInfo.InvariantCulture),
-            positionId?.ToString(CultureInfo.InvariantCulture) ?? "", fill, slip, gross, net, "ok", detail,
+            positionId?.ToString(CultureInfo.InvariantCulture) ?? "", fill, slip, gross, net, "ok", detail, "",
         ]);
 
-    private void OrderRow(DateTime now, Want w, string action, long orderId, double? sl, DateTime? expires, long? positionId, string result, string detail, long? volume = null) =>
+    private void OrderRow(DateTime now, Want w, string action, long orderId, double? sl, DateTime? expires, long? positionId, string result, string detail, long? volume = null, string? chart = null) =>
         ordersCsv.Write(now,
         [
             CsvFormat.Time(now), w.Sym.Name, w.Chart.Chart.Timeframe, CsvFormat.Time(w.PauseStart), w.Reversal ? "R" : "M", action, Side(w.Dir),
             volume is { } v ? Lots(w.Sym, v) : "", Num(w.Level, w.Sym), sl is { } x ? Num(x, w.Sym) : "", expires is { } ex ? CsvFormat.Time(ex) : "",
-            orderId == 0 ? "" : orderId.ToString(CultureInfo.InvariantCulture), positionId?.ToString(CultureInfo.InvariantCulture) ?? "", "", "", "", "", result, detail,
+            orderId == 0 ? "" : orderId.ToString(CultureInfo.InvariantCulture), positionId?.ToString(CultureInfo.InvariantCulture) ?? "", "", "", "", "", result, detail, chart ?? "",
         ]);
+
+    // ── Order pictures (scout.md §3.1): never in the way of an order ────────────────────────────────────────────────
+    private OrderPicture Picture(Want w, long orderId, double price, double? sl, DateTime placed, DateTime expires) =>
+        new(w.Sym.Name, w.Chart.Chart.Timeframe, w.Sym.Digits, w.Sym.PipSize, account.Broker, account.AccountId, orderId, w.Dir, w.Reversal,
+            price, sl, placed, expires, w.PauseStart, w.Chart.HigherTimeframe, WithHigher(w));
+
+    /// <summary>Writes the picture next to that day's logs; returns its path relative to ~/tradebot/logs, or "" when it could not be drawn.</summary>
+    private string DrawChart(ChartTracker chart, OrderPicture p)
+    {
+        try
+        {
+            var dir = Path.Combine(logFolder, p.PlacedUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "charts");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, OrderChart.FileName(p));
+            File.WriteAllText(path, OrderChart.Svg(p, chart.Main.Candles));
+            return Path.GetRelativePath(TradebotPaths.Logs, path).Replace('\\', '/');
+        }
+        catch (Exception ex)
+        {
+            _log.Event("ScoutChartError").Warning("{Broker} {Symbol}: no picture for order {OrderId}: {Message}", account.Broker, p.Symbol, p.OrderId, ex.Message);
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// Once after the history is loaded: pictures for remembered orders that have none (placed before pictures
+    /// existed, or while drawing failed), from the same candles and the order's place row in the logs. Each gets a
+    /// <c>chart</c> row in today's orders.csv, since earlier log files are never changed.
+    /// </summary>
+    private void DrawMissingCharts(Dictionary<string, SymbolInfo> symbols)
+    {
+        var missing = state.Roles.Where(r => r.Value.OrderId != 0 && string.IsNullOrEmpty(r.Value.Chart)).ToList();
+        if (missing.Count == 0)
+            return;
+        Dictionary<long, PlacedOrder> placed;
+        try
+        {
+            placed = OrderLog.ReadPlaced(Path.GetDirectoryName(logFolder)!);
+        }
+        catch (Exception ex)
+        {
+            _log.Event("ScoutChartError").Warning("{Broker}: could not read past orders for their pictures: {Message}", account.Broker, ex.Message);
+            return;
+        }
+        var drawn = 0;
+        foreach (var (key, record) in missing)
+        {
+            var parts = key.Split('|');
+            var chart = _charts.FirstOrDefault(c => c.Chart.Symbol == parts[0] && c.Chart.Timeframe == parts[1]);
+            if (chart is null || !symbols.TryGetValue(parts[0], out var s) || !placed.TryGetValue(record.OrderId, out var o))
+            {
+                _log.Event("ScoutChartSkipped").Information("{Broker}: no picture for order {OrderId} ({Key}): its chart or place row is missing", account.Broker, record.OrderId, key);
+                continue;
+            }
+            var p = new OrderPicture(s.Name, o.Timeframe, s.Digits, s.PipSize, account.Broker, account.AccountId, o.OrderId, o.Dir, o.Reversal,
+                o.Price, o.StopLoss, o.TimeUtc, o.ExpiresUtc ?? o.TimeUtc + config.ExpiryCandles * chart.Length, o.SetupUtc, chart.HigherTimeframe, o.WithHigher);
+            if (DrawChart(chart, p) is not { Length: > 0 } path)
+                continue;
+            record.Chart = path;
+            drawn++;
+            var now = DateTime.UtcNow;
+            ordersCsv.Write(now,
+            [
+                CsvFormat.Time(now), s.Name, o.Timeframe, CsvFormat.Time(o.SetupUtc), o.Reversal ? "R" : "M", "chart", Side(o.Dir), "", Num(o.Price, s),
+                o.StopLoss is { } sl ? Num(sl, s) : "", o.ExpiresUtc is { } ex ? CsvFormat.Time(ex) : "", o.OrderId.ToString(CultureInfo.InvariantCulture),
+                record.PositionId?.ToString(CultureInfo.InvariantCulture) ?? "", "", "", "", "", "ok", $"drawn later; placed {CsvFormat.Time(o.TimeUtc)}", path,
+            ]);
+        }
+        _log.Event("ScoutCharts").Information("{Broker}: drew {Drawn} of {Missing} missing order picture(s)", account.Broker, drawn, missing.Count);
+        if (drawn > 0 && !dryRun)
+            state.Save(DateTime.UtcNow);
+    }
 
     private static string WithHigher(Want w)
     {
