@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.7 (04-Nov-2026) — history in §10 |
+| Document version | v1.8 (05-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -17,6 +17,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`); can also trade replayed prices on Rewind | [bots/tm.md](bots/tm.md) |
 | **Scout** | Finds the owner's pause-then-stop setup on many charts and places the first stop order; TM manages it (setup rules: [Scout repository](https://github.com/ziash/Scout)) | Trial on demo from 03-Nov-2026 (`trader-scout`); IC Markets only, 18 symbols from 04-Nov | [bots/scout.md](bots/scout.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [bots/auto-bot.md](bots/auto-bot.md) |
+| **Dashboard** | Private web page at trader.uzlabz.com (Hostinger): Scout's setups and orders with pictures, TM's trades, accounts and trading conditions, bot status; steers Scout through an options catalogue; Google sign-in (owner, approved viewers), M2M sign-in (Claude) | Specified 05-Nov-2026; design brief for Claude Design; hosting ready | [dashboard.md](dashboard.md) |
 | **Open Code Pieces** | The reusable code all bots are built from | In use by the Audit Bot, TM and Scout | [open-code-pieces.md](open-code-pieces.md) |
 
 ## 2. Brokers and accounts
@@ -70,14 +71,19 @@ Runtime data lives outside the repo:
     tm.json                                                       TM
     news-releases.json                                            Audit Bot, TM (US NFP/CPI dates)
     notifications.json                                            all bots (Open Code Pieces §7)
+    scout-controls.json                                           Dashboard: options the web may set for Scout (dashboard.md §3.4)
+  control/                         Dashboard → Scout: <bot>-<broker>-<ctid>.json (your options, fetched every minute), .ack.json (Scout's reply)
+  dashboard/                       Dashboard: status.json, snapshots, scout-options.json — uploaded every 30 min (dashboard.md §3.1)
   run/instances/                   instance registry: <broker>-<ctid>-<instanceId>.json, <Bot>-<ctid>.primary.lock
   run/tm/<broker>-<ctid>.json      TM's remembered trades
   logs/<broker>/<ctid>/<instanceId>/<yyyy-MM-dd>/
                                    one folder per bot copy (AuditBot-…, TM-…) and UTC day:
                                    events.csv (every bot), spreads.csv + probes.csv (Audit Bot), actions.csv (TM)
+                                   Dashboard/<yyyy-MM-dd>/ beside the bot copies (fixed name): account.csv, deals.csv, conditions.csv (dashboard.md §3.3)
   reports/                         Audit Bot reports
   bin/<Bot> → <Bot>-<git hash>/    link to the published build the service runs; the last few builds beside it (§3)
 ~/.config/trader/secrets.env       secrets (600)
+~/.config/trader/hostinger_ed25519, hostinger_known_hosts, dashboard.env, dashboard-m2m.env   Dashboard upload key and settings, Claude's M2M secret (600)
 ```
 
 **CSV format** (every bot's logs and reports):
@@ -174,6 +180,16 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | Median / 95th percentile | The middle value / the value that 95 % of readings are at or below — shows typical and near-worst cases while ignoring rare extremes. |
 | Open Code Pieces | The reusable code every bot is built from (`src/Trader.Core`): [open-code-pieces.md](open-code-pieces.md). |
 | Project document | Each bot's own document in `docs/bots/`: goal, rules, decisions, open items and history, with its own version number. |
+| SSH / rsync | SSH: an encrypted connection to another computer, here signed in with a key file instead of a password. rsync: a copy tool that sends only the files (and parts) that changed. The dashboard's upload uses both. |
+| PHP | The programming language web hosts such as Hostinger run for web pages; the dashboard's site is written in it. |
+| Subdomain | A name under a domain, e.g. trader.uzlabz.com under uzlabz.com, with its own folder of pages. |
+| HTTPS / SSL certificate | Encrypted web traffic; the certificate proves the site is the real one (the padlock in the browser). |
+| API / JSON | API: an address programs call instead of reading pages. JSON: the plain-text format of its answers (and of the bots' config files). |
+| Sign in with Google (OAuth / OpenID Connect) | Google checks the person and tells the site only their verified e-mail address; the site keeps no passwords. |
+| M2M sign-in | Machine-to-machine: a program (e.g. Claude) signs in with a client ID and secret and gets a short-lived token, instead of a person signing in. |
+| Hash | A one-way scrambled form of a secret: enough to check it, impossible to read it back. |
+| Session cookie | A small token the browser keeps after sign-in and sends with each page, so you stay signed in. |
+| Options catalogue | The laptop's list of options the dashboard may set for a bot, with the values allowed (dashboard.md §3.4). |
 
 ## 10. History
 
@@ -188,3 +204,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.5 | 03 Nov 2026 | Scout added to the projects (§1); Audit Bot no longer started at login (audit-bot.md v1.3) |
 | v1.6 | 04 Nov 2026 | §3, §5: deploy scripts publish each build into its own folder `~/tradebot/bin/<Bot>-<git hash>` and switch the link `~/tradebot/bin/<Bot>` to it; a running bot's files are never overwritten, moved or deleted (Scout's crash on stop, scout.md v1.3). Glossary: link |
 | v1.7 | 04 Nov 2026 | §1: Audit Bot's audit run over and the bot stopped (audit-bot.md v1.5); Scout on IC Markets only with 18 symbols (scout.md v1.4) |
+| v1.8 | 05 Nov 2026 | Dashboard added to the projects (§1, [dashboard.md](dashboard.md) v1.3); its folders and credential files (§5); glossary: SSH / rsync, PHP, subdomain, HTTPS, API / JSON, Sign in with Google, M2M sign-in, hash, session cookie, options catalogue |

@@ -11,6 +11,7 @@ Trading bots for cTrader (C# / .NET 10, Ubuntu). **Each bot is a project of its 
 | **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`) | [docs/bots/tm.md](docs/bots/tm.md) |
 | **Scout** | Finds the owner's pause-then-stop setup and places the first stop order; TM manages it | Trial on demo from 03-Nov-2026 (`trader-scout`) | [docs/bots/scout.md](docs/bots/scout.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [docs/bots/auto-bot.md](docs/bots/auto-bot.md) |
+| **Dashboard** | Private web page at trader.uzlabz.com: Scout's setups and orders with pictures, TM's trades, accounts and trading conditions, bot status; steers Scout through an options catalogue; Google sign-in (owner, approved viewers) and M2M sign-in (Claude) | Specified (v1.3); design brief for Claude Design; hosting ready | [docs/dashboard.md](docs/dashboard.md) |
 | **Open Code Pieces** | The reusable code all bots are built from (`src/Trader.Core`) | In use by the Audit Bot, TM and Scout | [docs/open-code-pieces.md](docs/open-code-pieces.md) |
 
 - **Shared by all projects** — brokers and accounts, machine, safety rules, folders, file format, glossary: [docs/shared.md](docs/shared.md)
