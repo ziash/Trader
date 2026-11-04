@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.5 (03-Nov-2026) — history in §10 |
+| Document version | v1.6 (04-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -48,6 +48,8 @@ Broker login numbers differ from the `ctidTraderAccountId` the API uses (`dotnet
 
 **Bots run as systemd user services** (one unit per bot), each from a **published Release build** in `~/tradebot/bin/<Bot>/`, so code changes never affect a running bot until it is redeployed and restarted. Each bot's document says how it is run.
 
+**Deploying never touches a running bot's files** (since v1.6). `scripts/deploy-<bot>.sh` publishes each build into a new folder `~/tradebot/bin/<Bot>-<git hash>` (`-dirty` when the repository had uncommitted changes; `-2`, `-3` … when that name exists) and then switches the link `~/tradebot/bin/<Bot>` to it in one step; the units start the bot through that link (shared code: `scripts/deploy-lib.sh`). The .NET host follows the link once, at start, so a running bot keeps loading from its own folder and switches only when it is restarted (tested 04-Nov-2026). The scripts keep the newest three builds plus any folder a running process uses, and still never start, stop or restart a bot. Before, they published into a fresh folder but renamed the live one away and deleted the previous one, so a bot that loaded a file late (often while stopping) read it from the new build or found it gone: Scout's crash on stop on 04-Nov-2026 ([Scout §7](bots/scout.md#7-decisions-and-open-items)). **One-time switch:** a bot still running from a plain `~/tradebot/bin/<Bot>/` folder is left alone; its next deploy prints a single command that stops it, renames the folder, makes the link and starts it again (a few seconds). Not covered: a .NET runtime update from Ubuntu changes the shared runtime under every running bot ([Audit Bot](bots/audit-bot.md) v1.4) — restart the bots after one.
+
 ## 4. Safety rules for every bot
 
 - **Demo only.** No bot connects to the live endpoint or places orders on a live account until a go-live is decided and recorded in that bot's document. A go-live means: a small live account, strict risk limits, a VPS near the broker servers, and a review after one month. The code refuses `live` unless explicitly enabled by the owner.
@@ -74,7 +76,7 @@ Runtime data lives outside the repo:
                                    one folder per bot copy (AuditBot-…, TM-…) and UTC day:
                                    events.csv (every bot), spreads.csv + probes.csv (Audit Bot), actions.csv (TM)
   reports/                         Audit Bot reports
-  bin/<Bot>/                       published builds the services run
+  bin/<Bot> → <Bot>-<git hash>/    link to the published build the service runs; the last few builds beside it (§3)
 ~/.config/trader/secrets.env       secrets (600)
 ```
 
@@ -125,6 +127,7 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | Trendbar | A candle (open, high, low, close) for a given timeframe. |
 | Webhook | An HTTP POST sent automatically by one system (e.g. TradingView) to a URL when an event fires. |
 | systemd service | Linux mechanism that keeps a program running in the background and restarts it on failure. |
+| Link (symbolic link) | A small file that points at another file or folder by name; opening the link opens the target. Switching it to another target is one step, so a program started through it gets either the old or the new build, never a mix. |
 | Heartbeat | A periodic "I am alive" signal; missing heartbeats mean the instance is dead. |
 | Trailing stop | A stop-loss that follows price in your favour to lock in profit during a trend. In cTrader it is held by the broker's server (`trailingStopLoss = true` on the position): the stop keeps the distance it had when trailing was switched on and never moves back. |
 | Hedge | An opposite-side position on the same symbol that freezes the open loss of the real trade. |
@@ -183,3 +186,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.3 | 22 Oct 2026 | Glossary: buy-/sell-limit, pending orders' stop-loss and take-profit, server-side trailing stop |
 | v1.4 | 27 Oct 2026 | §3: suspend must be off on battery too (the 24–26 Oct Audit Bot gap); linger is off |
 | v1.5 | 03 Nov 2026 | Scout added to the projects (§1); Audit Bot no longer started at login (audit-bot.md v1.3) |
+| v1.6 | 04 Nov 2026 | §3, §5: deploy scripts publish each build into its own folder `~/tradebot/bin/<Bot>-<git hash>` and switch the link `~/tradebot/bin/<Bot>` to it; a running bot's files are never overwritten, moved or deleted (Scout's crash on stop, scout.md v1.3). Glossary: link |
