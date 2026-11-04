@@ -313,7 +313,7 @@ internal sealed class AccountScout(
         var s = w.Sym;
         var price = Math.Round(w.Level, s.Digits);
         double? sl = w.Far is { } f && (f - price) * w.Dir < 0 ? Math.Round(f, s.Digits) : null;
-        var volume = s.VolumeForLots(config.Lots);
+        var volume = s.VolumeForLots(config.LotsFor(s.Name));
         var expires = now + config.ExpiryCandles * w.Chart.Length;
         var leg = $"{w.Chart.Chart.Timeframe}-{w.PauseStart:yyyyMMddHHmm}-{(w.Reversal ? "R" : "M")}";
         var label = identity.Label(leg);
@@ -337,9 +337,9 @@ internal sealed class AccountScout(
             record.Chart = DrawChart(w.Chart, Picture(w, order.OrderId, price, sl, now, expires));
             OrderRow(now, w, "place", order.OrderId, sl, expires, null, "ok", label, volume, record.Chart);
             _log.Event("ScoutOrder").Information("{Broker} {Symbol} {Tf}: placed {Side} Stop {Price} SL {Sl} {Lots} lot, expires {Expires:HH:mm}Z, order {OrderId} ({Label})",
-                account.Broker, s.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), config.Lots, expires, order.OrderId, label);
+                account.Broker, s.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), Lots(s, volume), expires, order.OrderId, label);
             notify.Info("OrderPlaced", $"Scout: {s.Name} {w.Chart.Chart.Timeframe} {Side(w.Dir)} Stop {Num(price, s)}",
-                $"{(w.Reversal ? "Reversal stop; " : "")}SL {(sl is null ? "none" : Num(sl.Value, s))}, {config.Lots} lot; {w.Chart.HigherTimeframe} {WithHigher(w)}. TM takes it over.", account.AccountId);
+                $"{(w.Reversal ? "Reversal stop; " : "")}SL {(sl is null ? "none" : Num(sl.Value, s))}, {Lots(s, volume)} lot; {w.Chart.HigherTimeframe} {WithHigher(w)}. TM takes it over.", account.AccountId);
         }
         catch (CTraderApiException ex)
         {

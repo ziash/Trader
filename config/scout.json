@@ -33,7 +33,24 @@
     ] }
   ],
 
-  "lots": 0.1,            // per Scout order; TM's mirror adds the same
+  "lots": 0.1,            // per Scout order on symbols not listed below (forex); TM's mirror adds the same
+  // Own size per symbol (owner, 04-Nov-2026; scout.md §2): small test sizes, chosen so a typical 1H move (ATR, last
+  // 100 candles on 04-Nov) is worth about $15 per order on every symbol, as on forex at 0.1 lot. In brackets: 1 lot at
+  // IC Markets, and $ per 1H ATR at this size. XNGUSD cannot go lower: 0.5 lot is the broker's minimum (≈ $135).
+  "lotsBySymbol": {
+    "XAUUSD": 0.01,   // 100 oz; ≈ $17
+    "XAGUSD": 0.03,   // 1,000 oz; ≈ $13
+    "XPTUSD": 0.01,   // 100 oz; ≈ $12
+    "US500": 0.7,     // 1 index unit; ≈ $16
+    "USTEC": 0.1,     // 1 index unit; ≈ $15
+    "DE40": 0.2,      // 1 index unit, in EUR; ≈ $19 (step 0.1)
+    "XTIUSD": 0.15,   // 100 barrels; ≈ $14
+    "XBRUSD": 0.15,   // 100 barrels; ≈ $16
+    "XNGUSD": 0.5,    // 10,000 MMBtu; ≈ $135 — the minimum
+    "BTCUSD": 0.04,   // 1 BTC; ≈ $16
+    "ETHUSD": 0.9,    // 1 ETH; ≈ $16
+    "SOLUSD": 20      // 1 SOL; ≈ $15 (minimum 1 lot)
+  },
   "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
   "historyDays": 30,      // past candles read at start to rebuild the state
 

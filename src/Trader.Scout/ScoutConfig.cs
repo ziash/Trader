@@ -12,13 +12,18 @@ public enum ScoutMode { Watch, Trade }
 /// </summary>
 public sealed record ScoutConfig(
     IReadOnlyList<ScoutAccount> Accounts,
-    double Lots = 0.1,              // per Scout order; TM's mirror adds the same (Scout spec §4.6)
+    double Lots = 0.1,              // per Scout order on symbols not in LotsBySymbol; TM's mirror adds the same (Scout spec §4.6)
     int ExpiryCandles = 16,         // server expiry of an unfilled order, in candles of its timeframe (Scout spec §4.2)
     int HistoryDays = 30,           // candles read at start to rebuild the detectors' state
-    DetectorSettings? Setup = null)
+    DetectorSettings? Setup = null,
+    IReadOnlyDictionary<string, double>? LotsBySymbol = null) // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
+    public const double MaxLots = 100;
+
+    /// <summary>Lots asked for on <paramref name="symbol"/>; the broker's minimum and step may change it (SymbolInfo.VolumeForLots).</summary>
+    public double LotsFor(string symbol) => LotsBySymbol is not null && LotsBySymbol.TryGetValue(symbol, out var lots) ? lots : Lots;
 
     public DetectorSettings SetupSettings => Setup ?? new DetectorSettings();
 
@@ -65,8 +70,15 @@ public sealed record ScoutConfig(
         }
         if (Accounts.GroupBy(a => a.AccountId).Any(g => g.Count() > 1))
             throw new ScoutConfigException($"{FileName}: an account appears twice");
-        if (Lots <= 0 || Lots > 1)
-            throw new ScoutConfigException($"{FileName}: \"lots\" must be above 0 and at most 1");
+        if (Lots <= 0 || Lots > MaxLots)
+            throw new ScoutConfigException($"{FileName}: \"lots\" must be above 0 and at most {MaxLots}");
+        foreach (var (symbol, lots) in LotsBySymbol ?? new Dictionary<string, double>())
+        {
+            if (lots <= 0 || lots > MaxLots)
+                throw new ScoutConfigException($"{FileName}: \"lotsBySymbol\" {symbol} must be above 0 and at most {MaxLots}");
+            if (!Accounts.Any(a => a.Charts.Any(c => c.Symbol == symbol)))
+                throw new ScoutConfigException($"{FileName}: \"lotsBySymbol\" {symbol} is not on any chart");
+        }
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

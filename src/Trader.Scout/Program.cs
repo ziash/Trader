@@ -101,8 +101,8 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
     var s = config.SetupSettings;
     bot.Log.Information("Setup (Scout spec §3.2): strong {Push}×ATR, move {Move}×ATR, pause {Min}–{Max} candles, ≤ {H}×ATR, pull-back ≤ {R}, reversal after {Rev}, turn {Flip}×ATR / {Ch} candles, level {Level}",
         s.PushBody, s.MinMove, s.MinPause, s.MaxPause, s.MaxPauseHeight, s.MaxRetrace, s.ReversalAfter, s.FlipAtr, s.Channel, s.Level);
-    bot.Log.Information("Orders: {Lots} lot, stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
-        config.Lots, config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
+    bot.Log.Information("Orders: {Lots} lot ({Own} symbol(s) with their own size, listed after connecting), stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
+        config.Lots, config.LotsBySymbol?.Count ?? 0, config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
 
     bot.Connection.MessageReceived += m =>
     {
@@ -121,6 +121,7 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
                 log.Event("SymbolMissing").Warning("{Broker}: symbol {Symbol} not found; its charts are skipped", a.Broker, missing.Key);
             scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, symbols);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
+            LogOrderSizes(log, a.Broker, config, symbols);
         }
     };
 
@@ -220,3 +221,22 @@ static async Task CandlesAsync(BotContext bot, ScoutAccount a, string symbol, st
 }
 
 static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
+
+// The size each symbol's orders really get (scout.md §2): the broker raises a size below its minimum and rounds down to its step.
+static void LogOrderSizes(Serilog.ILogger log, string broker, ScoutConfig config, IReadOnlyList<SymbolInfo> symbols)
+{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    foreach (var s in symbols)
+    {
+        var want = config.LotsFor(s.Name);
+        var real = s.LotsForVolume(s.VolumeForLots(want));
+        if (Math.Abs(real - want) > 1e-9)
+            log.Event("LotsAdjusted").Warning("{Broker} {Symbol}: {Want} lot is not a size the broker takes (minimum {Min}, step {Step}); orders use {Real} lot",
+                broker, s.Name, want, s.LotsForVolume(s.MinVolume), s.LotsForVolume(s.StepVolume), real);
+    }
+    log.Information("{Broker}: order size per symbol: {Sizes}", broker, string.Join(", ", symbols.Select(s =>
+    {
+        var real = s.LotsForVolume(s.VolumeForLots(config.LotsFor(s.Name)));
+        return $"{s.Name} {real.ToString("0.##", inv)} lot = {(real * s.LotUnits).ToString("0.##", inv)} {s.BaseAsset}";
+    })));
+}

@@ -8,13 +8,38 @@ public sealed class ScoutTests
     private static readonly DateTime T0 = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void Repo_config_loads_trade_mode_on_H1_for_both_demos()
+    public void Repo_config_loads_trade_mode_on_H1_for_IC_Markets_with_sizes_per_symbol()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "config", ScoutConfig.FileName);
         var c = ScoutConfig.Load(path);
-        Assert.Equal([49123893L, 49124666L], c.Accounts.Select(a => a.AccountId));
+        Assert.Equal([49123893L], c.Accounts.Select(a => a.AccountId));
+        Assert.Equal(18, c.Accounts[0].Charts.Count);
         Assert.All(c.Accounts.SelectMany(a => a.Charts), ch => Assert.Equal(("H1", ScoutMode.Trade), (ch.Timeframe, ch.Mode)));
         Assert.Equal((0.1, 16, LevelMode.Smart), (c.Lots, c.ExpiryCandles, c.SetupSettings.Level));
+        Assert.Equal((0.1, 0.01, 20.0), (c.LotsFor("EURUSD"), c.LotsFor("XAUUSD"), c.LotsFor("SOLUSD")));
+    }
+
+    [Fact]
+    public void Sizes_per_symbol_must_be_positive_and_on_a_chart()
+    {
+        ScoutConfig With(Dictionary<string, double> lots) => new([new ScoutAccount("brokerA", 1, [new ScoutChart("XAUUSD", "H1")])], LotsBySymbol: lots);
+        Assert.Equal(0.01, With(new() { ["XAUUSD"] = 0.01 }).Validated().LotsFor("XAUUSD"));
+        Assert.Throws<ScoutConfigException>(() => With(new() { ["XAUUSD"] = 0 }).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new() { ["XAUUSD"] = 101 }).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new() { ["XAGUSD"] = 0.01 }).Validated());
+    }
+
+    /// <summary>A size below the broker's minimum is raised to it (SOLUSD at IC Markets: 1 lot), one between steps rounded down.</summary>
+    [Fact]
+    public void Real_size_follows_the_brokers_minimum_and_step()
+    {
+        SymbolInfo Sym(long lotUnits, long min, long step) =>
+            new(1, "X", "X", "X", "USD", 2, 2, lotUnits, true, ProtoOATradingMode.Enabled, TradingSchedule.AlwaysOpen, min, step);
+        var sol = Sym(1, 100, 1);                // 1 coin per lot; minimum 1 lot, step 0.01 lot
+        Assert.Equal(1, sol.LotsForVolume(sol.VolumeForLots(0.1)));
+        Assert.Equal(20, sol.LotsForVolume(sol.VolumeForLots(20)));
+        var de40 = Sym(1, 10, 10);               // minimum and step 0.1 lot
+        Assert.Equal(0.1, de40.LotsForVolume(de40.VolumeForLots(0.15)), 9);
     }
 
     [Fact]
@@ -23,7 +48,7 @@ public sealed class ScoutTests
         var chart = new ScoutChart("EURUSD", "H1");
         Assert.Throws<ScoutConfigException>(() => new ScoutConfig([new ScoutAccount("brokerA", 1, [chart, chart])]).Validated());
         Assert.Throws<ScoutConfigException>(() => new ScoutConfig([new ScoutAccount("brokerA", 1, [new ScoutChart("EURUSD", "M5")])]).Validated());
-        Assert.Throws<ScoutConfigException>(() => new ScoutConfig([new ScoutAccount("brokerA", 1, [chart])], Lots: 2).Validated());
+        Assert.Throws<ScoutConfigException>(() => new ScoutConfig([new ScoutAccount("brokerA", 1, [chart])], Lots: 101).Validated());
     }
 
     [Fact]
