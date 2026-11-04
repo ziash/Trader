@@ -2,7 +2,11 @@
   // TM — Trade Manually (docs/bots/tm.md). Live copy: ~/tradebot/config/tm.json
   // Mains (your unlabelled positions) on these symbols are taken over; everything else stays yours.
   "accounts": [
-    { "broker": "brokerA", "accountId": 49123893, "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"] },
+    // brokerA: Scout's 18 symbols from 04-Nov-2026 (scout.md §7) plus EURGBP (Scout traded it before).
+    { "broker": "brokerA", "accountId": 49123893, "symbols": [
+      "EURUSD", "GBPUSD", "USDJPY", "GBPJPY", "EURJPY", "AUDJPY", "EURGBP",
+      "XAUUSD", "XAGUSD", "XPTUSD", "US500", "USTEC", "DE40", "XTIUSD", "XBRUSD", "XNGUSD",
+      "BTCUSD", "ETHUSD", "SOLUSD"] },
     { "broker": "brokerB", "accountId": 49124666, "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"] }
   ],
 

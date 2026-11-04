@@ -5,13 +5,13 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout.md)'s orders (`takeOver`, decision 12) |
-| Document version | v1.7 (03-Nov-2026) — history in §13 |
+| Document version | v1.8 (04-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
 | Memory | `~/tradebot/run/tm/<broker>-<ctid>.json` (trades TM is managing; survives restarts) |
 | Accounts | IC Markets demo 49123893, Pepperstone demo 49124666 — each separately; demo only |
-| Symbols | AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD (per account in `tm.json`) |
+| Symbols | Per account in `tm.json`. IC Markets (brokerA), from 04-Nov-2026: Scout's 18 ([scout.md](scout.md) §7) plus EURGBP. Pepperstone (brokerB): AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD |
 | Bot name / labels | `TM` — `TM-<6hex>-P<mainPositionId>-MIR` (mirror), `-HMAIN`, `-HMIR` (hedges); `TM-<6hex>-O<yourOrderId>-MIR` (mirror order of your pending order) |
 | Takes over | Positions and pending orders whose **label is in `takeOver`** (§2; default: **without a label** = your manual trades: market entries, and buy/sell limit and stop orders) on a **listed symbol**. Unlisted symbols and positions with other labels are never touched |
 | Directions | Longs and shorts (for a long everything is mirrored: the hedge is a sell-stop below) |
@@ -262,3 +262,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.5 | 22 Oct 2026 | **Mirror orders** (§3.1, decision 10, owner): the owner's buy/sell limit or stop order gets a mirror order of the same type at the same price, stop-loss at H, the owner's take-profit; it follows the owner's changes and is cancelled with the order; hedges once both fill (they cannot be placed at H before). Labels `TM-<6hex>-O<orderId>-MIR` (§7). Code: `Planner` (pending trades), `TradeState.MainOrderId`, `Ord` with type and protection; Trader.Core `PlacePendingOrderAsync` / `AmendPendingOrderAsync` ([Open Code Pieces](../open-code-pieces.md) v1.4); TM tests: 36 (3 new, 2 rewritten). Tested on Rewind (§9) |
 | v1.6 | 24 Oct 2026 | **Take-over list** (§2.1, decision 11, owner): `"takeOver"` in `tm.json` sets which labels TM takes over (`""` = no label; others by prefix); default and live `[""]`, so behaviour is unchanged. TM refuses a list that is empty or matches its own labels; logs the list at start. Code: `TmConfig.TakeOver` / `TakesOver`, `Planner` (mains); TM tests: 47 (11 new) |
 | v1.7 | 03 Nov 2026 | **TM manages Scout's orders** (decision 12, owner): live `takeOver` = `["", "Scout-"]` in `tm.json`; TM restarted with it on both demos for the Scout trial ([scout.md](scout.md)). No TM code change |
+| v1.8 | 04 Nov 2026 | **IC Markets symbols for Scout** (owner): brokerA's list in `tm.json` = Scout's 18 symbols (top three per market) plus EURGBP; TM also takes over the owner's unlabelled positions on them there. Pepperstone unchanged. TM restarted with it 04-Nov-2026 18:14:30Z (`TM-38ade9`; all 19 symbols found, 6 + 6 remembered trades picked up). No TM code change |

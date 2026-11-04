@@ -4,8 +4,8 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 
 | Item | Value |
 |---|---|
-| Status | **Built and finished; running, no longer started at login** — the audit run (2 brokers × 2 weeks) started 18-Oct-2026 and runs to about mid-November (§7); testing judged enough by the owner on 03-Nov-2026, so `trader-auditbot` is disabled at boot and stops at the next reboot (§6) |
-| Document version | v1.4 (03-Nov-2026) — history in §10 |
+| Status | **Built and finished; audit run over — stopped 04-Nov-2026 18:11:52Z** (owner: the audit is complete). The run lasted 18-Oct → 04-Nov-2026 (§7); `trader-auditbot` is stopped and disabled at boot (§6) |
+| Document version | v1.5 (04-Nov-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
@@ -217,7 +217,7 @@ The [instance registry](../open-code-pieces.md#6-instance-registry-one-primary-p
 systemctl --user status trader-auditbot             # running?
 journalctl --user -u trader-auditbot -f             # live output
 journalctl --user -u trader-auditbot -p warning     # warnings and alerts only
-systemctl --user stop trader-auditbot               # stop (owner's OK needed during the audit run)
+systemctl --user stop trader-auditbot               # stop
 systemctl --user restart trader-auditbot            # switch to a newly deployed build
 scripts/deploy-auditbot.sh                          # publish a new build (does not restart)
 ```
@@ -271,7 +271,7 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 
 ## 9. Open items
 
-- **Choose the broker** from the final summary (`--from 2026-10-18 --to <end>`) at the end of the audit run, and record it here. Weigh in the regulation note in [shared §8](../shared.md#8-open-items).
+- **Choose the broker** from the final summary (`--from 2026-10-18 --to 2026-11-04`; the 04-Nov daily report is made at 00:15 UTC on 05-Nov) now that the audit run is over, and record it here. Weigh in the regulation note in [shared §8](../shared.md#8-open-items).
 - Monitoring while the bot runs: a status script with a systemd timer and desktop alerts (Claude only on alerts) — deferred by the owner on 18-Oct-2026. The bot's `SpreadWide` / `SlippageHigh` warnings (§2.4) are what such a script would look for; the shared notifications could now carry them as pop-ups.
 - **Review the alert limits of the v1.1 symbols** (§2.4) after the first few days of their data; they are estimates.
 - With 18 symbols a probe window takes about 1.5–2 minutes per account (one probe at a time, §2.2), so in `NewsRelease+5s` only the first symbols are probed within seconds of the release.
@@ -291,3 +291,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | v1.2 | 27 Oct 2026 | **Probe waits survive a suspended laptop** (§2.2): `ProbeRunner` waits in ≤ 30 s steps on the wall clock instead of one long timer, which had kept the bot from probing for two days after the 24–26 Oct sleep. Gap recorded in §7; open item to keep the laptop awake (§9). 3 new tests. Takes effect at the next restart of `trader-auditbot` |
 | v1.3 | 03 Nov 2026 | **Not started at login any more** (owner: enough testing done): `systemctl --user disable trader-auditbot`; the running bot (AuditBot-62828b) was not stopped and carries on until the next reboot. Daily report timer unchanged (§6). No code change |
 | v1.4 | 03 Nov 2026 | **Crash and automatic restart 17:36:50Z**: `System.Diagnostics.Process` could not be loaded — the .NET runtime (now 10.0.14) had been updated on disk under the 4-day-old process, and new bot instances (Scout's first runs) made the instance registry load that file for the first time. Exit code 3; systemd restarted it 30 s later as AuditBot-992f56 (≈ 30 s without data). Lesson: restart the bots after a .NET update. Not redeployed (its build has no fix to take) |
+| v1.5 | 04 Nov 2026 | **Audit run over** (owner: the audit is complete): `trader-auditbot` stopped 04-Nov-2026 18:11:52Z (AuditBot-992f56, clean stop); it stays disabled at boot. Daily report timer unchanged. No code change |
