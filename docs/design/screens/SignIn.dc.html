@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in — phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#fff;--blue:#1b56c0;--blue-bg:#e7effd;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--blue:#8cb4ff;--blue-bg:#15264a;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .9s linear infinite}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="width: 390px; height: 844px; box-sizing: border-box; padding: 72px 24px 32px; display: flex; flex-direction: column; gap: 28px">
+  <div style="display: flex; flex-direction: column; gap: 14px">
+    <div aria-hidden="true" style="width: 44px; height: 44px; border-radius: 11px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700">TD</div>
+    <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em">Trader Dashboard</h1>
+    <p style="margin: 0; color: var(--text-2)">Scout, TM and accounts — private</p>
+  </div>
+
+  <sc-if value="{{s.expired}}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="padding: 12px 14px; border-radius: 10px; background: var(--blue-bg); color: var(--blue); font-weight: 500">Your session has ended. Please sign in again.</div>
+  </sc-if>
+
+  <sc-if value="{{s.showOptions}}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <button onClick="{{google}}" disabled="{{s.busy}}" aria-busy="{{s.busy}}" style="display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; border-radius: 24px; border: 1px solid #747775; background: #ffffff; color: #1f1f1f; font-weight: 500; font-size: 15px">
+        <sc-if value="{{s.busy}}" hint-placeholder-val="{{ false }}"><svg class="spin" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2.6" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></sc-if>
+        <sc-if value="{{s.idle}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" title="Google’s own logo goes here" style="width: 20px; height: 20px; border-radius: 50%; border: 1.5px dashed #9aa0a6; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #5f6368">G</span></sc-if>
+        {{s.googleLabel}}
+      </button>
+
+      <button onClick="{{toggleM2M}}" aria-expanded="{{m2m}}" aria-controls="m2m-panel" style="align-self: flex-start; border: 0; background: transparent; color: var(--text-2); padding: 10px 0; display: inline-flex; align-items: center; gap: 6px; font-size: 14px">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M9 10h.01M15 10h.01M9 15h6"></path></svg>
+        Machine sign-in (M2M)
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="{{chev}}"></path></svg>
+      </button>
+      <sc-if value="{{m2m}}" hint-placeholder-val="{{ true }}">
+        <div id="m2m-panel" style="padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 8px">
+          <p style="margin: 0; font-size: 13px; color: var(--text-2)">For programs such as Claude. Machines sign in with a client ID and secret through the API, not on this page.</p>
+          <a href="#" style="font-size: 13px; font-weight: 600">API description</a>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{s.requested}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border)">
+      <div style="display: flex; align-items: center; gap: 10px; color: var(--blue); font-weight: 600"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Access requested</div>
+      <p style="margin: 0; color: var(--text-2)">Thanks, someone@gmail.com — your request to view this dashboard is waiting for the owner’s approval.</p>
+      <a href="#" onClick="{{reset}}" style="align-self: flex-start; padding: 10px 16px; border-radius: 9px; border: 1px solid var(--border-strong); text-decoration: none; color: var(--text); font-weight: 500">Sign out</a>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{s.refused}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-direction: column; gap: 16px; padding: 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border)">
+      <div style="display: flex; align-items: center; gap: 10px; color: var(--red); font-weight: 600"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="m8 8 8 8M16 8l-8 8"></path></svg>Not approved</div>
+      <p style="margin: 0; color: var(--text-2)">The owner has not approved this account.</p>
+      <a href="#" onClick="{{reset}}" style="align-self: flex-start; padding: 10px 16px; border-radius: 9px; border: 1px solid var(--border-strong); text-decoration: none; color: var(--text); font-weight: 500">Use another account</a>
+    </div>
+  </sc-if>
+
+  <div style="flex: 1"></div>
+  <p style="margin: 0; font-size: 12px; color: var(--text-3)">No passwords and no sign-up here. New people ask for access with Google; the owner approves them.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"screen":{"editor":"enum","options":["default","signing-in","access-requested","refused","session-expired"],"default":"default"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { m2m: true, busy: false, over: null }; }
+  componentWillUnmount() { clearTimeout(this._t); }
+  renderVals() {
+    const scr = this.state.over || (this.state.busy ? 'signing-in' : (this.props.screen ?? 'default'));
+    const busy = scr === 'signing-in';
+    const s = {
+      showOptions: scr === 'default' || busy || scr === 'session-expired',
+      busy, idle: !busy, expired: scr === 'session-expired',
+      requested: scr === 'access-requested', refused: scr === 'refused',
+      googleLabel: busy ? 'Signing in…' : 'Sign in with Google'
+    };
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', s, m2m: this.state.m2m,
+      chev: this.state.m2m ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6',
+      toggleM2M: () => this.setState({ m2m: !this.state.m2m }),
+      google: () => { this.setState({ busy: true }); this._t = setTimeout(() => this.setState({ busy: false, over: 'access-requested' }), 1600); },
+      reset: (e) => { if (e) e.preventDefault(); this.setState({ over: null, busy: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

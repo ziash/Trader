@@ -1,0 +1,148 @@
+/*
+ * Trader Dashboard — design tokens (CSS custom properties)
+ * Source: Claude Design canvas "Trader Dashboard", 05-Nov-2026 (docs/design/HANDOFF.md).
+ * Use: import once at the app root (web/dashboard/ui/), then style only with var(--…).
+ *
+ * Dark mode follows the system setting; a manual toggle sets
+ * <html data-theme="light"> or <html data-theme="dark">, which wins over the system.
+ *
+ * Colour meanings are reserved (dashboard-design-brief.md §8):
+ *   green = keep / on / running / profit     red  = loss / failed / refused
+ *   grey  = skipped / off / stopped          amber = warning / against trend / data getting old
+ *   blue  = waiting / informational          accent (indigo) = navigation and focus only
+ * Every coloured state also carries an icon or a word — never colour alone.
+ */
+
+:root {
+  /* ---- Surfaces and text ---- */
+  --bg: #f3f5f8;            /* page */
+  --surface: #ffffff;       /* cards, bars, panels */
+  --surface-2: #f0f2f5;     /* wells, group headers, segmented-control track */
+  --border: #dde2e9;        /* dividers */
+  --border-strong: #c4ccd6; /* control outlines */
+  --text: #141922;          /* primary text */
+  --text-2: #465061;        /* secondary text */
+  --text-3: #5f6978;        /* labels, captions — still AA on --surface and --bg */
+
+  /* ---- Accent (navigation, focus, selection) ---- */
+  --accent: #4447c9;
+  --accent-soft: #ecedfc;
+  --on-accent: #ffffff;
+
+  /* ---- Reserved meanings ---- */
+  --green: #11703f;         /* text / icons */
+  --green-bg: #e2f3e9;      /* chip / pill background */
+  --green-solid: #177a47;   /* filled Keep button, switch on (white text passes AA) */
+  --red: #b42328;
+  --red-bg: #fcebeb;
+  --amber: #8f4f00;
+  --amber-bg: #fdf1dc;
+  --amber-line: #d98a1a;    /* refused / warning outlines */
+  --blue: #1b56c0;
+  --blue-bg: #e7effd;
+  --grey: #545d6a;
+  --grey-bg: #e9ecf0;
+  --grey-solid: #6b7482;    /* filled Skip button, "Symbol off" ribbon (white text passes AA) */
+  --switch-off: #8a93a0;    /* switch track when off */
+
+  /* ---- Owner tags (neutral hues, never green/red) ---- */
+  --t-scout: #2f4f7f;  --t-scout-bg: #e4ebf5;
+  --t-tm: #5e3f94;     --t-tm-bg: #efe8f8;    /* also TM role chips MAIN / MIR / HMAIN / HMIR */
+  --t-man: #6e4f1f;    --t-man-bg: #f3ece0;
+
+  /* ---- Charts and tables ---- */
+  --grid: #e8ebf0;          /* chart gridlines */
+  --chart-pos: #1f9158;     /* profit bars */
+  --chart-neg: #d23b41;     /* loss bars */
+  --better: #eef8f2;        /* Audit: better broker's cell */
+
+  /* ---- Order-picture frame (pictures stay white in dark mode) ---- */
+  --frame: #e3e7ec;
+
+  /* ---- Toast (same in both themes) ---- */
+  --toast-bg: #1c222b;
+  --toast-text: #e6eaf0;
+  --toast-action: #aab0ff;
+
+  /* ---- Elevation ---- */
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, .15);
+  --shadow-dialog: 0 16px 40px rgba(0, 0, 0, .3);
+  --scrim: rgba(10, 14, 20, .45);
+
+  /* ---- Type ---- */
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; /* every number */
+  --fs-display: 28px;  /* product name on Sign in */
+  --fs-h1: 24px;       /* page title */
+  --fs-symbol: 20px;   /* symbol on a setup card (18px on phone) */
+  --fs-h2: 16px;       /* card / section title */
+  --fs-body: 14px;
+  --fs-small: 12px;    /* labels, captions, "Updated HH:MM" */
+  --fs-micro: 11px;    /* chips, dt labels */
+  --fs-figure: 26px;   /* headline numbers (22px in cards) */
+  --lh-body: 1.45;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+  /* ---- Spacing (4-pt scale) ---- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  /* ---- Radii ---- */
+  --r-xs: 4px;   /* role chips */
+  --r-sm: 6px;   /* chips, tags, timeframe chip */
+  --r-md: 8px;   /* buttons, inputs, nav items */
+  --r-lg: 10px;  /* segmented controls, Keep/Skip, banners */
+  --r-xl: 12px;  /* cards */
+  --r-pill: 999px;
+
+  /* ---- Layout ---- */
+  --sidebar-w: 232px;
+  --content-max: 1240px;
+  --touch: 44px;       /* minimum touch target */
+
+  color-scheme: light;
+}
+
+/* Dark set: used when the system is dark and the user has not chosen light … */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --surface: #151a21; --surface-2: #1c222b; --border: #2a323d; --border-strong: #3a4350;
+    --text: #e6eaf0; --text-2: #b4bdc9; --text-3: #96a0ad;
+    --accent: #9aa0ff; --accent-soft: #262a52; --on-accent: #0e1116;
+    --green: #5ccf95; --green-bg: #11301f; --green-solid: #237a4d;
+    --red: #ff8a8a; --red-bg: #3b1619;
+    --amber: #f2b555; --amber-bg: #3a2a10; --amber-line: #c98a2a;
+    --blue: #8cb4ff; --blue-bg: #15264a;
+    --grey: #a3acb8; --grey-bg: #252b34; --grey-solid: #4f5865; --switch-off: #4f5865;
+    --t-scout: #9dbbe8; --t-scout-bg: #1b2a40; --t-tm: #c6aef0; --t-tm-bg: #2a2042; --t-man: #e0c08e; --t-man-bg: #33281a;
+    --grid: #232a33; --chart-pos: #3fb47a; --chart-neg: #e8686c; --better: #122719;
+    --frame: #2a323d; --shadow: none;
+    color-scheme: dark;
+  }
+}
+/* … or when the user picked dark with the toggle. Keep this block identical to the one above. */
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #151a21; --surface-2: #1c222b; --border: #2a323d; --border-strong: #3a4350;
+  --text: #e6eaf0; --text-2: #b4bdc9; --text-3: #96a0ad;
+  --accent: #9aa0ff; --accent-soft: #262a52; --on-accent: #0e1116;
+  --green: #5ccf95; --green-bg: #11301f; --green-solid: #237a4d;
+  --red: #ff8a8a; --red-bg: #3b1619;
+  --amber: #f2b555; --amber-bg: #3a2a10; --amber-line: #c98a2a;
+  --blue: #8cb4ff; --blue-bg: #15264a;
+  --grey: #a3acb8; --grey-bg: #252b34; --grey-solid: #4f5865; --switch-off: #4f5865;
+  --t-scout: #9dbbe8; --t-scout-bg: #1b2a40; --t-tm: #c6aef0; --t-tm-bg: #2a2042; --t-man: #e0c08e; --t-man-bg: #33281a;
+  --grid: #232a33; --chart-pos: #3fb47a; --chart-neg: #e8686c; --better: #122719;
+  --frame: #2a323d; --shadow: none;
+  color-scheme: dark;
+}
+
+/* ---- Base ---- */
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: var(--font-sans); font-size: var(--fs-body); line-height: var(--lh-body); -webkit-font-smoothing: antialiased; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { color: var(--accent); }
+a:hover { color: var(--text); }
+@keyframes td-pulse { 50% { opacity: .45; } }
+.skeleton { background: var(--surface-2); border-radius: var(--r-md); animation: td-pulse 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }

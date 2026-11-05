@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout home — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--amber-line:#d98a1a;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grey-solid:#6b7482;--t-scout:#2f4f7f;--t-scout-bg:#e4ebf5;--t-tm:#5e3f94;--t-tm-bg:#efe8f8;--t-man:#6e4f1f;--t-man-bg:#f3ece0;--frame:#e3e7ec;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--amber-line:#c98a2a;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grey-solid:#4f5865;--t-scout:#9dbbe8;--t-scout-bg:#1b2a40;--t-tm:#c6aef0;--t-tm-bg:#2a2042;--t-man:#e0c08e;--t-man-bg:#33281a;--frame:#2a323d;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app button:disabled{cursor:not-allowed}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none}.nav a:hover{background:var(--surface-2);color:var(--text)}
+.card{transition:background .2s}
+.card.is-skipped{background:var(--surface-2)}
+.card.is-skipped .thumb{opacity:.45;filter:grayscale(1)}
+.card.is-skipped .sym{color:var(--text-3)}
+.card.is-gone{opacity:.7}
+.card.is-sel{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent)}
+.seg{border:0;border-radius:7px;padding:0 14px;min-height:40px;display:inline-flex;align-items:center;gap:6px;font-weight:600;background:transparent;color:var(--text-2)}
+.seg.on-keep{background:var(--green-solid);color:#fff}
+.seg.on-skip{background:var(--grey-solid);color:#fff}
+.seg:disabled{opacity:.75}
+.thumbbtn{border:0;padding:4px;background:var(--frame);border-radius:9px;display:block}
+.thumbbtn:hover{outline:2px solid var(--border-strong)}
+.tbl th{font-weight:500;color:var(--text-3);font-size:12px;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl .r{text-align:right}
+@keyframes pulse{50%{opacity:.45}}
+.sk{background:var(--surface-2);border-radius:8px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .9s linear infinite}
+.refresh{border:1px solid var(--border);background:var(--surface);border-radius:8px;min-height:36px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch">
+
+  <!-- Sidebar -->
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px">
+      <div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div>
+      <div style="display: flex; flex-direction: column; line-height: 1.2">
+        <span style="font-weight: 600; font-size: 14px">Trader Dashboard</span>
+        <span style="font-size: 12px; color: var(--text-3)">Private</span>
+      </div>
+    </div>
+    <a href="#" aria-current="page" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 600">Scout <span class="num" style="font-size: 12px; background: var(--accent); color: var(--on-accent); border-radius: 10px; padding: 1px 7px" aria-label="3 setups in the last hour">3</span></a>
+    <a href="Symbols.dc.html" style="padding: 10px 12px; border-radius: 8px">Symbols</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Trades</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Accounts</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Conditions</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Settings</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Status</a>
+    <a href="#" style="padding: 10px 12px; border-radius: 8px">Audit</a>
+    <sc-if value="{{isOwner}}" hint-placeholder-val="{{ true }}">
+      <a href="#" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px">Users <span class="num" style="font-size: 12px; background: var(--amber-bg); color: var(--amber); border-radius: 10px; padding: 1px 7px" aria-label="1 access request">1</span></a>
+    </sc-if>
+    <div style="flex: 1"></div>
+    <a href="SignIn.dc.html" style="padding: 10px 12px; border-radius: 8px; font-size: 13px">Sign out</a>
+  </nav>
+
+  <!-- Content column -->
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+    <!-- Top bar -->
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <sc-if value="{{fresh.isGreen}}" hint-placeholder-val="{{ true }}">
+        <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      </sc-if>
+      <sc-if value="{{fresh.isAmber}}" hint-placeholder-val="{{ false }}">
+        <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); font-size: 13px; font-weight: 500"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Data <span class="num">09:02</span> UTC · 66 min ago</span>
+      </sc-if>
+      <sc-if value="{{fresh.isRed}}" hint-placeholder-val="{{ false }}">
+        <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--red-bg); color: var(--red); font-size: 13px; font-weight: 600"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17v.5"></path></svg>Laptop offline? Last data 3 h ago</span>
+      </sc-if>
+
+      <div role="group" aria-label="Account" style="display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px">
+        <button aria-pressed="true" style="border: 0; border-radius: 6px; padding: 6px 12px; background: var(--surface); box-shadow: var(--shadow); font-weight: 600">IC Markets demo</button>
+        <button aria-pressed="false" style="border: 0; border-radius: 6px; padding: 6px 12px; background: transparent; color: var(--text-2)">Pepperstone demo</button>
+        <button aria-pressed="false" style="border: 0; border-radius: 6px; padding: 6px 12px; background: transparent; color: var(--text-2)">Both</button>
+      </div>
+
+      <div role="group" aria-label="Time display" style="display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px">
+        <button aria-pressed="true" style="border: 0; border-radius: 6px; padding: 6px 10px; background: var(--surface); box-shadow: var(--shadow); font-weight: 600">UTC</button>
+        <button aria-pressed="false" style="border: 0; border-radius: 6px; padding: 6px 10px; background: transparent; color: var(--text-2)">Local</button>
+      </div>
+
+      <div style="flex: 1"></div>
+      <sc-if value="{{isViewer}}" hint-placeholder-val="{{ false }}">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12px; font-weight: 600"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>View only</span>
+      </sc-if>
+      <button aria-label="User menu" style="display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 12px 4px 4px">
+        <span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--t-scout-bg); color: var(--t-scout); display: grid; place-items: center; font-weight: 600; font-size: 13px">{{user.initial}}</span>
+        <span style="font-size: 13px; color: var(--text-2)">{{user.email}}</span>
+        <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent)">{{user.role}}</span>
+      </button>
+    </header>
+
+    <sc-if value="{{fresh.isRed}}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="display: flex; gap: 10px; align-items: center; padding: 12px 28px; background: var(--red-bg); color: var(--red); font-weight: 500; border-bottom: 1px solid var(--border)">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17v.5"></path></svg>
+        The laptop has not sent data for 3 hours. What you see below may be out of date; your switches will apply when it is back.
+      </div>
+    </sc-if>
+
+    <!-- Main + detail -->
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 28px 96px; align-items: flex-start; max-width: 1240px; box-sizing: border-box; width: 100%">
+
+      <main style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em">Scout</h1>
+          <span style="font-size: 13px; color: var(--text-3)">Wed 04 Nov · IC Markets demo</span>
+        </div>
+
+        <!-- Last hour strip -->
+        <section aria-label="Last hour" style="display: flex; flex-wrap: wrap; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow)">
+          <div style="flex: 1 1 150px; padding: 14px 18px; border-right: 1px solid var(--border)">
+            <div style="font-size: 12px; color: var(--text-3)">New setups · last hour</div>
+            <div class="num" style="font-size: 26px; font-weight: 600">3</div>
+          </div>
+          <div style="flex: 1 1 150px; padding: 14px 18px; border-right: 1px solid var(--border)">
+            <div style="font-size: 12px; color: var(--text-3)">Orders placed · last hour</div>
+            <div class="num" style="font-size: 26px; font-weight: 600">2</div>
+          </div>
+          <div style="flex: 2 1 220px; padding: 14px 18px; border-right: 1px solid var(--border)">
+            <div style="font-size: 12px; color: var(--text-3)">Last 1H candle closed</div>
+            <div style="font-size: 16px; font-weight: 600; margin-top: 6px"><span class="num">10:00</span> UTC <span class="num" style="font-size: 12px; color: var(--text-3); font-weight: 400">15:00 PKT</span></div>
+          </div>
+          <div style="flex: 1 1 150px; padding: 14px 18px">
+            <div style="font-size: 12px; color: var(--text-3)">Scout</div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px; font-weight: 600; color: var(--green)"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: var(--green)"></span>Running</div>
+          </div>
+        </section>
+
+        <!-- Setups header: in-place refresh -->
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <h2 style="margin: 0; font-size: 16px; font-weight: 600">Setups</h2>
+          <span role="status" aria-live="polite" style="font-size: 12px; color: var(--text-3)">{{upd}}</span>
+          <div style="flex: 1"></div>
+          <button class="refresh" onClick="{{refresh}}" disabled="{{refreshing}}" aria-label="Refresh setups now">
+            <svg class="{{spinCls}}" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"></path></svg>Refresh
+          </button>
+        </div>
+
+        <!-- Groups -->
+        <sc-if value="{{ds.ready}}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <section aria-label="{{g.label}}" class="grp" style="display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h2 class="num" style="margin: 0; font-size: 15px; font-weight: 600">{{g.label}}</h2>
+              <span class="num" style="font-size: 12px; color: var(--text-3)">{{g.local}}</span>
+              <sc-if value="{{g.highlight}}" hint-placeholder-val="{{ false }}">
+                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 6px">Last hour</span>
+              </sc-if>
+              <div aria-hidden="true" style="flex: 1; height: 1px; background: var(--border)"></div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px; border-left: 3px solid {{g.rail}}; padding-left: 12px">
+              <sc-for list="{{g.cards}}" as="c" hint-placeholder-count="2">
+                <article class="card {{c.cardCls}}" aria-label="{{c.sym}} setup" style="position: relative; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); overflow: hidden">
+                  <sc-if value="{{c.symOff}}" hint-placeholder-val="{{ false }}">
+                    <span style="position: absolute; top: 0; right: 0; background: var(--grey-solid); color: #fff; font-size: 11px; font-weight: 600; padding: 3px 12px; border-bottom-left-radius: 8px">Symbol off</span>
+                  </sc-if>
+                  <button class="thumbbtn thumb" onClick="{{c.onOpen}}" aria-label="Open {{c.sym}} order picture and details">
+                    <svg role="img" aria-label="Order picture (sample)" width="200" height="111" viewBox="0 0 720 400" style="display: block; border-radius: 6px; background: #fff"><rect width="720" height="400" fill="#fff"></rect><g stroke="#eef0f3" stroke-width="2"><path d="M0 100H720M0 200H720M0 300H720"></path></g><rect x="400" y="132" width="180" height="40" fill="#f59e0b" opacity=".2"></rect><g stroke-width="3"><path d="M60 250V310M105 220V280M150 228V262M195 196V262M240 168V218M285 140V188M330 146V176M375 132V175M420 136V166M465 138V164M510 140V164M555 138V162" stroke="#6b7280"></path></g><g fill="#26a69a"><rect x="49" y="260" width="22" height="40"></rect><rect x="94" y="230" width="22" height="40"></rect><rect x="184" y="205" width="22" height="50"></rect><rect x="229" y="175" width="22" height="35"></rect><rect x="274" y="150" width="22" height="30"></rect><rect x="364" y="140" width="22" height="28"></rect><rect x="454" y="146" width="22" height="12"></rect><rect x="544" y="144" width="22" height="12"></rect></g><g fill="#ef5350"><rect x="139" y="235" width="22" height="20"></rect><rect x="319" y="152" width="22" height="18"></rect><rect x="409" y="142" width="22" height="18"></rect><rect x="499" y="148" width="22" height="10"></rect></g><path d="M380 122H700" stroke="#1e66f5" stroke-width="3" stroke-dasharray="10 6"></path><path d="M380 182H700" stroke="#e11d48" stroke-width="3"></path></svg>
+                  </button>
+
+                  <div style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                      <span class="sym" style="font-size: 20px; font-weight: 700; letter-spacing: .01em">{{c.sym}}</span>
+                      <span style="font-size: 11px; color: var(--text-3); border: 1px solid var(--border); padding: 1px 7px; border-radius: 6px">{{c.mkt}}</span>
+                      <span class="num" style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--text); color: var(--surface)">{{c.tf}}</span>
+                      <span style="font-size: 12px; color: var(--text-3)">{{c.ev}} <span class="num">{{c.evTime}}</span></span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px">
+                      <span style="display: inline-flex; align-items: center; gap: 4px; font-weight: 600">
+                        <sc-if value="{{c.up}}" hint-placeholder-val="{{ true }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></sc-if>
+                        <sc-if value="{{c.down}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"></path></svg></sc-if>
+                        {{c.side}}
+                      </span>
+                      <span style="color: var(--text-3)">{{c.mr}}</span>
+                      <sc-if value="{{c.against}}" hint-placeholder-val="{{ false }}">
+                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-bg); padding: 2px 8px; border-radius: 6px"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4"></path></svg>Against 4H {{c.trendArrow}}</span>
+                      </sc-if>
+                      <sc-if value="{{c.withTrend}}" hint-placeholder-val="{{ true }}">
+                        <span style="font-size: 12px; color: var(--text-2); background: var(--surface-2); padding: 2px 8px; border-radius: 6px">With 4H {{c.trendArrow}}</span>
+                      </sc-if>
+                    </div>
+                    <dl style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 16px; margin: 0">
+                      <div><dt style="font-size: 11px; color: var(--text-3)">Level</dt><dd class="num" style="margin: 0; font-weight: 500">{{c.level}}</dd></div>
+                      <div><dt style="font-size: 11px; color: var(--text-3)">Stop-loss</dt><dd class="num" style="margin: 0; font-weight: 500">{{c.sl}}</dd></div>
+                      <div><dt style="font-size: 11px; color: var(--text-3)">Distance</dt><dd class="num" style="margin: 0; font-weight: 500">{{c.pips}} pips</dd></div>
+                      <div><dt style="font-size: 11px; color: var(--text-3)">Size</dt><dd class="num" style="margin: 0; font-weight: 500">{{c.lots}} lot</dd></div>
+                    </dl>
+                  </div>
+
+                  <!-- Keep / Skip -->
+                  <div style="flex: 0 1 230px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; text-align: right">
+                    <sc-if value="{{c.decidable}}" hint-placeholder-val="{{ true }}">
+                      <div role="group" aria-label="Decision for {{c.sym}}" style="display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface)">
+                        <button class="seg {{c.keepCls}}" aria-pressed="{{c.isKeep}}" disabled="{{ro}}" onClick="{{c.onKeep}}">
+                          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>Keep
+                        </button>
+                        <button class="seg {{c.skipCls}}" aria-pressed="{{c.isSkip}}" disabled="{{ro}}" onClick="{{c.onSkip}}">Skip</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{c.late}}" hint-placeholder-val="{{ false }}">
+                      <span style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 13px; font-weight: 500"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>{{c.lateText}}</span>
+                    </sc-if>
+                    <sc-if value="{{c.gone}}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size: 13px; color: var(--text-3)">{{c.goneText}}</span>
+                    </sc-if>
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{c.stColor}}; min-height: 18px">
+                      <sc-if value="{{c.stWait}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>
+                      <sc-if value="{{c.stOk}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg></sc-if>
+                      <sc-if value="{{ro}}" hint-placeholder-val="{{ false }}"><sc-if value="{{c.decidable}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></sc-if></sc-if>
+                      <span>{{c.stText}}</span>
+                    </div>
+                  </div>
+                </article>
+              </sc-for>
+            </div>
+          </section>
+        </sc-for>
+        </sc-if>
+
+        <!-- Setups: loading -->
+        <sc-if value="{{ds.loading}}" hint-placeholder-val="{{ false }}">
+          <div aria-busy="true" aria-label="Loading setups" style="display: flex; flex-direction: column; gap: 10px">
+            <div class="sk" style="width: 140px; height: 16px"></div>
+            <sc-for list="{{skel}}" as="s" hint-placeholder-count="3">
+              <div style="display: flex; gap: 16px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px">
+                <div class="sk" style="width: 208px; height: 119px"></div>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 10px"><div class="sk" style="width: 40%; height: 20px"></div><div class="sk" style="width: 60%; height: 14px"></div><div class="sk" style="width: 80%; height: 30px"></div></div>
+                <div class="sk" style="width: 150px; height: 46px; border-radius: 10px"></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- Setups: empty -->
+        <sc-if value="{{ds.empty}}" hint-placeholder-val="{{ false }}">
+          <div style="border: 1px dashed var(--border-strong); border-radius: 12px; padding: 40px 24px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; background: var(--surface)">
+            <svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <strong style="font-size: 16px">Nothing new since 08:00</strong>
+            <span style="color: var(--text-3)">Scout is watching 18 symbols. New setups appear here after each candle closes.</span>
+          </div>
+        </sc-if>
+
+        <!-- Setups: error -->
+        <sc-if value="{{ds.error}}" hint-placeholder-val="{{ false }}">
+          <div role="alert" style="border: 1px solid var(--border); border-left: 0; border-radius: 12px; padding: 20px 24px; display: flex; gap: 14px; align-items: flex-start; background: var(--surface)">
+            <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 50%; background: var(--red-bg); color: var(--red); display: grid; place-items: center; flex: none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17v.5"></path></svg></span>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+              <strong>Couldn’t load setups</strong>
+              <span style="color: var(--text-2)">The site didn’t answer (error 503). Showing nothing rather than old data. Your switches are safe — none were lost.</span>
+            </div>
+            <button class="refresh" onClick="{{refresh}}">Try again</button>
+          </div>
+        </sc-if>
+
+        <!-- Orders of the day -->
+        <section aria-labelledby="orders-h" style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border)">
+            <h2 id="orders-h" style="margin: 0; font-size: 16px; font-weight: 600">Orders of the day</h2>
+            <div style="display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px">
+              <button aria-label="Previous day" style="border: 0; background: transparent; width: 36px; height: 34px">‹</button>
+              <span style="font-size: 13px; font-weight: 600; padding: 0 6px">Today · Wed 04 Nov</span>
+              <button aria-label="Next day" disabled="{{ true }}" style="border: 0; background: transparent; width: 36px; height: 34px; color: var(--text-3)">›</button>
+            </div>
+            <label style="display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; height: 36px; font-size: 13px; color: var(--text-3)">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+              <span style="position: absolute; left: -9999px">Filter by symbol</span>
+              <input placeholder="Filter symbol" style="border: 0; outline: 0; background: transparent; font: inherit; color: var(--text); width: 110px">
+            </label>
+            <div style="flex: 1"></div>
+            <div class="num" style="display: flex; gap: 16px; font-size: 13px; color: var(--text-2)">
+              <span>7 orders</span><span>2 filled</span><span>2 closed</span><span style="color: var(--green); font-weight: 600">Net +$4.25</span>
+            </div>
+            <span style="font-size: 12px; color: var(--text-3); width: 100%">{{upd}}</span>
+          </div>
+          <div style="overflow-x: auto">
+            <table class="tbl" style="width: 100%; border-collapse: collapse; font-size: 13px">
+              <thead><tr><th scope="col" style="position: sticky; left: 0; background: var(--surface)">Time</th><th scope="col">Symbol</th><th scope="col">Side</th><th scope="col">M/R</th><th scope="col" class="r">Level</th><th scope="col" class="r">Stop-loss</th><th scope="col" class="r">Lots</th><th scope="col">Status</th><th scope="col" class="r">Net</th></tr></thead>
+              <tbody>
+                <sc-for list="{{orders}}" as="o" hint-placeholder-count="5">
+                  <tr>
+                    <td class="num" style="position: sticky; left: 0; background: var(--surface)">{{o.t}}</td>
+                    <td style="font-weight: 600">{{o.sym}}</td>
+                    <td>{{o.side}}</td>
+                    <td style="color: var(--text-3)">{{o.mr}}</td>
+                    <td class="num r">{{o.level}}</td>
+                    <td class="num r">{{o.sl}}</td>
+                    <td class="num r">{{o.lots}}</td>
+                    <td><span style="font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: {{o.chipBg}}; color: {{o.chipFg}}">{{o.status}}</span></td>
+                    <td class="num r" style="color: {{o.netColor}}; font-weight: 600">{{o.net}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <sc-if value="{{ds.loading}}" hint-placeholder-val="{{ false }}">
+              <div aria-busy="true" aria-label="Loading orders" style="display: flex; flex-direction: column; gap: 10px; padding: 12px 10px"><div class="sk" style="height: 18px"></div><div class="sk" style="height: 18px; width: 90%"></div><div class="sk" style="height: 18px; width: 75%"></div></div>
+            </sc-if>
+            <sc-if value="{{ds.empty}}" hint-placeholder-val="{{ false }}">
+              <p style="margin: 0; padding: 24px; text-align: center; color: var(--text-3)">No orders yet today.</p>
+            </sc-if>
+            <sc-if value="{{ds.error}}" hint-placeholder-val="{{ false }}">
+              <p role="alert" style="margin: 0; padding: 24px; text-align: center; color: var(--red)">Couldn’t load orders. <button class="refresh" onClick="{{refresh}}" style="margin-left: 8px">Try again</button></p>
+            </sc-if>
+          </div>
+        </section>
+      </main>
+
+      <!-- Detail panel -->
+      <aside aria-label="Setup detail" style="flex: 1 1 380px; max-width: 420px; min-width: 300px; position: sticky; top: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border)">
+          <span style="font-size: 18px; font-weight: 700">{{d.sym}}</span>
+          <span class="num" style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--text); color: var(--surface)">{{d.tf}}</span>
+          <span style="font-size: 13px; color: var(--text-2)">{{d.side}} · {{d.mr}}</span>
+          <div style="flex: 1"></div>
+          <button aria-label="Close detail" style="border: 0; background: transparent; width: 36px; height: 36px; border-radius: 8px; color: var(--text-3)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+        </div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+          <div style="padding: 5px; background: var(--frame); border-radius: 10px">
+            <svg role="img" aria-label="Order picture for {{d.sym}} (sample)" viewBox="0 0 720 400" style="display: block; width: 100%; height: auto; border-radius: 6px; background: #fff"><rect width="720" height="400" fill="#fff"></rect><g stroke="#eef0f3" stroke-width="2"><path d="M0 100H720M0 200H720M0 300H720"></path></g><rect x="400" y="132" width="180" height="40" fill="#f59e0b" opacity=".2"></rect><g stroke-width="3"><path d="M60 250V310M105 220V280M150 228V262M195 196V262M240 168V218M285 140V188M330 146V176M375 132V175M420 136V166M465 138V164M510 140V164M555 138V162" stroke="#6b7280"></path></g><g fill="#26a69a"><rect x="49" y="260" width="22" height="40"></rect><rect x="94" y="230" width="22" height="40"></rect><rect x="184" y="205" width="22" height="50"></rect><rect x="229" y="175" width="22" height="35"></rect><rect x="274" y="150" width="22" height="30"></rect><rect x="364" y="140" width="22" height="28"></rect><rect x="454" y="146" width="22" height="12"></rect><rect x="544" y="144" width="22" height="12"></rect></g><g fill="#ef5350"><rect x="139" y="235" width="22" height="20"></rect><rect x="319" y="152" width="22" height="18"></rect><rect x="409" y="142" width="22" height="18"></rect><rect x="499" y="148" width="22" height="10"></rect></g><path d="M380 122H700" stroke="#1e66f5" stroke-width="3" stroke-dasharray="10 6"></path><path d="M380 182H700" stroke="#e11d48" stroke-width="3"></path><text x="590" y="114" font-size="20" fill="#6b7280" font-family="sans-serif">level</text><text x="590" y="206" font-size="20" fill="#6b7280" font-family="sans-serif">stop-loss</text></svg>
+          </div>
+
+          <dl style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0">
+            <sc-for list="{{d.fields}}" as="f" hint-placeholder-count="8">
+              <div><dt style="font-size: 11px; color: var(--text-3)">{{f.k}}</dt><dd class="num" style="margin: 0; font-size: 13px; font-weight: 500">{{f.v}}</dd></div>
+            </sc-for>
+          </dl>
+
+          <div>
+            <h3 style="margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text-2)">Timeline</h3>
+            <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+              <sc-for list="{{d.timeline}}" as="s" hint-placeholder-count="4">
+                <li style="display: flex; gap: 10px; padding-bottom: 12px; position: relative">
+                  <span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex: none; background: {{s.dot}}"></span>
+                  <div style="flex: 1; display: flex; justify-content: space-between; gap: 8px; font-size: 13px"><span>{{s.text}}</span><span class="num" style="color: var(--text-3)">{{s.t}}</span></div>
+                </li>
+              </sc-for>
+            </ol>
+          </div>
+
+          <sc-if value="{{d.hasTm}}" hint-placeholder-val="{{ false }}">
+            <div style="border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+              <div style="display: flex; justify-content: space-between; align-items: center"><h3 style="margin: 0; font-size: 13px; font-weight: 600; color: var(--text-2)">TM's actions</h3><a href="#" style="font-size: 13px">Open in Trades</a></div>
+              <sc-for list="{{tm}}" as="a" hint-placeholder-count="5">
+                <div style="display: grid; grid-template-columns: 64px 58px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px">
+                  <span class="num" style="color: var(--text-3)">{{a.t}}</span>
+                  <span class="num" style="font-size: 10px; font-weight: 700; padding: 2px 4px; text-align: center; border-radius: 4px; background: var(--t-tm-bg); color: var(--t-tm)">{{a.role}}</span>
+                  <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{a.text}}</span>
+                  <span style="color: var(--green); font-weight: 600">✓ ok</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{d.decidable}}" hint-placeholder-val="{{ false }}">
+            <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 8px">
+              <div role="group" aria-label="Decision for {{d.sym}}" style="display: flex; padding: 3px; gap: 3px; border: 1px solid var(--border-strong); border-radius: 10px">
+                <button class="seg {{d.keepCls}}" aria-pressed="{{d.isKeep}}" disabled="{{ro}}" onClick="{{d.onKeep}}" style="flex: 1; justify-content: center; min-height: 46px">Keep</button>
+                <button class="seg {{d.skipCls}}" aria-pressed="{{d.isSkip}}" disabled="{{ro}}" onClick="{{d.onSkip}}" style="flex: 1; justify-content: center; min-height: 46px">Skip</button>
+              </div>
+              <p style="margin: 0; font-size: 12px; color: var(--text-3)">{{d.explain}}</p>
+            </div>
+          </sc-if>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Toast -->
+    <sc-if value="{{toast.show}}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: #1c222b; color: #e6eaf0; padding: 10px 10px 10px 16px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.25); font-size: 14px">
+        <span>{{toast.text}}</span>
+        <button onClick="{{undo}}" style="border: 0; background: transparent; color: #aab0ff; font-weight: 600; padding: 8px 12px; border-radius: 6px">Undo</button>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"role":{"editor":"enum","options":["owner","viewer"],"default":"owner"},"freshness":{"editor":"enum","options":["fresh","aging","stale"],"default":"fresh"},"dataState":{"editor":"enum","options":["ready","loading","empty","error"],"default":"ready"},"$preview":{"width":1440,"height":1760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { dec: {}, sel: 'gbpjpy', toast: null, clock: 6, refreshing: false, updated: '10:02', forceReady: false };
+  }
+  componentWillUnmount() { clearTimeout(this._t1); clearTimeout(this._t2); clearTimeout(this._t3); }
+  refresh() {
+    if (this.state.refreshing) return;
+    this.setState({ refreshing: true });
+    clearTimeout(this._t3);
+    this._t3 = setTimeout(() => this.setState((s) => ({ refreshing: false, forceReady: true, updated: '10:' + String(s.clock + 2).padStart(2, '0') })), 1300);
+  }
+  base() {
+    return [
+      { id: 'gbpusd', g: '10', sym: 'GBPUSD', mkt: 'Forex', tf: '1H', up: true, mr: 'Main', level: '1.35030', sl: '1.34546', pips: '48.4', lots: '0.10', against: false, ta: '↑', ev: 'New', evTime: '10:00', kind: 'decide', d: 'keep', ph: 'conf', oid: 'P692240117' },
+      { id: 'xauusd', g: '10', sym: 'XAUUSD', mkt: 'Metals', tf: '1H', up: false, mr: 'Main', level: '2 650.20', sl: '2 661.80', pips: '116.0', lots: '0.01', against: true, ta: '↑', ev: 'New', evTime: '10:00', kind: 'decide', d: 'skip', ph: 'applied', at: '10:03', extra: ' · 1 order cancelled', oid: 'P692240121' },
+      { id: 'btcusd', g: '10', sym: 'BTCUSD', mkt: 'Crypto', tf: '1H', up: true, mr: 'Main', level: '69 420.5', sl: '68 910.0', pips: '510.5', lots: '0.02', against: false, ta: '↑', ev: 'Moved', evTime: '10:00', kind: 'decide', d: 'keep', ph: 'conf', oid: 'P692236504' },
+      { id: 'gbpjpy', g: '09', sym: 'GBPJPY', mkt: 'Forex', tf: '1H', up: true, mr: 'Main', level: '212.686', sl: '212.474', pips: '21.2', lots: '0.10', against: false, ta: '↑', ev: 'Filled', evTime: '09:41', kind: 'late', lateText: 'Filled 09:41 — managed by TM', oid: 'P692232259' },
+      { id: 'eurusd', g: '09', sym: 'EURUSD', mkt: 'Forex', tf: '1H', up: false, mr: 'Reversal', level: '1.08210', sl: '1.08460', pips: '25.0', lots: '0.10', against: false, ta: '↓', ev: 'Cancelled', evTime: '09:00', kind: 'gone', goneText: 'Cancelled by Scout · trend turned', oid: 'P692232262' },
+      { id: 'xngusd', g: '08', sym: 'XNGUSD', mkt: 'Energies', tf: '1H', up: false, mr: 'Main', level: '3.412', sl: '3.498', pips: '86.0', lots: '0.50', against: false, ta: '↓', ev: 'New', evTime: '08:00', kind: 'decide', d: 'keep', ph: 'conf', symOff: true, oid: 'P692228840' }
+    ];
+  }
+  decide(id, d) {
+    if (this.props.role === 'viewer') return;
+    const cur = this.merged(id);
+    if (cur.d === d) return;
+    const prev = { ...(this.state.dec[id] || {}) };
+    const hadPrev = !!this.state.dec[id];
+    const sym = cur.sym;
+    this.setState((s) => ({ dec: { ...s.dec, [id]: { d, ph: 'wait' } }, toast: { id, prev: hadPrev ? prev : null, text: (d === 'skip' ? 'Skipped ' : 'Kept ') + sym + ' · waiting for laptop' } }));
+    clearTimeout(this._t1); clearTimeout(this._t2);
+    this._t1 = setTimeout(() => {
+      this.setState((s) => {
+        const c = s.clock + 1;
+        const cd = s.dec[id];
+        if (!cd || cd.ph !== 'wait') return null;
+        return { clock: c, dec: { ...s.dec, [id]: { ...cd, ph: 'applied', at: '10:' + String(c).padStart(2, '0') } } };
+      });
+    }, 2600);
+    this._t2 = setTimeout(() => this.setState({ toast: null }), 5000);
+  }
+  undo() {
+    const t = this.state.toast; if (!t) return;
+    clearTimeout(this._t1); clearTimeout(this._t2);
+    this.setState((s) => { const dec = { ...s.dec }; if (t.prev) dec[t.id] = t.prev; else delete dec[t.id]; return { dec, toast: null }; });
+  }
+  merged(id) {
+    const b = this.base().find((x) => x.id === id);
+    return { ...b, ...(this.state.dec[id] || {}) };
+  }
+  view(c, ro) {
+    const isKeep = c.kind === 'decide' && c.d === 'keep';
+    const isSkip = c.kind === 'decide' && c.d === 'skip';
+    let stText = '', stColor = 'var(--text-3)', stWait = false, stOk = false;
+    if (c.kind === 'decide') {
+      if (ro) { stText = 'View only · set by owner'; }
+      if (c.ph === 'wait') { stWait = true; stColor = 'var(--blue)'; stText = (isSkip ? 'Skipped' : 'Kept') + ' · waiting for laptop'; }
+      else if (c.ph === 'applied') { stOk = true; stColor = isSkip ? 'var(--grey)' : 'var(--green)'; stText = (isSkip ? 'Skipped · applied ' + c.at + (c.extra || '') : 'Kept · applied ' + c.at + ' · order again at next candle'); }
+      else if (!ro) { stText = c.symOff ? 'Pending · Scout will not place new orders' : 'Pending order'; }
+    }
+    const cardCls = [isSkip ? 'is-skipped' : '', c.kind === 'gone' ? 'is-gone' : '', this.state.sel === c.id ? 'is-sel' : ''].join(' ');
+    return {
+      ...c, down: !c.up, side: c.up ? 'Buy stop' : 'Sell stop', withTrend: !c.against, trendArrow: c.ta,
+      decidable: c.kind === 'decide', late: c.kind === 'late', gone: c.kind === 'gone',
+      isKeep, isSkip, keepCls: isKeep ? 'on-keep' : '', skipCls: isSkip ? 'on-skip' : '', cardCls,
+      stText, stColor, stWait, stOk,
+      onKeep: () => this.decide(c.id, 'keep'), onSkip: () => this.decide(c.id, 'skip'),
+      onOpen: () => this.setState({ sel: c.id })
+    };
+  }
+  renderVals() {
+    const theme = this.props.theme ?? 'light';
+    const role = this.props.role ?? 'owner';
+    const fr = this.props.freshness ?? 'fresh';
+    const ro = role === 'viewer';
+    const cards = this.base().map((b) => this.view(this.merged(b.id), ro));
+    const by = (g) => cards.filter((c) => c.g === g);
+    const groups = [
+      { label: '10:00 UTC', local: '15:00 PKT', highlight: true, rail: 'var(--accent)', cards: by('10') },
+      { label: '09:00 UTC', local: '14:00 PKT', highlight: false, rail: 'var(--border)', cards: by('09') },
+      { label: '08:00 UTC', local: '13:00 PKT', highlight: false, rail: 'var(--border)', cards: by('08') }
+    ];
+    const sel = cards.find((c) => c.id === this.state.sel) || cards[0];
+    const fields = [
+      { k: 'Placed', v: sel.evTime === '09:41' ? '09:00 UTC' : sel.evTime + ' UTC' },
+      { k: 'Expiry', v: sel.kind === 'decide' ? 'Thu 05 Nov ' + sel.evTime : '—' },
+      { k: 'Level', v: sel.level }, { k: 'Stop-loss', v: sel.sl },
+      { k: 'Distance', v: sel.pips + ' pips' }, { k: 'Size', v: sel.lots + ' lot' },
+      { k: 'Order ID', v: sel.oid }, { k: 'Higher TF (4H)', v: (sel.against ? 'Against ' : 'With ') + sel.ta }
+    ];
+    const G = 'var(--green)', B = 'var(--border-strong)', A = 'var(--accent)', Gr = 'var(--grey-solid)';
+    let timeline;
+    if (sel.id === 'gbpjpy') timeline = [
+      { text: 'Found by Scout', t: '09:00', dot: B }, { text: 'Order placed · Buy stop 212.686', t: '09:00', dot: A },
+      { text: 'Filled at 212.688 · slippage 0.2 pips', t: '09:41', dot: A }, { text: 'Stop moved to break-even by TM', t: '10:15', dot: A },
+      { text: 'Closed +$12.40 net', t: '10:16', dot: G }];
+    else if (sel.kind === 'gone') timeline = [
+      { text: 'Found by Scout', t: '09:00', dot: B }, { text: 'Order placed · Sell stop 1.08210', t: '09:00', dot: A },
+      { text: 'Cancelled by Scout · trend turned', t: '09:00', dot: Gr }];
+    else timeline = [
+      { text: 'Found by Scout', t: sel.evTime, dot: B }, { text: 'Order placed · ' + sel.side + ' ' + sel.level, t: sel.evTime, dot: A }]
+      .concat(sel.isSkip ? [{ text: sel.ph === 'wait' ? 'Skipped by you · waiting for laptop' : 'Skipped by you · order cancelled', t: sel.at || '', dot: Gr }] : [{ text: 'Waiting to fill', t: '', dot: B }]);
+    const d = { ...sel, fields, timeline, hasTm: sel.id === 'gbpjpy',
+      explain: sel.isSkip ? 'Keep asks Scout to place this order again at the next candle.' : 'Skip asks Scout to cancel this pending order. You can undo for 5 seconds.' };
+    const pos = (bg, fg) => ({ chipBg: bg, chipFg: fg });
+    const orders = [
+      { t: '10:00', sym: 'GBPUSD', side: '↑ Buy stop', mr: 'M', level: '1.35030', sl: '1.34546', lots: '0.10', status: 'Pending', ...pos('var(--blue-bg)', 'var(--blue)'), net: '', netColor: 'var(--text)' },
+      { t: '10:00', sym: 'XAUUSD', side: '↓ Sell stop', mr: 'M', level: '2 650.20', sl: '2 661.80', lots: '0.01', status: 'Skipped', ...pos('var(--grey-bg)', 'var(--grey)'), net: '', netColor: 'var(--text)' },
+      { t: '10:00', sym: 'BTCUSD', side: '↑ Buy stop', mr: 'M', level: '69 420.5', sl: '68 910.0', lots: '0.02', status: 'Pending', ...pos('var(--blue-bg)', 'var(--blue)'), net: '', netColor: 'var(--text)' },
+      { t: '09:41', sym: 'GBPJPY', side: '↑ Buy stop', mr: 'M', level: '212.686', sl: '212.474', lots: '0.10', status: 'Closed', ...pos('var(--green-bg)', 'var(--green)'), net: '+$12.40', netColor: 'var(--green)' },
+      { t: '09:00', sym: 'EURUSD', side: '↓ Sell stop', mr: 'R', level: '1.08210', sl: '1.08460', lots: '0.10', status: 'Cancelled', ...pos('var(--grey-bg)', 'var(--grey)'), net: '', netColor: 'var(--text)' },
+      { t: '08:00', sym: 'XNGUSD', side: '↓ Sell stop', mr: 'M', level: '3.412', sl: '3.498', lots: '0.50', status: 'Pending', ...pos('var(--blue-bg)', 'var(--blue)'), net: '', netColor: 'var(--text)' },
+      { t: '07:00', sym: 'ETHUSD', side: '↑ Buy stop', mr: 'M', level: '[level]', sl: '[stop-loss]', lots: '0.05', status: 'Closed', ...pos('var(--red-bg)', 'var(--red)'), net: '−$8.15', netColor: 'var(--red)' },
+      { t: '06:00', sym: 'AUDJPY', side: '↓ Sell stop', mr: 'M', level: '[level]', sl: '[stop-loss]', lots: '0.10', status: 'Expired', ...pos('var(--grey-bg)', 'var(--grey)'), net: '', netColor: 'var(--text)' }
+    ];
+    const tm = [
+      { t: '09:41:02', role: 'MAIN', text: 'Filled 212.688' },
+      { t: '09:41:03', role: 'MIR', text: 'Mirror placed 0.10 · 212 ms' },
+      { t: '09:41:04', role: 'HMAIN', text: 'Hedge placed sell stop 212.474' },
+      { t: '09:41:04', role: 'HMIR', text: 'Hedge placed' },
+      { t: '10:15:20', role: 'MAIN', text: 'Stop moved to break-even 212.688' },
+      { t: '10:15:21', role: 'HMAIN', text: 'Hedge cancelled' }
+    ];
+    return {
+      themeCls: theme === 'dark' ? 'dark' : '', ro, isOwner: !ro, isViewer: ro,
+      user: ro ? { initial: 'V', email: 'viewer@gmail.com', role: 'Viewer' } : { initial: 'Z', email: 'owner@gmail.com', role: 'Owner' },
+      fresh: { isGreen: fr === 'fresh', isAmber: fr === 'aging', isRed: fr === 'stale' },
+      ds: (() => { const v = this.state.forceReady ? 'ready' : (this.props.dataState ?? 'ready'); return { ready: v === 'ready', loading: v === 'loading' || (this.state.refreshing && v !== 'ready'), empty: v === 'empty', error: v === 'error' && !this.state.refreshing }; })(),
+      skel: [1, 2, 3],
+      refreshing: this.state.refreshing, spinCls: this.state.refreshing ? 'spin' : '',
+      upd: this.state.refreshing ? 'Updating…' : 'Updated ' + this.state.updated + ' UTC · next 10:32',
+      refresh: () => this.refresh(),
+      groups, orders: (this.state.forceReady || (this.props.dataState ?? 'ready') === 'ready') ? orders : [], d, tm,
+      toast: { show: !!this.state.toast, text: this.state.toast ? this.state.toast.text : '' },
+      undo: () => this.undo()
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Accounts — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#1f9158;--red:#b42328;--red-bg:#fcebeb;--red-solid:#d23b41;--amber:#8f4f00;--amber-bg:#fdf1dc;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grid:#e8ebf0;--t-scout:#2f4f7f;--t-scout-bg:#e4ebf5;--t-tm:#5e3f94;--t-tm-bg:#efe8f8;--t-man:#6e4f1f;--t-man-bg:#f3ece0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#3fb47a;--red:#ff8a8a;--red-bg:#3b1619;--red-solid:#e8686c;--amber:#f2b555;--amber-bg:#3a2a10;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grid:#232a33;--t-scout:#9dbbe8;--t-scout-bg:#1b2a40;--t-tm:#c6aef0;--t-tm-bg:#2a2042;--t-man:#e0c08e;--t-man-bg:#33281a;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.ch{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border)}
+.ch h3{margin:0;font-size:14px;font-weight:600}
+.upd{font-size:12px;color:var(--text-3)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:12px}
+.seg button{border:0;border-radius:6px;padding:5px 10px;background:transparent;color:var(--text-2)}
+.seg button.sel{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow)}
+.kpi{display:flex;flex-direction:column;gap:2px;padding:12px 16px}
+.kpi dt{font-size:12px;color:var(--text-3)}
+.kpi dd{margin:0;font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:22px;font-weight:600}
+.tip{color:var(--text-3);cursor:help;font-size:12px}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th,.tbl td{padding:5px 10px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+.tbl th{color:var(--text-3);font-weight:500}
+.tbl .l{text-align:left}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="Trades.dc.html">Trades</a><a href="#" class="on" aria-current="page">Accounts</a><a href="Conditions.dc.html">Conditions</a><a href="Settings.dc.html">Settings</a><a href="Status.dc.html">Status</a><a href="Audit.dc.html">Audit</a><a href="Users.dc.html">Users</a>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div class="seg" role="group" aria-label="Account" style="font-size: 13px"><button aria-pressed="false">IC Markets demo</button><button aria-pressed="false">Pepperstone demo</button><button class="sel" aria-pressed="true">Both</button></div>
+      <div style="flex: 1"></div>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">Z</span>Owner</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 1240px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Accounts</h1>
+        <span class="upd">Updated <span class="num">10:02</span> UTC · next <span class="num">10:32</span></span>
+        <div style="flex: 1"></div>
+        <div class="seg" role="group" aria-label="Chart period">
+          <sc-for list="{{ranges}}" as="g" hint-placeholder-count="3"><button class="{{g.cls}}" aria-pressed="{{g.sel}}" onClick="{{g.pick}}">{{g.label}}</button></sc-for>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 20px">
+        <sc-for list="{{accounts}}" as="a" hint-placeholder-count="2">
+          <section aria-label="{{a.name}}" style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; align-items: baseline; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">{{a.name}}</h2><span class="upd num">{{a.id}}</span><span class="chip" style="background: var(--surface-2); color: var(--text-2)">Leverage {{a.lev}}</span></div>
+
+            <div class="card">
+              <dl style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0">
+                <div class="kpi" style="border-bottom: 1px solid var(--border); border-right: 1px solid var(--border)"><dt>Balance</dt><dd>{{a.bal}}</dd></div>
+                <div class="kpi" style="border-bottom: 1px solid var(--border)"><dt>Equity <span class="tip" title="Balance plus the profit or loss of open trades.">ⓘ</span></dt><dd>{{a.eq}}</dd><span class="num" style="font-size: 12px; color: {{a.openColor}}">{{a.open}}</span></div>
+                <div class="kpi" style="border-right: 1px solid var(--border)"><dt>Free margin <span class="tip" title="Money still available for new trades.">ⓘ</span></dt><dd style="font-size: 18px">{{a.free}}</dd><span class="upd">Margin used <span class="num">{{a.used}}</span></span></div>
+                <div class="kpi"><dt>Margin level <span class="tip" title="Equity divided by margin used. Brokers close trades when it falls too low.">ⓘ</span></dt><dd style="font-size: 18px">{{a.ml}}</dd></div>
+              </dl>
+            </div>
+
+            <div class="card">
+              <div class="ch"><h3>Today · closed, net</h3><div style="flex: 1"></div><span class="num" style="font-weight: 700; font-size: 16px; color: {{a.todayColor}}">{{a.today}}</span></div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
+                <sc-for list="{{a.split}}" as="s" hint-placeholder-count="3">
+                  <div style="padding: 10px 16px; display: flex; flex-direction: column; gap: 4px"><span class="chip" style="align-self: flex-start; background: {{s.bg}}; color: {{s.fg}}">{{s.who}}</span><span class="num" style="font-weight: 600; color: {{s.color}}">{{s.v}}</span></div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="ch"><h3>Balance &amp; equity</h3><div style="flex: 1"></div>
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2)"><svg aria-hidden="true" width="18" height="4"><path d="M0 2H18" stroke="var(--accent)" stroke-width="2"></path></svg>Balance</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2)"><svg aria-hidden="true" width="18" height="4"><path d="M0 2H18" stroke="var(--text-2)" stroke-width="2" stroke-dasharray="4 3"></path></svg>Equity</span>
+              </div>
+              <sc-if value="{{a.hasLine}}" hint-placeholder-val="{{ true }}">
+                <div style="padding: 10px 12px 6px">
+                  <svg role="img" aria-label="{{a.lineLabel}}" viewBox="0 0 520 190" style="display: block; width: 100%; height: auto">
+                    <path d="{{a.grid}}" stroke="var(--grid)" stroke-width="1"></path>
+                    <text x="0" y="{{a.yTopY}}" font-size="11" fill="var(--text-3)" font-family="JetBrains Mono, monospace">{{a.yTop}}</text>
+                    <text x="0" y="{{a.yBotY}}" font-size="11" fill="var(--text-3)" font-family="JetBrains Mono, monospace">{{a.yBot}}</text>
+                    <path d="{{a.eqPath}}" fill="none" stroke="var(--text-2)" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round"></path>
+                    <path d="{{a.balPath}}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"></path>
+                    <circle cx="{{a.endX}}" cy="{{a.endY}}" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"></circle>
+                    <text x="64" y="186" font-size="11" fill="var(--text-3)" font-family="Inter, sans-serif">{{a.x0}}</text>
+                    <text x="516" y="186" font-size="11" fill="var(--text-3)" text-anchor="end" font-family="Inter, sans-serif">{{a.x1}}</text>
+                  </svg>
+                </div>
+              </sc-if>
+              <sc-if value="{{a.noLine}}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 36px 16px; text-align: center; color: var(--text-3); font-size: 13px">No trades on this account in this period — balance unchanged at <span class="num">{{a.bal}}</span>.</div>
+              </sc-if>
+            </div>
+
+            <div class="card">
+              <div class="ch"><h3>Profit per day · net</h3><div style="flex: 1"></div><button onClick="{{a.toggleTable}}" aria-pressed="{{a.showTable}}" style="border: 1px solid var(--border); background: var(--surface); border-radius: 7px; font-size: 12px; padding: 4px 10px; min-height: 30px">{{a.tableLabel}}</button></div>
+              <sc-if value="{{a.hasBars}}" hint-placeholder-val="{{ true }}">
+                <sc-if value="{{a.chartView}}" hint-placeholder-val="{{ true }}">
+                  <div style="padding: 10px 12px 6px">
+                    <svg role="img" aria-label="{{a.barLabel}}" viewBox="0 0 520 150" style="display: block; width: 100%; height: auto">
+                      <path d="M64 20H520M64 130H520" stroke="var(--grid)" stroke-width="1"></path>
+                      <path d="{{a.zero}}" stroke="var(--border-strong)" stroke-width="1"></path>
+                      <text x="0" y="24" font-size="11" fill="var(--text-3)" font-family="JetBrains Mono, monospace">{{a.bTop}}</text>
+                      <text x="0" y="134" font-size="11" fill="var(--text-3)" font-family="JetBrains Mono, monospace">{{a.bBot}}</text>
+                      <path d="{{a.posPath}}" fill="var(--green-solid)"></path>
+                      <path d="{{a.negPath}}" fill="var(--red-solid)"></path>
+                      <text x="64" y="147" font-size="11" fill="var(--text-3)" font-family="Inter, sans-serif">{{a.x0}}</text>
+                      <text x="516" y="147" font-size="11" fill="var(--text-3)" text-anchor="end" font-family="Inter, sans-serif">{{a.x1}}</text>
+                    </svg>
+                    <p class="upd" style="margin: 4px 0 0">Green above zero = profit day (+), red below = loss day (−). Best day <span class="num">{{a.best}}</span> · worst <span class="num">{{a.worst}}</span>.</p>
+                  </div>
+                </sc-if>
+                <sc-if value="{{a.showTable}}" hint-placeholder-val="{{ false }}">
+                  <div style="max-height: 180px; overflow: auto"><table class="tbl"><thead><tr><th class="l" scope="col">Day</th><th scope="col">Net</th><th scope="col">Balance</th></tr></thead><tbody>
+                    <sc-for list="{{a.rows}}" as="r" hint-placeholder-count="5"><tr><td class="l">{{r.day}}</td><td class="num" style="color: {{r.color}}">{{r.net}}</td><td class="num">{{r.bal}}</td></tr></sc-for>
+                  </tbody></table></div>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{a.noBars}}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 36px 16px; text-align: center; color: var(--text-3); font-size: 13px">No closed trades in this period.</div>
+              </sc-if>
+            </div>
+
+            <div class="card" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr))">
+              <div style="padding: 12px 16px; border-right: 1px solid var(--border)"><div class="upd">Open positions</div><div class="num" style="font-size: 20px; font-weight: 600">{{a.pos}}</div><div class="upd">{{a.posSplit}}</div></div>
+              <div style="padding: 12px 16px"><div class="upd">Pending orders</div><div class="num" style="font-size: 20px; font-weight: 600">{{a.pend}}</div><div class="upd">{{a.pendSplit}}</div></div>
+            </div>
+          </section>
+        </sc-for>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { range: '30d', table: {} }; }
+  renderVals() {
+    const usd = (n, sign) => (n < 0 ? '−' : (sign && n > 0 ? '+' : '')) + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, ' ');
+    const days = ['18 Oct','19 Oct','20 Oct','21 Oct','22 Oct','23 Oct','24 Oct','25 Oct','26 Oct','27 Oct','28 Oct','29 Oct','30 Oct','31 Oct','01 Nov','02 Nov','03 Nov','04 Nov'];
+    const net = [12.1, -5.3, 8.4, 0, 21.6, -14.2, 9.8, 17.3, -3.6, 6.2, 25.4, -9.1, 14.7, 31.2, -11.8, 40.5, 34.95, 4.25];
+    const off = [0, 2.1, -1.4, 0, 3.2, -4.5, 1.1, 0, 2.6, -1.9, 0, 4.4, -2.2, 0, 6.3, -3.1, 11.8, 27.35];
+    const n = this.state.range === '7d' ? 7 : 18;
+    let b = 10000; const balAll = net.map((v) => (b += v));
+    const D = days.slice(-n), N = net.slice(-n), B = balAll.slice(-n), E = B.map((v, i) => v + off.slice(-n)[i]);
+    const X0 = 64, X1 = 516, W = X1 - X0;
+    const lo = Math.floor(Math.min(...B, ...E) / 25) * 25, hi = Math.ceil(Math.max(...B, ...E) / 25) * 25;
+    const y = (v) => 170 - (v - lo) / (hi - lo || 1) * 150;
+    const x = (i) => X0 + (n === 1 ? 0 : i / (n - 1) * W);
+    const line = (arr) => arr.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+    const grid = [0, 1, 2, 3].map((k) => 'M' + X0 + ' ' + (20 + k * 50) + 'H520').join(' ');
+    const bmax = Math.max(...N.map(Math.abs)) || 1; const zy = 75;
+    const bw = W / n * 0.62;
+    const bar = (keep) => N.map((v, i) => {
+      if (!keep(v) || v === 0) return '';
+      const cx = X0 + (i + 0.5) * (W / n) - bw / 2; const h = Math.abs(v) / bmax * 55;
+      const top = v > 0 ? zy - h : zy + 1; return 'M' + cx.toFixed(1) + ' ' + top.toFixed(1) + 'h' + bw.toFixed(1) + 'v' + (h - 1).toFixed(1) + 'h' + (-bw).toFixed(1) + 'z';
+    }).join(' ');
+    const showT = !!this.state.table.ic;
+    const ic = {
+      name: 'IC Markets demo', id: '49123893', lev: '1:500', bal: '$10 182.40', eq: '$10 209.75', open: 'Open +$27.35', openColor: 'var(--green)',
+      free: '$10 113.45', used: '$96.30', ml: '10 602 %', today: '+$4.25', todayColor: 'var(--green)',
+      split: [
+        { who: 'Scout', bg: 'var(--t-scout-bg)', fg: 'var(--t-scout)', v: '+$4.25', color: 'var(--green)' },
+        { who: 'TM', bg: 'var(--t-tm-bg)', fg: 'var(--t-tm)', v: '$0.00', color: 'var(--text-3)' },
+        { who: 'Manual', bg: 'var(--t-man-bg)', fg: 'var(--t-man)', v: '$0.00', color: 'var(--text-3)' }],
+      hasLine: true, noLine: false, grid, balPath: line(B), eqPath: line(E), endX: x(n - 1).toFixed(1), endY: y(B[n - 1]).toFixed(1),
+      yTop: hi.toLocaleString('en-US').replace(',', ' '), yTopY: 24, yBot: lo.toLocaleString('en-US').replace(',', ' '), yBotY: 174, x0: D[0], x1: D[n - 1],
+      lineLabel: 'Balance from ' + usd(B[0]) + ' on ' + D[0] + ' to ' + usd(B[n - 1]) + ' on ' + D[n - 1],
+      hasBars: true, noBars: false, chartView: !showT, showTable: showT, tableLabel: showT ? 'Chart view' : 'Table view',
+      toggleTable: () => this.setState((s) => ({ table: { ...s.table, ic: !s.table.ic } })),
+      posPath: bar((v) => v > 0), negPath: bar((v) => v < 0), zero: 'M64 ' + zy + 'H520', bTop: '+' + Math.round(bmax), bBot: '−' + Math.round(bmax),
+      barLabel: 'Profit per day, ' + D[0] + ' to ' + D[n - 1], best: usd(Math.max(...N), true), worst: usd(Math.min(...N), true),
+      rows: D.map((d, i) => ({ day: d, net: usd(N[i], true), color: N[i] > 0 ? 'var(--green)' : (N[i] < 0 ? 'var(--red)' : 'var(--text-3)'), bal: usd(B[i]) })).reverse(),
+      pos: '1', posSplit: 'TM 1 · Scout 0 · Manual 0', pend: '3', pendSplit: 'Scout 3 · TM 0 · Manual 0'
+    };
+    const pp = {
+      name: 'Pepperstone demo', id: '49124666', lev: '1:200', bal: '$9 874.10', eq: '$9 874.10', open: 'No open trades', openColor: 'var(--text-3)',
+      free: '$9 874.10', used: '$0.00', ml: '—', today: '$0.00', todayColor: 'var(--text-3)',
+      split: [
+        { who: 'Scout', bg: 'var(--t-scout-bg)', fg: 'var(--t-scout)', v: '—', color: 'var(--text-3)' },
+        { who: 'TM', bg: 'var(--t-tm-bg)', fg: 'var(--t-tm)', v: '$0.00', color: 'var(--text-3)' },
+        { who: 'Manual', bg: 'var(--t-man-bg)', fg: 'var(--t-man)', v: '$0.00', color: 'var(--text-3)' }],
+      hasLine: false, noLine: true, hasBars: false, noBars: true, chartView: false, showTable: false, tableLabel: 'Table view', toggleTable: () => {},
+      pos: '0', posSplit: 'Scout does not trade here yet', pend: '0', pendSplit: '—'
+    };
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '',
+      ranges: [['7d', '7 days'], ['30d', '30 days'], ['all', 'All']].map(([k, label]) => ({ label, sel: this.state.range === k, cls: this.state.range === k ? 'sel' : '', pick: () => this.setState({ range: k }) })),
+      accounts: [ic, pp]
+    };
+  }
+}
+</script>
+</body>
+</html>

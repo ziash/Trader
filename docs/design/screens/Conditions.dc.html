@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Conditions — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--amber-line:#d98a1a;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--amber-line:#c98a2a;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button,.app select,.app input{font:inherit;color:inherit}
+.app button{cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.ch{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--border)}
+.ch h2{margin:0;font-size:16px;font-weight:600}
+.upd{font-size:12px;color:var(--text-3)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:500;color:var(--text-3);font-size:12px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl .r{text-align:right}
+.tbl .pin{position:sticky;left:0;background:var(--surface);z-index:1}
+.tbl tr.sel td{background:var(--accent-soft)}
+.btn{border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;min-height:36px;padding:0 12px;font-size:13px;font-weight:500}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:13px}
+.seg button{border:0;border-radius:6px;padding:6px 12px;background:transparent;color:var(--text-2)}
+.seg button.sel{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow)}
+.stp{display:flex;align-items:center;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface)}
+.stp button{border:0;background:transparent;width:44px;height:44px;font-size:18px;color:var(--text-2)}
+.stp input{border:0;outline:0;background:transparent;width:100%;text-align:center;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;min-width:0}
+.res{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.tip{color:var(--text-3);cursor:help}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="Trades.dc.html">Trades</a><a href="Accounts.dc.html">Accounts</a><a href="#" class="on" aria-current="page">Conditions</a><a href="Settings.dc.html">Settings</a><a href="Status.dc.html">Status</a><a href="Audit.dc.html">Audit</a><a href="Users.dc.html">Users</a>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div class="seg" role="group" aria-label="Account"><button class="sel" aria-pressed="true">IC Markets demo</button><button aria-pressed="false">Pepperstone demo</button></div>
+      <div style="flex: 1"></div>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">Z</span>Owner</span>
+    </header>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 28px 64px; align-items: flex-start; max-width: 1240px; box-sizing: border-box; width: 100%">
+      <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600">Conditions</h1>
+          <span style="color: var(--text-3); font-size: 13px">How far a trade can be scaled · IC Markets demo · leverage 1:500 · free margin <span class="num">$10 113.45</span></span>
+        </div>
+
+        <section class="card" aria-labelledby="cond-h">
+          <div class="ch"><h2 id="cond-h">Trading conditions</h2><span class="upd">Conditions as of <span class="num">10:02</span> UTC · <span class="num">15:02</span> PKT</span><div style="flex: 1"></div><span class="upd">Tap a row to load it into What if</span></div>
+          <div style="overflow-x: auto">
+            <table class="tbl">
+              <thead><tr>
+                <th scope="col" class="pin">Symbol</th><th scope="col">1 lot =</th><th scope="col" class="r">Min / step / max</th><th scope="col">Leverage</th>
+                <th scope="col" class="r">Margin / lot <span class="tip" title="Money the broker holds for 1 lot while it is open.">ⓘ</span></th>
+                <th scope="col" class="r">Pip value / lot <span class="tip" title="Dollars gained or lost per pip of price move, for 1 lot.">ⓘ</span></th>
+                <th scope="col" class="r">Spread now <span class="tip" title="The gap between buy and sell price — a cost paid on every trade.">ⓘ</span></th>
+                <th scope="col" class="r">Commission / lot</th>
+                <th scope="col" class="r">Swap L / S <span class="tip" title="Overnight fee (−) or credit (+) for holding a position, per lot per night.">ⓘ</span></th>
+                <th scope="col" class="r" style="color: var(--text)">Largest size now</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+                  <tr class="{{r.selCls}}" onClick="{{r.pick}}" style="cursor: pointer">
+                    <th scope="row" class="pin" style="font-weight: 700; font-size: 13px; color: var(--text); padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left">{{r.sym}}</th>
+                    <td>{{r.lot}}</td>
+                    <td class="num r">{{r.mms}}</td>
+                    <td><span class="num">{{r.lev}}</span> <sc-if value="{{r.hasTiers}}" hint-placeholder-val="{{ false }}"><button onClick="{{r.toggleTiers}}" aria-expanded="{{r.tiersOpen}}" style="border: 1px solid var(--border); background: var(--surface-2); border-radius: 6px; font-size: 11px; padding: 1px 6px; margin-left: 4px">tiers</button></sc-if>
+                      <sc-if value="{{r.tiersOpen}}" hint-placeholder-val="{{ false }}"><div role="dialog" aria-label="{{r.sym}} leverage tiers" style="position: absolute; margin-top: 6px; z-index: 3; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 10px 12px; font-size: 12px; display: flex; flex-direction: column; gap: 4px"><strong style="font-size: 12px">Leverage drops as size grows</strong><span class="num">0 – 20 lots · 1:500</span><span class="num">20 – 50 lots · 1:200</span><span class="num">over 50 lots · 1:100</span></div></sc-if>
+                    </td>
+                    <td class="num r">{{r.mpl}}</td>
+                    <td class="num r">{{r.pvl}}</td>
+                    <td class="num r">{{r.spr}}</td>
+                    <td class="num r">{{r.com}}</td>
+                    <td class="num r">{{r.swap}}</td>
+                    <td class="num r" style="font-size: 15px; font-weight: 700">{{r.lg}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <p style="margin: 0; padding: 12px 16px; font-size: 12px; color: var(--text-3)">Largest size now = lots you could open with today’s free margin, rounded down to the step, capped by the max, with leverage tiers taken into account.</p>
+        </section>
+      </main>
+
+      <!-- What if -->
+      <aside class="card" aria-labelledby="wi-h" style="flex: 1 1 340px; max-width: 380px; min-width: 300px; position: sticky; top: 16px; display: flex; flex-direction: column">
+        <div class="ch"><h2 id="wi-h">What if</h2><span class="upd">Pure calculation — nothing is sent</span></div>
+        <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-3)">Symbol
+            <select onChange="{{onSym}}" value="{{sym}}" style="min-height: 44px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); padding: 0 12px; font-size: 15px; font-weight: 600">
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="4"><option value="{{r.sym}}">{{r.sym}}</option></sc-for>
+            </select>
+          </label>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="wi-lots" style="font-size: 12px; color: var(--text-3)">Size in lots <span class="num">({{cur.mms}})</span></label>
+            <div class="stp"><button onClick="{{dec}}" aria-label="Smaller by one step">−</button><input id="wi-lots" inputmode="decimal" value="{{lotsText}}" onChange="{{onLots}}"><button onClick="{{inc}}" aria-label="Larger by one step">+</button></div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap">
+              <sc-for list="{{quick}}" as="q" hint-placeholder-count="4"><button class="btn" onClick="{{q.go}}" style="min-height: 32px; padding: 0 10px; font-size: 12px">{{q.label}}</button></sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="wi-sl" style="font-size: 12px; color: var(--text-3)">Stop-loss distance in pips <span class="tip" title="How far the price may move against you before the trade is closed automatically.">ⓘ</span></label>
+            <div class="stp"><button onClick="{{slDec}}" aria-label="Five pips less">−</button><input id="wi-sl" inputmode="decimal" value="{{slText}}" onChange="{{onSl}}"><button onClick="{{slInc}}" aria-label="Five pips more">+</button></div>
+          </div>
+
+          <sc-if value="{{over}}" hint-placeholder-val="{{ false }}">
+            <div role="alert" style="display: flex; gap: 10px; padding: 12px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); font-size: 13px">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex: none"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17v.5"></path></svg>
+              <span><strong>Above the largest size now ({{cur.lg}} lots).</strong> The broker would refuse this order: it needs {{marginText}} of margin and you have $10 113.45 free.</span>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; flex-direction: column">
+            <div class="res"><span>Margin needed</span><span class="num" style="font-weight: 600">{{marginText}}</span></div>
+            <div class="res"><span>Free margin used</span><span class="num" style="font-weight: 600; color: {{pctColor}}">{{pctText}}</span></div>
+            <div style="height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 2px 0 6px" aria-hidden="true"><div style="height: 100%; width: {{barW}}; background: {{pctColor}}; border-radius: 3px"></div></div>
+            <div class="res"><span>Pip value</span><span class="num">{{pvText}}</span></div>
+            <div class="res"><span>Spread cost</span><span class="num">{{sprText}}</span></div>
+            <div class="res"><span>Commission</span><span class="num">{{comText}}</span></div>
+            <div class="res" style="border-bottom: 0; padding-top: 12px"><span style="font-weight: 600">Money at risk <span class="tip" title="Loss if the stop-loss is hit, plus spread and commission.">ⓘ</span></span><span class="num" style="font-size: 20px; font-weight: 700">{{riskText}}</span></div>
+            <span class="upd">{{riskNote}}</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sym: 'XAUUSD', lots: 1, sl: 116, tiers: null }; }
+  data() {
+    return [
+      { sym: 'EURUSD', lot: '100 000 EUR', min: 0.01, step: 0.01, max: 200, lev: '1:500', mpl: 217, pv: 10, pvLabel: '$10.00', spr: '0.1 pip ($1.00)', sprUsd: 1, com: 7, swap: '−$9.80 / +$3.10', lg: 46.60 },
+      { sym: 'XAUUSD', lot: '100 oz', min: 0.01, step: 0.01, max: 100, lev: '1:500', tiers: true, mpl: 530, pv: 10, pvLabel: '$10.00 per $0.10', spr: '0.12 ($12.00)', sprUsd: 12, com: 7, swap: '−$45.20 / +$22.10', lg: 19.08 },
+      { sym: 'BTCUSD', lot: '1 BTC', min: 0.01, step: 0.01, max: 50, lev: '1:20', mpl: 3471, pv: 1, pvLabel: '$1.00 per $1', spr: '12.0 ($12.00)', sprUsd: 12, com: 0, swap: '−$58.00 / −$29.00', lg: 2.91 },
+      { sym: 'XNGUSD', lot: '10 000 MMBtu', min: 0.5, step: 0.1, max: 50, lev: '1:50', mpl: 683, pv: 10, pvLabel: '$10.00 per $0.001', spr: '0.004 ($40.00)', sprUsd: 40, com: 7, swap: '−$12.00 / +$4.00', lg: 14.80 }
+    ];
+  }
+  renderVals() {
+    const usd = (n) => (n < 0 ? '−' : '') + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/,/g, ' ');
+    const d = this.data();
+    const cur = d.find((x) => x.sym === this.state.sym);
+    const clamp = (v) => Math.min(cur.max, Math.max(cur.min, Math.round(v / cur.step) * cur.step));
+    const lots = clamp(this.state.lots);
+    const sl = Math.max(0, this.state.sl);
+    const margin = lots * cur.mpl, pv = lots * cur.pv, spr = lots * cur.sprUsd, com = lots * cur.com;
+    const risk = sl * pv + spr + com;
+    const pct = margin / 10113.45 * 100;
+    const over = lots > cur.lg;
+    const setLots = (v) => this.setState({ lots: Math.min(cur.max, Math.max(cur.min, +(Math.round(v / cur.step) * cur.step).toFixed(2))) });
+    const rows = d.map((r) => ({
+      ...r, mms: r.min.toFixed(2) + ' / ' + r.step.toFixed(2) + ' / ' + r.max, mpl: usd(r.mpl).replace('.00', ''), pvl: r.pvLabel, com: usd(r.com), lg: r.lg.toFixed(2),
+      hasTiers: !!r.tiers, tiersOpen: this.state.tiers === r.sym,
+      toggleTiers: (e) => { if (e) e.stopPropagation(); this.setState({ tiers: this.state.tiers === r.sym ? null : r.sym }); },
+      selCls: r.sym === cur.sym ? 'sel' : '', pick: () => this.setState({ sym: r.sym, lots: Math.max(r.min, Math.min(this.state.lots, r.max)) })
+    }));
+    const c = rows.find((x) => x.sym === cur.sym);
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', rows, cur: c, sym: cur.sym,
+      lotsText: lots.toFixed(2), slText: String(sl),
+      quick: [
+        { label: 'Min', go: () => setLots(cur.min) },
+        { label: '1 lot', go: () => setLots(1) },
+        { label: 'Largest now', go: () => setLots(cur.lg) },
+        { label: '+ 5 lots', go: () => setLots(lots + 5) }
+      ],
+      onSym: (e) => { const n = d.find((x) => x.sym === e.target.value); this.setState({ sym: n.sym, lots: Math.max(n.min, Math.min(this.state.lots, n.max)) }); },
+      onLots: (e) => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (!isNaN(v)) setLots(v); },
+      onSl: (e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) this.setState({ sl: v }); },
+      dec: () => setLots(lots - cur.step), inc: () => setLots(lots + cur.step),
+      slDec: () => this.setState({ sl: Math.max(0, sl - 5) }), slInc: () => this.setState({ sl: sl + 5 }),
+      over, marginText: usd(margin), pvText: usd(pv) + ' per pip', sprText: usd(spr), comText: usd(com), riskText: usd(risk),
+      riskNote: sl + ' pips × ' + usd(pv) + ' + spread + commission · ' + (risk / 10182.40 * 100).toFixed(1) + ' % of balance',
+      pctText: pct.toFixed(1) + ' %', barW: Math.min(100, pct).toFixed(1) + '%',
+      pctColor: pct > 100 ? 'var(--amber)' : (pct > 50 ? 'var(--amber)' : 'var(--accent)')
+    };
+  }
+}
+</script>
+</body>
+</html>

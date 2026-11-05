@@ -5,10 +5,10 @@
 | Item | Value |
 |---|---|
 | Status | **Specified — waiting for the owner's OK** (04-Nov-2026). Hosting ready: subdomain, HTTPS and upload key set up (§8 step 0) |
-| Document version | v1.4 (05-Nov-2026) — history in §11 |
+| Document version | v1.5 (05-Nov-2026) — history in §11 |
 | Address | `https://trader.uzlabz.com` — people sign in with Google (owner `zia.zeeshan@gmail.com`; others watch once approved), machines with M2M sign-in (`claude`, administrator); API under `/api/` (§5) |
 | Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) and no Node.js — so nothing of ours can run there all the time; the site is plain files (the screens) plus a small PHP API (§4.1) |
-| Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result is the reference for the pages |
+| Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result, [`design/`](design/HANDOFF.md) (tokens, screen sources, handoff notes), is the reference for the pages |
 | Code | `web/dashboard/ui/` (the screens: Next.js + React + TypeScript, exported as plain files), `web/dashboard/api/` (the PHP API), `web/dashboard/openapi.yaml` (the API contract both follow, §4.1), `src/Trader.DashboardExport` (the laptop program that collects the data), `scripts/dashboard-push.sh` (30-min upload), `scripts/dashboard-sync.sh` (1-min control sync), `scripts/deploy-dashboard.sh` (puts the site on Hostinger), `scripts/dashboard-m2m.sh` (machine accounts, §5.3); in Scout: reading the control file ([Scout](bots/scout.md), §3.4); the options catalogue `config/scout-controls.json` (§3.4) |
 | Tests | `tests/Trader.DashboardExport.Tests` (what gets collected and what never does); Scout's tests for the control file; Vitest for the screens, PHPUnit for the API, and a test that every API call refuses anyone not signed in or without the role |
 | Accounts | Reads IC Markets demo 49123893 (`brokerA`) and Pepperstone demo 49124666 (`brokerB`) ([shared §4](shared.md#4-safety-rules-for-every-bot)) |
@@ -329,7 +329,7 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 |---|---|---|
 | 0 | Hosting: SSH on (owner), upload key added (owner), server identity pinned, subdomain trader.uzlabz.com, HTTPS (Lifetime SSL) | Done 04-Nov-2026 |
 | 1 | This document and the design brief (owner's OK) | Waiting |
-| 2 | Design in Claude Design from the brief (owner); the result saved with the brief | — |
+| 2 | Design in Claude Design from the brief (owner); the result saved with the brief | Desktop design ready for the owner's review 05-Nov-2026: [`design/HANDOFF.md`](design/HANDOFF.md). Phone layouts deferred (owner) |
 | 3 | Google sign-in client (owner, §5.2); site skeleton with both sign-ins, roles, Users page, access requests, the API's sign-in; Claude's machine account; the API contract (`openapi.yaml`); the Next.js app from Claude Design's components; Status page; `deploy-dashboard.sh` | — |
 | 4 | Data upload: allowlist, secrets check, `status.json`, `dashboard-push.sh`, timer — no cTrader connection yet. Dry run, then the first real upload. Scout page (view only) | — |
 | 5 | Account snapshot (§3.2, §3.3) — read-only cTrader questions; Accounts, Trading conditions with the "what if" box, TM trades, Audit pages | — |
@@ -379,3 +379,4 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 | v1.2 | 05 Nov 2026 | Owner: the design must be extensible, first new option a symbol's timeframe (1H → 1D). An options catalogue on the laptop defines what the web may set and to which values; one control file per bot and account; the site draws its controls from the catalogue; Scout applies and acknowledges each entry (§3.4, decisions 11 and 14); Symbols page becomes Symbols and settings, plus a Settings page (§2.2) |
 | v1.3 | 05 Nov 2026 | Owner: others may sign in with Google and watch once approved (viewer role); Claude gets an administrator account through a new **M2M sign-in** (client ID + secret → token → JSON API) with no Google account; roles owner / administrator / viewer; Users page (§2.8, §5; decisions 15, 16). Google consent screen published instead of testing |
 | v1.4 | 05 Nov 2026 | Owner: **stack** — screens in Next.js + React + TypeScript, exported as plain files, with a small PHP API and one API contract (`openapi.yaml`) between them, instead of PHP pages (§4.1, decision 17); server folders, deploy, tests and build step 3 to match |
+| v1.5 | 05 Nov 2026 | Design result (build step 2) saved in `docs/design/`: design tokens (`tokens.css`), the 12 screen sources from Claude Design, and `HANDOFF.md` for step 3 (shared components, states, sample data to replace, gaps). Desktop only; phone layouts deferred (owner) |

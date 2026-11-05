@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Symbols — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--amber-line:#d98a1a;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grey-solid:#8a93a0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--amber-line:#c98a2a;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grey-solid:#4f5865;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app button:disabled{cursor:not-allowed}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}
+.sw{width:46px;height:28px;border-radius:14px;border:0;padding:3px;background:var(--grey-solid);display:flex;flex:none}
+.sw .k{width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:margin .15s}
+.sw.on{background:var(--green-solid)}.sw.on .k{margin-left:18px}
+.sw:disabled{opacity:.6}
+.chs{display:inline-flex;padding:2px;gap:2px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2)}
+.chs button{border:0;border-radius:6px;min-width:40px;min-height:30px;padding:0 8px;background:transparent;color:var(--text-2);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600}
+.chs button.sel{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border-strong)}
+.chs button:disabled{opacity:.6}
+.row.off .symn{color:var(--text-3)}
+.row:hover{background:var(--surface-2)}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; position: relative">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px">
+      <div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div>
+      <span style="font-weight: 600">Trader Dashboard</span>
+    </div>
+    <a href="Main.dc.html">Scout</a>
+    <a href="#" aria-current="page" style="background: var(--accent-soft); color: var(--accent); font-weight: 600">Symbols</a>
+    <a href="#">Trades</a><a href="#">Accounts</a><a href="#">Conditions</a><a href="#">Settings</a><a href="#">Status</a><a href="#">Audit</a>
+    <sc-if value="{{isOwner}}" hint-placeholder-val="{{ true }}"><a href="#">Users</a></sc-if>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <span style="font-size: 13px; color: var(--text-2)">Scout · IC Markets demo</span>
+      <div style="flex: 1"></div>
+      <sc-if value="{{ro}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12px; font-weight: 600"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>View only</span></sc-if>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">{{initial}}</span>{{roleLabel}}</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 1180px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Symbols</h1>
+        <span style="color: var(--text-3); font-size: 13px">{{onCount}} of 18 on · switch markets on or off for Scout and set each one’s options</span>
+      </div>
+
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="6">
+        <section aria-label="{{g.name}}" style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border)">
+            <h2 style="margin: 0; font-size: 13px; font-weight: 600; flex: 1">{{g.name}}</h2>
+            <button disabled="{{ro}}" onClick="{{g.allOn}}" style="border: 1px solid var(--border-strong); background: var(--surface); border-radius: 7px; padding: 4px 10px; font-size: 12px; min-height: 30px">All on</button>
+            <button disabled="{{ro}}" onClick="{{g.allOff}}" style="border: 1px solid var(--border-strong); background: var(--surface); border-radius: 7px; padding: 4px 10px; font-size: 12px; min-height: 30px">All off</button>
+          </div>
+          <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+            <div style="border-bottom: 1px solid var(--border)">
+              <div class="row {{r.offCls}}" style="display: grid; grid-template-columns: 36px minmax(120px, 1.3fr) 150px 90px minmax(110px, 1fr) minmax(170px, 1.4fr) 56px; align-items: center; gap: 12px; padding: 8px 16px; min-height: 52px">
+                <button onClick="{{r.toggleOpen}}" aria-expanded="{{r.open}}" aria-label="Options for {{r.sym}}" style="border: 0; background: transparent; width: 36px; height: 36px; border-radius: 8px; color: var(--text-3)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="{{r.chev}}"></path></svg></button>
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
+                  <span class="symn" style="font-weight: 700">{{r.sym}}</span>
+                  <sc-if value="{{r.changed}}" hint-placeholder-val="{{ false }}"><span title="Differs from the laptop’s configured value" style="font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 5px">changed</span></sc-if>
+                </div>
+                <div class="chs" role="radiogroup" aria-label="{{r.sym}} timeframe">
+                  <sc-for list="{{r.tfs}}" as="t" hint-placeholder-count="3">
+                    <button role="radio" aria-checked="{{t.sel}}" class="{{t.cls}}" disabled="{{ro}}" onClick="{{t.pick}}">{{t.v}}</button>
+                  </sc-for>
+                </div>
+                <span class="num" style="font-size: 13px; color: var(--text-2)">{{r.size}}</span>
+                <span style="font-size: 12px; color: var(--text-3)">{{r.today}}</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: {{r.stColor}}">
+                  <sc-if value="{{r.stWait}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>
+                  <sc-if value="{{r.stOk}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="m5 12 5 5 9-10"></path></svg></sc-if>
+                  {{r.stText}}
+                </span>
+                <button role="switch" class="sw {{r.swCls}}" aria-checked="{{r.on}}" aria-label="{{r.sym}} on for Scout" disabled="{{ro}}" onClick="{{r.toggleOn}}"><span class="k"></span></button>
+              </div>
+
+              <sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+                <div style="padding: 4px 16px 16px 64px; display: flex; flex-direction: column; background: var(--surface)">
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border)">
+                    <div style="flex: 1 1 260px"><div style="font-weight: 500">On for Scout <span title="Scout looks for setups and places orders on this symbol only when on." aria-label="Help" style="color: var(--text-3)">ⓘ</span></div><div style="font-size: 12px; color: var(--text-3)">Configured: on · takes effect now</div></div>
+                    <span style="font-size: 12px; color: var(--text-3)">As configured</span>
+                    <button role="switch" class="sw {{r.swCls}}" aria-checked="{{r.on}}" aria-label="{{r.sym}} on" disabled="{{ro}}" onClick="{{r.toggleOn}}"><span class="k"></span></button>
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border)">
+                    <div style="flex: 1 1 260px"><div style="font-weight: 500">Timeframe <span title="The chart Scout watches for this symbol." aria-label="Help" style="color: var(--text-3)">ⓘ</span></div><div style="font-size: 12px; color: var(--text-3)">Configured: 1H · takes effect at the next candle</div></div>
+                    <sc-if value="{{r.changed}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; gap: 8px; align-items: center; font-size: 12px"><span style="color: {{r.stColor}}">{{r.stText}}</span><button disabled="{{ro}}" onClick="{{r.reset}}" style="border: 0; background: transparent; color: var(--accent); font-weight: 600; padding: 6px">Reset to configured</button></span></sc-if>
+                    <div class="chs" role="radiogroup" aria-label="{{r.sym}} timeframe">
+                      <sc-for list="{{r.tfs}}" as="t" hint-placeholder-count="3"><button role="radio" aria-checked="{{t.sel}}" class="{{t.cls}}" disabled="{{ro}}" onClick="{{t.pick}}">{{t.v}}</button></sc-for>
+                    </div>
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; opacity: .7">
+                    <div style="flex: 1 1 260px"><div style="font-weight: 500; color: var(--text-2)">Order size <span style="color: var(--text-3)">ⓘ</span></div><div style="font-size: 12px; color: var(--text-3)">Example of a future option</div></div>
+                    <span style="display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--blue)">ⓘ Needs a newer Scout</span>
+                    <div style="display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px"><button disabled="{{ true }}" aria-label="Decrease" style="border: 0; background: transparent; width: 34px; height: 32px">−</button><span class="num" style="min-width: 64px; text-align: center; font-size: 13px">{{r.size}}</span><button disabled="{{ true }}" aria-label="Increase" style="border: 0; background: transparent; width: 34px; height: 32px">+</button></div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </section>
+      </sc-for>
+      <p style="margin: 0; font-size: 13px; color: var(--text-3)">Symbols are added or removed on the laptop (scout.json).</p>
+    </main>
+  </div>
+
+  <!-- Confirm sheet -->
+  <sc-if value="{{cf.show}}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; inset: 0; background: rgba(10,14,20,.45); display: grid; place-items: center; padding: 16px; z-index: 5">
+      <div role="dialog" aria-modal="true" aria-labelledby="cf-h" style="width: 100%; max-width: 440px; background: var(--surface); border-radius: 14px; border: 1px solid var(--border); padding: 22px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 16px 40px rgba(0,0,0,.3)">
+        <h2 id="cf-h" style="margin: 0; font-size: 18px; font-weight: 600">{{cf.title}}</h2>
+        <p style="margin: 0; color: var(--text-2)">{{cf.body}}</p>
+        <div style="display: flex; justify-content: flex-end; gap: 10px">
+          <button onClick="{{cf.cancel}}" style="border: 1px solid var(--border-strong); background: var(--surface); border-radius: 9px; padding: 0 18px; min-height: 44px; font-weight: 500">Cancel</button>
+          <button onClick="{{cf.ok}}" style="border: 0; background: var(--accent); color: var(--on-accent); border-radius: 9px; padding: 0 18px; min-height: 44px; font-weight: 600">{{cf.okText}}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"role":{"editor":"enum","options":["owner","viewer"],"default":"owner"},"confirm":{"editor":"enum","options":["none","switch-off","timeframe"],"default":"none"},"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    const s = {};
+    const add = (sym, size, today, pend) => { s[sym] = { on: true, tf: '1H', ph: 'conf', size, today, pend }; };
+    add('EURUSD', '0.10 lot', '1 setup · 0 orders'); add('GBPUSD', '0.10 lot', '1 setup · 1 order', 'Buy stop 1.35030'); add('USDJPY', '0.10 lot', '—');
+    add('GBPJPY', '0.10 lot', '1 setup · 1 order'); add('EURJPY', '0.10 lot', '—'); add('AUDJPY', '0.10 lot', '0 setups · 1 order');
+    add('XAUUSD', '0.01 lot', '1 setup · 0 orders', 'Buy stop 2 650.20'); add('XAGUSD', '0.01 lot', '—'); add('XPTUSD', '0.01 lot', '—');
+    add('US500', '0.10 lot', '—'); add('USTEC', '0.10 lot', '—'); add('DE40', '0.10 lot', '—');
+    add('XTIUSD', '0.10 lot', '—'); add('XBRUSD', '0.10 lot', '—'); add('XNGUSD', '0.50 lot', '1 setup · 1 order');
+    add('BTCUSD', '0.02 lot', '1 setup · 1 order', 'Buy stop 69 420.5'); add('ETHUSD', '0.05 lot', '0 setups · 1 order'); add('SOLUSD', '0.10 lot', '—');
+    s.XNGUSD.on = false; s.SOLUSD.on = false;
+    s.XAUUSD.tf = '1D'; s.XAUUSD.ph = 'applied'; s.XAUUSD.at = '10:05';
+    s.US500.tf = '4H'; s.US500.ph = 'wait';
+    this.state = { s, open: { XAUUSD: true }, cf: null, clock: 6 };
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  apply(sym, patch) {
+    this.setState((st) => ({ s: { ...st.s, [sym]: { ...st.s[sym], ...patch, ph: 'wait' } }, cf: null }));
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState((st) => {
+      const c = st.clock + 1; const cur = st.s[sym];
+      return { clock: c, s: { ...st.s, [sym]: { ...cur, ph: 'applied', at: '10:' + String(c).padStart(2, '0') } } };
+    }), 2600);
+  }
+  toggleOn(sym) {
+    const r = this.state.s[sym];
+    if (r.on && r.pend) this.setState({ cf: { type: 'off', sym } });
+    else this.apply(sym, { on: !r.on });
+  }
+  pickTf(sym, tf) {
+    if (this.state.s[sym].tf === tf) return;
+    this.setState({ cf: { type: 'tf', sym, tf } });
+  }
+  renderVals() {
+    const ro = (this.props.role ?? 'owner') === 'viewer';
+    const st = this.state.s;
+    const forced = this.props.confirm ?? 'none';
+    let cf = this.state.cf;
+    if (!cf && forced === 'switch-off') cf = { type: 'off', sym: 'XAUUSD', forced: true };
+    if (!cf && forced === 'timeframe') cf = { type: 'tf', sym: 'GBPUSD', tf: '1D', forced: true };
+    const row = (sym) => {
+      const r = st[sym];
+      const confOn = sym !== 'XNGUSD' && sym !== 'SOLUSD';
+      const changed = r.tf !== '1H' || r.on !== confOn;
+      let stText = '', stColor = 'var(--text-3)', stWait = false, stOk = false;
+      if (r.ph === 'wait') { stWait = true; stColor = 'var(--blue)'; stText = 'Saved · waiting for laptop'; }
+      else if (r.ph === 'applied') { stOk = true; stColor = 'var(--green)'; stText = 'Applied by Scout ' + r.at; }
+      else if (!r.on) { stText = 'Off'; }
+      const open = !!this.state.open[sym];
+      return {
+        sym, ...r, changed, open, chev: open ? 'm6 15 6-6 6 6' : 'm9 6 6 6-6 6',
+        offCls: r.on ? '' : 'off', swCls: r.on ? 'on' : '', stText, stColor, stWait, stOk,
+        tfs: ['1H', '4H', '1D'].map((v) => ({ v, sel: r.tf === v, cls: r.tf === v ? 'sel' : '', pick: () => this.pickTf(sym, v) })),
+        toggleOpen: () => this.setState((x) => ({ open: { ...x.open, [sym]: !x.open[sym] } })),
+        toggleOn: () => this.toggleOn(sym),
+        reset: () => this.apply(sym, { tf: '1H' })
+      };
+    };
+    const G = [
+      ['Forex majors', ['EURUSD', 'GBPUSD', 'USDJPY']], ['Forex crosses', ['GBPJPY', 'EURJPY', 'AUDJPY']],
+      ['Metals', ['XAUUSD', 'XAGUSD', 'XPTUSD']], ['Indices', ['US500', 'USTEC', 'DE40']],
+      ['Energies', ['XTIUSD', 'XBRUSD', 'XNGUSD']], ['Crypto', ['BTCUSD', 'ETHUSD', 'SOLUSD']]
+    ];
+    const groups = G.map(([name, syms]) => ({
+      name, rows: syms.map(row),
+      allOn: () => syms.forEach((x) => { if (!st[x].on) this.apply(x, { on: true }); }),
+      allOff: () => syms.forEach((x) => { if (st[x].on && !st[x].pend) this.apply(x, { on: false }); })
+    }));
+    const tfName = { '1H': 'hourly', '4H': '4-hour', '1D': 'daily' };
+    let cfv = { show: false };
+    if (cf) {
+      const r = st[cf.sym];
+      const close = () => this.setState({ cf: null });
+      if (cf.type === 'off') cfv = { show: true, title: 'Switch off ' + cf.sym + '?', body: 'Scout will cancel 1 pending order (' + r.pend + '). Filled trades stay with TM.', okText: 'Switch off', cancel: close, ok: () => cf.forced ? close() : this.apply(cf.sym, { on: false }) };
+      else cfv = { show: true, title: 'Change ' + cf.sym + ' from ' + r.tf + ' to ' + cf.tf + '?', body: 'Scout will look for setups on the ' + tfName[cf.tf] + ' chart from its next candle. The pending order found on ' + r.tf + ' stays until filled or expired.', okText: 'Change', cancel: close, ok: () => cf.forced ? close() : this.apply(cf.sym, { tf: cf.tf }) };
+    }
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', ro, isOwner: !ro,
+      initial: ro ? 'V' : 'Z', roleLabel: ro ? 'Viewer' : 'Owner',
+      onCount: Object.values(st).filter((x) => x.on).length, groups, cf: cfv
+    };
+  }
+}
+</script>
+</body>
+</html>

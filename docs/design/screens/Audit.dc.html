@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--better:#eef8f2;--blue:#1b56c0;--blue-bg:#e7effd;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--better:#122719;--blue:#8cb4ff;--blue-bg:#15264a;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button,.app select{font:inherit;color:inherit}
+.app button{cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.upd{font-size:12px;color:var(--text-3)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:500;color:var(--text-3);font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:right;background:var(--surface)}
+.tbl thead tr:first-child th{color:var(--text);font-weight:600;text-align:center;border-bottom:0;padding-top:12px}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:right}
+.tbl .pin{position:sticky;left:0;background:var(--surface);text-align:left;z-index:1}
+.tbl .gs{border-left:1px solid var(--border)}
+.tbl td.b{background:var(--better);color:var(--green);font-weight:600}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:13px}
+.seg button{border:0;border-radius:6px;padding:6px 12px;background:transparent;color:var(--text-2)}
+.seg button.sel{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow)}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="Trades.dc.html">Trades</a><a href="Accounts.dc.html">Accounts</a><a href="Conditions.dc.html">Conditions</a><a href="Settings.dc.html">Settings</a><a href="Status.dc.html">Status</a><a href="#" class="on" aria-current="page">Audit</a><a href="Users.dc.html">Users</a>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div style="flex: 1"></div>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">Z</span>Owner</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 1240px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <div><h1 style="margin: 0; font-size: 24px; font-weight: 600">Audit</h1><span class="upd">Audit Bot’s comparison of IC Markets and Pepperstone</span></div>
+        <div style="flex: 1"></div>
+        <div class="seg" role="group" aria-label="Period"><button class="sel" aria-pressed="true">Whole run · 18 Oct → 04 Nov</button><button aria-pressed="false">One day</button></div>
+        <label style="font-size: 12px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px">Day <select disabled="{{ true }}" style="min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 0 8px"><option>Wed 04 Nov</option></select></label>
+      </div>
+
+      <sc-if value="{{recorded}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); color: var(--text)"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"><path d="m5 12 5 5 9-10"></path></svg><span><strong>Broker choice recorded:</strong> IC Markets — decided 05 Nov 2026 in the Audit Bot’s document.</span></div>
+      </sc-if>
+      <sc-if value="{{notRecorded}}" hint-placeholder-val="{{ true }}">
+        <div role="status" style="display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 12px; background: var(--blue-bg); color: var(--blue); font-size: 13px">ⓘ No broker choice recorded yet. The final summary is made at the end of the run.</div>
+      </sc-if>
+
+      <section class="card" aria-labelledby="cmp-h" style="overflow: hidden">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 16px; border-bottom: 1px solid var(--border)">
+          <h2 id="cmp-h" style="margin: 0; font-size: 16px; font-weight: 600">Side by side</h2>
+          <span class="upd">From summary-20261018_20261104.csv · lower is better in every column</span>
+          <div style="flex: 1"></div>
+          <span style="display: inline-flex; gap: 6px; align-items: center; font-size: 12px"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 4px; background: var(--better); border: 1px solid var(--green)"></span><span style="color: var(--text-2)">✓ better broker for that metric</span></span>
+        </div>
+        <div style="overflow-x: auto">
+          <table class="tbl">
+            <thead>
+              <tr><th class="pin"></th><th></th><th colspan="2" class="gs">Typical spread</th><th colspan="2" class="gs">Near-worst spread (p95)</th><th colspan="2" class="gs">Slippage</th><th colspan="2" class="gs">Latency</th><th colspan="2" class="gs">Rejections</th></tr>
+              <tr><th scope="col" class="pin">Symbol</th><th scope="col">Unit</th>
+                <th scope="col" class="gs">IC</th><th scope="col">Pepper</th><th scope="col" class="gs">IC</th><th scope="col">Pepper</th><th scope="col" class="gs">IC</th><th scope="col">Pepper</th><th scope="col" class="gs">IC</th><th scope="col">Pepper</th><th scope="col" class="gs">IC</th><th scope="col">Pepper</th></tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+                <tr>
+                  <th scope="row" class="pin" style="font-weight: 700; color: var(--text); padding: 9px 10px; border-bottom: 1px solid var(--border)">{{r.sym}}</th>
+                  <td style="color: var(--text-3); font-size: 12px">{{r.unit}}</td>
+                  <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="10"><td class="num {{c.cls}}">{{c.v}}</td></sc-for>
+                </tr>
+              </sc-for>
+            </tbody>
+            <tfoot><tr><th scope="row" class="pin" style="padding: 10px; font-weight: 600; color: var(--text)">Better on</th><td></td><td colspan="10" style="text-align: left; font-size: 13px; color: var(--text-2)">IC Markets <strong class="num">{{icWins}}</strong> of {{total}} metrics · Pepperstone <strong class="num">{{ppWins}}</strong> · equal <strong class="num">{{ties}}</strong></td></tr></tfoot>
+          </table>
+        </div>
+        <p class="upd" style="margin: 0; padding: 12px 16px">Latency in ms. Rejections = orders refused per 100. Metals, indices and crypto are compared in USD per lot (XAGUSD in pips), as the Audit Bot’s report sets. Sample figures.</p>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"brokerChoice":{"editor":"enum","options":["not-recorded","recorded"],"default":"not-recorded"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      ['EURUSD', 'pips', [0.1, 0.2], [0.4, 0.6], [0.1, 0.1], [118, 142], [0.3, 0.5]],
+      ['GBPUSD', 'pips', [0.3, 0.4], [0.9, 0.8], [0.2, 0.3], [121, 139], [0.2, 0.4]],
+      ['USDJPY', 'pips', [0.2, 0.2], [0.7, 0.9], [0.1, 0.2], [117, 144], [0.3, 0.3]],
+      ['GBPJPY', 'pips', [1.1, 1.4], [2.8, 3.1], [0.2, 0.4], [124, 141], [0.4, 0.6]],
+      ['XAUUSD', 'USD/lot', [12.0, 14.5], [31.0, 28.0], [4.0, 6.0], [129, 150], [0.5, 0.4]],
+      ['XAGUSD', 'pips', [2.1, 2.4], [5.0, 5.6], [0.6, 0.6], [131, 148], [0.6, 0.9]],
+      ['US500', 'USD/lot', [4.0, 3.5], [9.0, 8.0], [1.5, 2.0], [126, 147], [0.4, 0.5]],
+      ['BTCUSD', 'USD/lot', [12.0, 18.0], [40.0, 55.0], [6.0, 9.5], [140, 161], [0.8, 1.1]]
+    ];
+    let ic = 0, pp = 0, eq = 0;
+    const fmt = (v, i) => i === 3 ? String(v) : v.toFixed(i === 4 ? 1 : (v >= 10 ? 1 : 1));
+    const rows = raw.map(([sym, unit, ...m]) => ({
+      sym, unit,
+      cells: m.flatMap((pair, i) => {
+        const [a, b] = pair;
+        if (a < b) ic++; else if (b < a) pp++; else eq++;
+        return [
+          { v: (a < b ? '✓ ' : '') + fmt(a, i), cls: 'gs ' + (a < b ? 'b' : '') },
+          { v: (b < a ? '✓ ' : '') + fmt(b, i), cls: b < a ? 'b' : '' }
+        ];
+      })
+    }));
+    const rec = (this.props.brokerChoice ?? 'not-recorded') === 'recorded';
+    return { themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', rows, icWins: ic, ppWins: pp, ties: eq, total: ic + pp + eq, recorded: rec, notRecorded: !rec };
+  }
+}
+</script>
+</body>
+</html>
