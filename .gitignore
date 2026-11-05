@@ -16,3 +16,7 @@ reports/
 # Editors / OS
 .vscode/*.local.json
 .DS_Store
+
+# Dashboard API (PHP)
+web/dashboard/api/vendor/
+web/dashboard/api/.phpunit.cache/

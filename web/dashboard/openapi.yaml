@@ -1,0 +1,273 @@
+openapi: 3.1.0
+info:
+  title: Trader Dashboard API
+  version: 0.1.0
+  description: |
+    The one API the dashboard's screens and machines (M2M) use (docs/dashboard.md §4.1, §5).
+    People sign in with Google and are kept in by the session cookie `__Host-tdash`; a change made with the cookie
+    must send the session's `csrf` value (from `GET /api/me`) in the `X-CSRF-Token` header.
+    Machines get a 1-hour access token from `POST /api/auth/token` and send it as `Authorization: Bearer <token>`.
+    Every answer carries `Cache-Control: no-store`. Errors are `{"error": code, "message": text}`.
+    Roles: owner > admin > viewer; each operation names the least role it needs (`x-least-role`).
+servers:
+  - url: https://trader.uzlabz.com
+security:
+  - session: []
+  - bearer: []
+paths:
+  /auth/google:
+    get:
+      summary: Start "Sign in with Google"
+      x-least-role: public
+      security: []
+      responses:
+        '302': { description: To Google's sign-in page; sets the short-lived cookie `__Host-tdash_signin` that binds the reply to this browser }
+  /auth/callback:
+    get:
+      summary: Google's reply (the client's only redirect address)
+      x-least-role: public
+      security: []
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        '302':
+          description: |
+            `/scout` with the session cookie (owner or approved viewer); `/?access=requested` (new address, waiting for the owner);
+            `/?access=refused` (refused, requests switched off, or another Google account than the one first seen); `/?access=error` (the reply could not be trusted).
+  /api/auth/token:
+    post:
+      summary: Machine sign-in (client credentials)
+      x-least-role: public
+      security:
+        - basic: []
+      responses:
+        '200':
+          description: Access token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in]
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string, const: Bearer }
+                  expires_in: { type: integer, const: 3600 }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { description: Locked for 15 minutes after 5 wrong secrets, $ref: '#/components/responses/Error' }
+  /api/auth/logout:
+    post:
+      summary: Sign out (people only; ends the session at once)
+      x-least-role: viewer
+      responses:
+        '200': { description: Signed out; the cookie is removed }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/me:
+    get:
+      summary: Who is signed in
+      x-least-role: viewer
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/status:
+    get:
+      summary: The bots' and uploads' state (Status page); `available` false until the first upload (build step 4)
+      x-least-role: viewer
+      responses:
+        '200':
+          description: The uploaded status.json, or none yet
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available]
+                properties:
+                  available: { type: boolean }
+                  reason: { type: string }
+                additionalProperties: true
+        '401': { $ref: '#/components/responses/Error' }
+  /api/users:
+    get:
+      summary: Users page — people, requests, machines, settings and the newest 100 rows of the access log
+      x-least-role: owner
+      responses:
+        '200':
+          description: Overview (never secret hashes or Google account numbers)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsersOverview' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/users/approve:
+    post:
+      summary: Approve a waiting (or refused) address as viewer
+      x-least-role: owner
+      requestBody: { $ref: '#/components/requestBodies/Email' }
+      responses:
+        '200': { description: Approved }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/users/refuse:
+    post:
+      summary: Refuse a waiting address
+      x-least-role: owner
+      requestBody: { $ref: '#/components/requestBodies/Email' }
+      responses:
+        '200': { description: Refused }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/users/remove:
+    post:
+      summary: Remove an approved viewer; their sessions end at once
+      x-least-role: owner
+      requestBody: { $ref: '#/components/requestBodies/Email' }
+      responses:
+        '200': { description: Removed }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/users/machines/revoke:
+    post:
+      summary: Revoke a machine account; its tokens end at once (a new secret is made only on the laptop)
+      x-least-role: owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 31 }
+      responses:
+        '200': { description: Revoked }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/users/settings:
+    post:
+      summary: Switch access requests on or off (off = unknown addresses are simply refused)
+      x-least-role: owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [access_requests]
+              properties:
+                access_requests: { type: boolean }
+      responses:
+        '200': { description: Saved }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    session: { type: apiKey, in: cookie, name: __Host-tdash }
+    bearer: { type: http, scheme: bearer }
+    basic: { type: http, scheme: basic, description: 'client ID and secret, made with scripts/dashboard-m2m.sh' }
+  requestBodies:
+    Email:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, format: email }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string, enum: [bad_request, not_signed_in, forbidden, forgery_check, not_found, invalid_client, locked, server_error] }
+        message: { type: string }
+    Role:
+      type: string
+      enum: [owner, admin, viewer]
+    Me:
+      type: object
+      required: [kind, id, role]
+      properties:
+        kind: { type: string, enum: [person, machine] }
+        id: { type: string, description: e-mail address or machine name }
+        role: { $ref: '#/components/schemas/Role' }
+        csrf: { type: string, description: people only; send back as X-CSRF-Token with every change }
+    UsersOverview:
+      type: object
+      required: [owner, people, requests, refused, machines, settings, log]
+      properties:
+        owner:
+          type: object
+          properties:
+            email: { type: string }
+            first_utc: { type: string }
+            last_seen_utc: { type: string }
+            last_ip: { type: string }
+        people:
+          type: array
+          items:
+            type: object
+            properties:
+              email: { type: string }
+              role: { $ref: '#/components/schemas/Role' }
+              approved_utc: { type: string }
+              last_seen_utc: { type: [string, 'null'] }
+              last_ip: { type: [string, 'null'] }
+        requests:
+          type: array
+          items:
+            type: object
+            properties:
+              email: { type: string }
+              requested_utc: { type: string }
+              last_try_utc: { type: string }
+              ip: { type: string }
+        refused:
+          type: array
+          items:
+            type: object
+            properties:
+              email: { type: string }
+              refused_utc: { type: string }
+        machines:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              role: { $ref: '#/components/schemas/Role' }
+              client_id: { type: string }
+              created_utc: { type: string }
+              secret_set_utc: { type: string }
+              revoked_utc: { type: [string, 'null'] }
+              last_seen_utc: { type: [string, 'null'] }
+        settings:
+          type: object
+          properties:
+            access_requests: { type: boolean }
+        log:
+          type: array
+          items:
+            type: object
+            properties:
+              time_utc: { type: string }
+              event: { type: string }
+              who: { type: string }
+              role: { type: string }
+              ip: { type: string }
+              user_agent: { type: string }
+              detail: { type: string }

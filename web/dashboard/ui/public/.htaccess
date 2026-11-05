@@ -8,6 +8,13 @@ RewriteCond %{HTTPS} !=on [OR]
 RewriteCond %{HTTP_HOST} !^trader\.uzlabz\.com$ [NC]
 RewriteRule ^(.*)$ https://trader.uzlabz.com/$1 [R=301,L]
 
+# Hand the Authorization header on to PHP (machine sign-in and access tokens).
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# The API and the sign-in addresses go to the PHP front controller; its code lives outside the web root.
+RewriteCond %{REQUEST_URI} !^/api/index\.php$
+RewriteRule ^(api|auth)(/|$) api/index.php [L]
+
 <IfModule mod_headers.c>
   Header always set X-Robots-Tag "noindex, nofollow"
   Header always set Strict-Transport-Security "max-age=31536000"
