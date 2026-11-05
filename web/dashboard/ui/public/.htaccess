@@ -1,6 +1,7 @@
 # Trader Dashboard: Apache settings for the web root of trader.uzlabz.com (dashboard.md §4).
 Options -Indexes
 DirectoryIndex index.html
+ErrorDocument 404 /404.html
 
 RewriteEngine On
 # HTTPS only, and only under trader.uzlabz.com (the folder also answers at uzlabz.com/trader).
@@ -21,4 +22,8 @@ RewriteRule ^(api|auth)(/|$) api/index.php [L]
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
   Header always set Referrer-Policy "same-origin"
+  # Pages are checked for a newer version on every visit; Next.js's own files carry a hash in their name.
+  <FilesMatch "\.(html|txt)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
 </IfModule>
