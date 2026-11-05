@@ -85,13 +85,7 @@ paths:
           description: The uploaded status.json, or none yet
           content:
             application/json:
-              schema:
-                type: object
-                required: [available]
-                properties:
-                  available: { type: boolean }
-                  reason: { type: string }
-                additionalProperties: true
+              schema: { $ref: '#/components/schemas/Status' }
         '401': { $ref: '#/components/responses/Error' }
   /api/users:
     get:
@@ -198,6 +192,72 @@ components:
     Role:
       type: string
       enum: [owner, admin, viewer]
+    Status:
+      type: object
+      description: |
+        `available` false (with `reason`) until the laptop's first upload. Otherwise the laptop's status.json (build step 4),
+        made at each upload from systemctl and the bots' events.csv. Times are UTC, "yyyy-MM-dd HH:mm:ss".
+      required: [available]
+      properties:
+        available: { type: boolean }
+        reason: { type: string }
+        generated_utc: { type: string, description: when the laptop made this file (the data's age) }
+        units:
+          type: array
+          description: each bot and timer (Scout, TM, Audit Bot, audit report, data upload, control sync)
+          items:
+            type: object
+            required: [name, kind, state]
+            properties:
+              name: { type: string }
+              kind: { type: string, enum: [bot, timer] }
+              state: { type: string, enum: [running, stopped, failed, waiting] }
+              since_utc: { type: [string, 'null'] }
+              build: { type: [string, 'null'], description: 'e.g. Scout-ae41f2c' }
+              last_log_utc: { type: [string, 'null'] }
+              errors_today: { type: integer }
+              warnings_today: { type: integer }
+              schedule: { type: [string, 'null'], description: 'e.g. every 30 min, at :02 and :32' }
+              last_run_utc: { type: [string, 'null'] }
+              last_result: { type: [string, 'null'], enum: [ok, failed, null] }
+              next_run_utc: { type: [string, 'null'] }
+        events:
+          type: array
+          description: today's warnings and errors, the newest 20
+          items:
+            type: object
+            required: [time_utc, bot, level, message]
+            properties:
+              time_utc: { type: string }
+              bot: { type: string }
+              level: { type: string, enum: [warning, error] }
+              message: { type: string }
+        upload:
+          type: object
+          properties:
+            last_utc: { type: [string, 'null'] }
+            seconds: { type: [number, 'null'] }
+            files: { type: [integer, 'null'] }
+            next_utc: { type: [string, 'null'] }
+        sync:
+          type: object
+          properties:
+            last_utc: { type: [string, 'null'] }
+            ack_received: { type: boolean }
+            next_utc: { type: [string, 'null'] }
+        controls:
+          type: array
+          description: the last 50 control changes, newest first (build step 6)
+          items:
+            type: object
+            required: [time_utc, change, by, applied]
+            properties:
+              time_utc: { type: string }
+              change: { type: string }
+              by: { type: string }
+              applied: { type: string, enum: [waiting, applied, refused] }
+              applied_utc: { type: [string, 'null'] }
+              reason: { type: [string, 'null'] }
     Me:
       type: object
       required: [kind, id, role]
