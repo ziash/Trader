@@ -1,0 +1,17 @@
+# Trader Dashboard: Apache settings for the web root of trader.uzlabz.com (dashboard.md §4).
+Options -Indexes
+DirectoryIndex index.html
+
+RewriteEngine On
+# HTTPS only, and only under trader.uzlabz.com (the folder also answers at uzlabz.com/trader).
+RewriteCond %{HTTPS} !=on [OR]
+RewriteCond %{HTTP_HOST} !^trader\.uzlabz\.com$ [NC]
+RewriteRule ^(.*)$ https://trader.uzlabz.com/$1 [R=301,L]
+
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "same-origin"
+</IfModule>
