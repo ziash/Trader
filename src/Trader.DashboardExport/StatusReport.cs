@@ -115,11 +115,13 @@ public sealed class StatusReport(string tradebotHome, ISystemd systemd)
             var last = Systemctl.Time(t.GetValueOrDefault("LastTriggerUSec"));
             if (timer.Unit == "trader-dashboard")
                 nextUpload = next;
-            var state = s.GetValueOrDefault("ActiveState") is "active" or "activating" ? "running"
+            // status.json is written by the upload itself: that run has just sent the data, so it counts as done.
+            var self = timer.Unit == "trader-dashboard" && upload.LastUtc is not null;
+            var state = s.GetValueOrDefault("ActiveState") is "active" or "activating" && !self ? "running"
                 : t.GetValueOrDefault("ActiveState") == "active" ? "waiting"
                 : "stopped";
-            var result = last is null ? null : s.GetValueOrDefault("Result") == "success" ? "ok" : "failed";
-            units.Add(new UnitStatus(timer.Name, "timer", state, Schedule: timer.Schedule, LastRunUtc: UtcOrNull(last),
+            var result = self ? "ok" : last is null ? null : s.GetValueOrDefault("Result") == "success" ? "ok" : "failed";
+            units.Add(new UnitStatus(timer.Name, "timer", state, Schedule: timer.Schedule, LastRunUtc: self ? upload.LastUtc : UtcOrNull(last),
                 LastResult: result, NextRunUtc: UtcOrNull(next)));
         }
 

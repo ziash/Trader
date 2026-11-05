@@ -146,6 +146,8 @@ public sealed class ExportTests : IDisposable
 
     private sealed class FakeSystemd(Dictionary<string, Dictionary<string, string>> units) : ISystemd
     {
+        public Dictionary<string, Dictionary<string, string>> Units => units;
+
         public IReadOnlyDictionary<string, string> Show(string unit, params string[] properties) =>
             units.TryGetValue(unit, out var v) ? v : new Dictionary<string, string> { ["LoadState"] = "not-found" };
 
@@ -178,14 +180,25 @@ public sealed class ExportTests : IDisposable
             ["trader-dashboard.service"] = new() { ["ActiveState"] = "inactive", ["Result"] = "exit-code" },
         });
 
-        var s = new StatusReport(Home, systemd).Build([A], new DateTime(2026, 11, 5, 18, 0, 0, DateTimeKind.Utc), new UploadInfo("2026-11-05 10:00:00", 3.5, 12, null));
+        var s = new StatusReport(Home, systemd).Build([A], new DateTime(2026, 11, 5, 18, 0, 0, DateTimeKind.Utc), new UploadInfo("2026-11-05 18:00:00", 3.5, 12, null));
 
         var scout = s.Units.Single(u => u.Name == "Scout");
         Assert.Equal(("running", "Scout-6711a92", "2026-11-04 18:24:01", 1, 1), (scout.State, scout.Build, scout.SinceUtc, scout.ErrorsToday, scout.WarningsToday));
         Assert.Equal("failed", s.Units.Single(u => u.Name == "TM").State);
         Assert.DoesNotContain(s.Units, u => u.Name == "Audit Bot" || u.Name == "Control sync" || u.Name == "Audit report");
         var upload = s.Units.Single(u => u.Name == "Data upload");
-        Assert.Equal(("waiting", "failed", "2026-11-05 18:02:00"), (upload.State, upload.LastResult, upload.NextRunUtc));
+        Assert.Equal(("waiting", "ok", "2026-11-05 18:00:00", "2026-11-05 18:02:00"), (upload.State, upload.LastResult, upload.LastRunUtc, upload.NextRunUtc));
+
+        // Without an upload (a dry run): the timer's last run and its result as systemd has them.
+        var dry = new StatusReport(Home, systemd).Build([A], new DateTime(2026, 11, 5, 18, 0, 0, DateTimeKind.Utc), new UploadInfo(null, null, null, null))
+            .Units.Single(u => u.Name == "Data upload");
+        Assert.Equal(("waiting", "failed", "2026-11-05 17:33:20"), (dry.State, dry.LastResult, dry.LastRunUtc));
+
+        // Written during an upload (the service is running): that upload is the last run, and it worked.
+        systemd.Units["trader-dashboard.service"] = new() { ["ActiveState"] = "activating", ["Result"] = "success" };
+        var during = new StatusReport(Home, systemd).Build([A], new DateTime(2026, 11, 5, 18, 0, 0, DateTimeKind.Utc), new UploadInfo("2026-11-05 18:00:01", 3.5, 12, null))
+            .Units.Single(u => u.Name == "Data upload");
+        Assert.Equal(("waiting", "ok", "2026-11-05 18:00:01"), (during.State, during.LastResult, during.LastRunUtc));
         Assert.Equal("2026-11-05 18:02:00", s.Upload.NextUtc);
         Assert.Equal(["error", "warning"], s.Events.Select(e => e.Level));
         Assert.Equal("ScoutRefused: order refused, margin", s.Events[1].Message);
