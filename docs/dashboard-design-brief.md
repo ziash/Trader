@@ -4,7 +4,7 @@ Brief for **Claude Design**. Paste this whole document into Claude Design as the
 
 | Item | Value |
 |---|---|
-| Brief version | v1.2 (05-Nov-2026), for [dashboard.md](dashboard.md) v1.3 |
+| Brief version | v1.3 (05-Nov-2026), for [dashboard.md](dashboard.md) v1.4 |
 | Product | Trader Dashboard — `https://trader.uzlabz.com` |
 | Users | The owner (everything); approved viewers (read only), both signing in with Google; machine accounts (Claude) through M2M sign-in, which use the API, not the screens |
 | Deliverables | §12 |
@@ -36,7 +36,8 @@ A private web dashboard for one person who runs automated trading bots on demo a
 
 ## 4. Technical constraints (the build)
 
-- Pages are **rendered on the server in PHP** (classic web pages, one URL per screen), then enhanced with **small vanilla JavaScript** — no React / single-page app, no build step. Design for HTML + CSS that can be cut into templates.
+- The screens are built in **React + TypeScript with Next.js**, exported as static files (no Node.js server: a small PHP API on the host supplies the data). One URL per screen (`/scout`, `/symbols` …), so links and the back button work. Design for **React components** — no particular UI library required; keep dependencies few.
+- **All data arrives from a JSON API after sign-in**, so every data block needs a *loading* (skeleton), *empty* and *error / stale data* state. Data refreshes in place every 30 minutes and on demand (show "updated HH:MM"); controls save without reloading the page.
 - **Design tokens as CSS custom properties** (colours, type scale, spacing, radii, shadows), light and dark sets; dark mode follows the system setting with a manual toggle.
 - Fonts: one sans-serif for text and a monospaced or tabular-figure face for numbers (e.g. Inter + JetBrains Mono, or IBM Plex Sans + Plex Mono), from Google Fonts or the system stack.
 - Breakpoints: phone 360–430 px, tablet 768 px, desktop 1280–1440 px. No horizontal page scroll on phones; wide tables scroll inside their own box with the first column pinned.
@@ -257,7 +258,7 @@ No order entry, no buy/sell or close buttons, no live price ticker, no options o
 2. **Component sheet** with every state of 7.1, the setting row of 7.2 in all four types and all delivery states, the view-only state (7.3), role badges, chips, pills, tags, banners, empty states, toasts.
 3. **Design tokens** as CSS custom properties (light and dark), and the type scale.
 4. **Clickable prototype** of five flows: (a) sign in → Scout → skip a setup → *waiting* → *applied*; (b) switch a symbol off with pending orders → confirm → applied; (c) change a symbol's timeframe 1H → 1D → confirm → applied, and its next setup card shows "1D"; (d) Conditions → what-if with a size above "largest size now" (warning); (e) a new person signs in with Google → access requested → the owner approves on Users → the person sees Scout in view-only.
-5. Exported **HTML/CSS** of the screens where possible, to be turned into PHP templates.
+5. Exported **React components (TypeScript)** for the screens and the component sheet, styled with the design tokens (CSS custom properties) — to be used directly in the Next.js app.
 
 ## 13. Glossary for the designer
 
@@ -287,3 +288,4 @@ No order entry, no buy/sell or close buttons, no live price ticker, no options o
 | v1.0 | 04 Nov 2026 | First issue, for dashboard.md v1.1 |
 | v1.1 | 05 Nov 2026 | Owner: extensible design. Controls generated from an options catalogue: generic setting rows in four types (§7.2), timeframe per symbol as the first new option (§6.4), a Settings page (§6.5), timeframe chips on setup cards, a fourth prototype flow; for dashboard.md v1.2 |
 | v1.2 | 05 Nov 2026 | Owner: viewers (read only, approved by the owner) and machine sign-in (M2M, for Claude): sign-in options list with Google and M2M (§6.1), access-requested and refused states, Users page (§6.11), view-only state of controls (§7.3), role badges, a fifth prototype flow; for dashboard.md v1.3 |
+| v1.3 | 05 Nov 2026 | Owner: stack is Next.js + React + TypeScript (static export) with a small PHP API, instead of PHP pages (§4): deliver React components; loading, empty and error states for every data block; for dashboard.md v1.4 |

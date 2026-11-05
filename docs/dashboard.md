@@ -5,12 +5,12 @@
 | Item | Value |
 |---|---|
 | Status | **Specified — waiting for the owner's OK** (04-Nov-2026). Hosting ready: subdomain, HTTPS and upload key set up (§8 step 0) |
-| Document version | v1.3 (05-Nov-2026) — history in §11 |
+| Document version | v1.4 (05-Nov-2026) — history in §11 |
 | Address | `https://trader.uzlabz.com` — people sign in with Google (owner `zia.zeeshan@gmail.com`; others watch once approved), machines with M2M sign-in (`claude`, administrator); API under `/api/` (§5) |
-| Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) — so nothing of ours can run there all the time; the site is PHP pages only |
+| Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) and no Node.js — so nothing of ours can run there all the time; the site is plain files (the screens) plus a small PHP API (§4.1) |
 | Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result is the reference for the pages |
-| Code | `web/dashboard/` (the PHP site), `src/Trader.DashboardExport` (the laptop program that collects the data), `scripts/dashboard-push.sh` (30-min upload), `scripts/dashboard-sync.sh` (1-min control sync), `scripts/deploy-dashboard.sh` (puts the site on Hostinger), `scripts/dashboard-m2m.sh` (machine accounts, §5.3); in Scout: reading the control file ([Scout](bots/scout.md), §3.4); the options catalogue `config/scout-controls.json` (§3.4) |
-| Tests | `tests/Trader.DashboardExport.Tests` (what gets collected and what never does); Scout's tests for the control file; the PHP pages checked by hand |
+| Code | `web/dashboard/ui/` (the screens: Next.js + React + TypeScript, exported as plain files), `web/dashboard/api/` (the PHP API), `web/dashboard/openapi.yaml` (the API contract both follow, §4.1), `src/Trader.DashboardExport` (the laptop program that collects the data), `scripts/dashboard-push.sh` (30-min upload), `scripts/dashboard-sync.sh` (1-min control sync), `scripts/deploy-dashboard.sh` (puts the site on Hostinger), `scripts/dashboard-m2m.sh` (machine accounts, §5.3); in Scout: reading the control file ([Scout](bots/scout.md), §3.4); the options catalogue `config/scout-controls.json` (§3.4) |
+| Tests | `tests/Trader.DashboardExport.Tests` (what gets collected and what never does); Scout's tests for the control file; Vitest for the screens, PHPUnit for the API, and a test that every API call refuses anyone not signed in or without the role |
 | Accounts | Reads IC Markets demo 49123893 (`brokerA`) and Pepperstone demo 49124666 (`brokerB`) ([shared §4](shared.md#4-safety-rules-for-every-bot)) |
 | Credentials | Laptop: `~/.config/trader/hostinger_ed25519` (upload key), `hostinger_known_hosts`, `dashboard.env`, `dashboard-m2m.env` (Claude's M2M secret) — all 600, outside the repo. Server: `~/trader-dashboard/config.php` (Google sign-in client ID and secret, the owner's address) and `users.json` (people and machines; machine secrets as hashes only), mode 600 — never in Git |
 | Services | `trader-dashboard.timer` (data upload, every 30 min), `trader-dashboard-sync.timer` (controls, every minute) — systemd user units |
@@ -233,18 +233,33 @@ An option in the catalogue that the running Scout does not know yet is shown gre
 
 | Server folder | Holds | Reachable from the web? |
 |---|---|---|
-| `~/domains/uzlabz.com/public_html/trader/` | The pages, styles and scripts, `.htaccess` (from `web/dashboard/public/`). Hostinger's `default.php` is removed | Yes — the web root of trader.uzlabz.com |
-| `~/trader-dashboard/app/` | The PHP code that reads the files, signs you in and writes the controls (from `web/dashboard/app/`) | No |
+| `~/domains/uzlabz.com/public_html/trader/` | The screens as exported by Next.js (HTML, CSS, JavaScript, fonts — the same files for everyone, no data in them), the API's entry files `api/index.php` and `auth/index.php` that hand every request to `app/`, and `.htaccess`. Hostinger's `default.php` is removed | Yes — the web root of trader.uzlabz.com |
+| `~/trader-dashboard/app/` | The PHP API: signs you in, checks the role, reads the files and writes the controls (from `web/dashboard/api/`) | No |
 | `~/trader-dashboard/data/` | The uploaded files (§3.1), same layout as on the laptop | No — pictures and files are handed out only by the PHP code, after sign-in |
 | `~/trader-dashboard/controls/` | The control files and `control-history.csv` (§3.4) | No |
 | `~/trader-dashboard/config.php` | Google sign-in client ID and secret, the owner's address; made once on the server, mode 600 | No |
 | `~/trader-dashboard/users.json` | People (address, role, Google `sub`, approved when) and machines (name, role, client ID, secret **hash**), access requests; mode 600 | No |
 | `~/trader-dashboard/logs/` | Sign-ins, refused sign-ins, approvals and API calls (`access.csv`) | No |
 
+- **The screens hold no data:** after sign-in they fetch everything from the API as JSON (pictures too), so nothing private is ever a plain file in `public_html`.
 - **PHP**, the web language Hostinger runs, reads the CSV files directly; **no database** (MySQL) — the files are small (a day of Scout and TM is well under 1 MB). Added later only if pages get slow.
 - The site has **no cTrader credentials and no connection to cTrader**: even someone who broke into the server could read the demo logs and change Scout's options — only those the laptop's catalogue lists, only to the values it allows (§3.4) — but never place an order itself.
 - The subdomain's folder lies inside the main site's, so the same pages would also answer at `uzlabz.com/trader`; `.htaccess` (Apache's per-folder settings file) sends those to `https://trader.uzlabz.com`, forces HTTPS, turns off folder listings and blocks every file except the pages and their styles.
-- **Deploy:** `scripts/deploy-dashboard.sh` sends `web/dashboard/` over the same SSH key; it never touches `data/`, `controls/`, `config.php` or `users.json`.
+- **Deploy:** `scripts/deploy-dashboard.sh` builds the screens on the laptop (Next.js static export), then sends them and the API over the same SSH key; it never touches `data/`, `controls/`, `config.php` or `users.json`.
+
+### 4.1 Stack (owner, 05-Nov-2026)
+
+| Part | Choice |
+|---|---|
+| Screens | **Next.js** (static export) + **React** + **TypeScript**, built on the laptop and uploaded as plain files; one address per screen (`/scout`, `/symbols` …), so links and the back button work |
+| Look | The design tokens of the [brief](dashboard-design-brief.md) as CSS custom properties (light and dark); Claude Design's React components as the starting point |
+| Data on the page | Fetched from the API every 30 min and on demand, updated in place; controls save without reloading the page |
+| Charts | Scout's own SVG order pictures; a small chart library only if the balance and profit charts need one |
+| API | Plain **PHP 8.3**, no framework; Google sign-in through a well-known library, not our own code; files outside `public_html`, no database |
+| Contract | `web/dashboard/openapi.yaml` describes every API call; the screens' TypeScript types are generated from it, so the two sides cannot drift apart |
+| Tests | Vitest (screens), PHPUnit (API) |
+
+**Why:** the screens and the machines (M2M, §5.3) use **one** API, so there is one set of rules to secure and test instead of pages plus an API. The contract is the fixed point between the two halves: on a plan with Node.js or a VPS later, the PHP API can be replaced (Next.js server code, or .NET like the bots) without touching a screen, and the screens can move unchanged. It runs on the plan already paid for — the server has PHP 8.3 but no Node.js (checked 05-Nov-2026), so a Next.js server cannot run there.
 
 ## 5. Sign-in and roles (owner, 04–05-Nov-2026)
 
@@ -266,7 +281,7 @@ Every page and every API call checks the role on the server; a hidden button is 
 - **Others can watch** (owner, 05-Nov-2026): anyone may sign in with Google, but an address the site does not know lands on **"Access requested — waiting for approval"** and sees nothing. The owner sees the request on the Users page and approves it as **viewer** (or refuses it). Approved viewers can be removed at any time.
 - **Setup (owner, once, step 3):** in Google Cloud Console a project "Trader Dashboard" with an **OAuth client** (the ID and secret that let our site use Google sign-in): type *Web application*, redirect address `https://trader.uzlabz.com/auth/callback`, only the sign-in scopes `openid email` (no Gmail, Drive or other access). Consent screen **published** ("In production"), so people other than you can sign in; with only these basic scopes Google asks for no review. Who gets in is decided by our own list (above), not by Google. The client secret goes straight into `config.php` on the server, never into Git or chat.
 - **How it is checked:** the standard sign-in flow (OpenID Connect, authorisation code with PKCE): a one-time `state` and `nonce` against forged replies; the reply's issuer, audience (our client ID), expiry and signature (Google's published keys) are checked; `email_verified` must be true; Google's fixed account number (`sub`) is recorded at the first sign-in and must match afterwards.
-- **Session:** after sign-in a **session cookie** (a small token the browser keeps, sent back with each page) keeps you in: HTTPS only, not readable by scripts, not sent by other sites. Idle timeout 14 days (owner), 7 days (viewers); **Sign out** ends it at once. Every control also carries a one-time form token, so another site cannot change it for you.
+- **Session:** after sign-in a **session cookie** (a small token the browser keeps, sent back with each page) keeps you in: HTTPS only, not readable by scripts, not sent by other sites. Idle timeout 14 days (owner), 7 days (viewers); **Sign out** ends it at once. Every change also carries an anti-forgery token, so another site cannot make it for you.
 
 ### 5.3 Machines: "M2M sign-in" (owner, 05-Nov-2026)
 
@@ -274,7 +289,7 @@ Every page and every API call checks the role on the server; a hidden button is 
 
 - **Machine account:** a name (`claude`), a role (administrator), a **client ID** and a **client secret** (a long random key). Made on the laptop with `scripts/dashboard-m2m.sh create claude --role admin`: the script writes the secret to `~/.config/trader/dashboard-m2m.env` (mode 600) and sends only its **hash** (one-way scrambled form) to the server over SSH. The secret never passes through a browser, chat or Git.
 - **Signing in:** the program sends its client ID and secret to `POST https://trader.uzlabz.com/api/auth/token` (HTTPS, in the request header, never in the address) and gets an **access token** valid for 1 hour; it then calls the dashboard's **API** with it. This is the standard "client credentials" way machines sign in.
-- **The API** gives the same data as the pages, as JSON (`/api/scout/setups`, `/api/accounts`, `/api/conditions`, `/api/status`, `/api/options` …), and — for administrators — `POST /api/controls` to change an option, under exactly the same rules as the page (catalogue, values, history, Scout's acknowledgement; §3.4). Every call is logged with the machine's name.
+- **The API** is the one the screens use themselves (§4.1), so a machine gets the same data, as JSON (`/api/scout/setups`, `/api/accounts`, `/api/conditions`, `/api/status`, `/api/options` …), and — for administrators — `POST /api/controls` to change an option, under exactly the same rules as the page (catalogue, values, history, Scout's acknowledgement; §3.4). Every call is logged with the machine's name.
 - **Limits:** a machine account can never use the Users page or create other accounts; after 5 wrong secrets in 15 min its sign-in is locked for 15 min and the owner is told; the owner can **revoke** it at any time (Users page or laptop) and **rotate** its secret from the laptop (`scripts/dashboard-m2m.sh rotate claude` — the new secret has to land on the laptop, so this is not done from the web).
 - **On the sign-in page** the M2M way is shown as a second option, "Machine sign-in (M2M)", which explains it and links to the API description — there is no form to paste a secret into, so a secret is never typed into a web page.
 
@@ -294,7 +309,7 @@ People and machines with their sign-in method, role, last seen and address; acce
 ## 7. Run and operate
 
 ```bash
-scripts/deploy-dashboard.sh                                   # put the site (web/dashboard/) on Hostinger
+scripts/deploy-dashboard.sh                                   # build the screens; put them and the API on Hostinger
 systemctl --user enable --now trader-dashboard.timer          # start the 30-min uploads
 systemctl --user enable --now trader-dashboard-sync.timer     # start the 1-min control sync
 systemctl --user list-timers 'trader-dashboard*'              # when are the next ones?
@@ -315,7 +330,7 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 | 0 | Hosting: SSH on (owner), upload key added (owner), server identity pinned, subdomain trader.uzlabz.com, HTTPS (Lifetime SSL) | Done 04-Nov-2026 |
 | 1 | This document and the design brief (owner's OK) | Waiting |
 | 2 | Design in Claude Design from the brief (owner); the result saved with the brief | — |
-| 3 | Google sign-in client (owner, §5.2); site skeleton with both sign-ins, roles, Users page, access requests, the API's sign-in; Claude's machine account; Status page; `deploy-dashboard.sh` | — |
+| 3 | Google sign-in client (owner, §5.2); site skeleton with both sign-ins, roles, Users page, access requests, the API's sign-in; Claude's machine account; the API contract (`openapi.yaml`); the Next.js app from Claude Design's components; Status page; `deploy-dashboard.sh` | — |
 | 4 | Data upload: allowlist, secrets check, `status.json`, `dashboard-push.sh`, timer — no cTrader connection yet. Dry run, then the first real upload. Scout page (view only) | — |
 | 5 | Account snapshot (§3.2, §3.3) — read-only cTrader questions; Accounts, Trading conditions with the "what if" box, TM trades, Audit pages | — |
 | 6 | Controls: the options catalogue with today's three options (symbol on/off, setup keep/skip, symbol timeframe); controls drawn from it on the site; `dashboard-sync.sh` and its timer; Scout reads the control file and acknowledges each entry ([Scout](bots/scout.md) document first; tested with `--dry-run`, then deployed and restarted with your OK) | — |
@@ -325,7 +340,7 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 
 | # | Decision | Why |
 |---|---|---|
-| 1 | PHP site on the existing Hostinger web hosting, not a VPS | Already paid for; a VPS costs more and the dashboard needs nothing running there (owner, 04-Nov-2026) |
+| 1 | ~~PHP site~~ → Next.js screens with a small PHP API (decision 17), on the existing Hostinger web hosting, not a VPS | Already paid for; a VPS costs more and the dashboard needs nothing running there (owner, 04-Nov-2026) |
 | 2 | The laptop pushes data and fetches controls; the server never connects to the laptop | Hostinger cannot reach a home laptop; nothing on the laptop is opened to the internet |
 | 3 | No cTrader credentials on the server | A break-in there can never trade |
 | 4 | Data every 30 min, at :02 and :32 (owner, 04-Nov-2026) | You check Scout's findings every 30 min to trade 1H; :02 is just after the hourly candle closes |
@@ -341,6 +356,7 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 | 14 | **Extensible options** (owner, 05-Nov-2026): one catalogue of options on the laptop (key, scope, type, allowed values, default, help), one control file per bot and account holding only what you changed, the site's controls drawn from the catalogue, Scout acknowledging each entry | A new option needs a catalogue entry and Scout's support, not a new page, file format or design; first one: timeframe per symbol |
 | 15 | **Others may watch** (owner, 05-Nov-2026): any Google account can ask; the owner approves it as viewer (read only) | Share the dashboard without sharing control; nobody sees anything before approval |
 | 16 | **M2M sign-in for machines**, first `claude` as administrator (owner, 05-Nov-2026): client ID + secret → 1-hour token → JSON API; the secret made on the laptop, only its hash on the server; machines cannot manage users | Claude can read and steer without a Google account; a leaked token expires within the hour and the secret can be revoked |
+| 17 | **Next.js + React screens (static export) with a small PHP API**, one contract between them (owner, 05-Nov-2026; §4.1) | One API for screens and machines; either half can be replaced later behind the same contract; Claude Design's React work carries over; runs on the current plan, which has no Node.js |
 
 ## 10. Open items
 
@@ -362,3 +378,4 @@ scripts/dashboard-m2m.sh revoke claude                        # remove it
 | v1.1 | 04 Nov 2026 | Owner: switches for symbols (§2.2) and keep / skip per setup (§2.1), kept in small control files Scout reads back, fetched every minute (§3.4; decisions 10–12); **Sign in with Google**, administrator `zia.zeeshan@gmail.com`, replaces the password login (§5, decision 5); look designed in Claude Design from [the brief](dashboard-design-brief.md) (decision 13); build steps re-ordered (§8) |
 | v1.2 | 05 Nov 2026 | Owner: the design must be extensible, first new option a symbol's timeframe (1H → 1D). An options catalogue on the laptop defines what the web may set and to which values; one control file per bot and account; the site draws its controls from the catalogue; Scout applies and acknowledges each entry (§3.4, decisions 11 and 14); Symbols page becomes Symbols and settings, plus a Settings page (§2.2) |
 | v1.3 | 05 Nov 2026 | Owner: others may sign in with Google and watch once approved (viewer role); Claude gets an administrator account through a new **M2M sign-in** (client ID + secret → token → JSON API) with no Google account; roles owner / administrator / viewer; Users page (§2.8, §5; decisions 15, 16). Google consent screen published instead of testing |
+| v1.4 | 05 Nov 2026 | Owner: **stack** — screens in Next.js + React + TypeScript, exported as plain files, with a small PHP API and one API contract (`openapi.yaml`) between them, instead of PHP pages (§4.1, decision 17); server folders, deploy, tests and build step 3 to match |
