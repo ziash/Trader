@@ -73,14 +73,14 @@ final class App
 
     public function handle(Request $request): Response
     {
+        $who = null;
+        $path = rtrim($request->path, '/') ?: '/';
         try {
-            $path = rtrim($request->path, '/') ?: '/';
             $route = self::ROUTES["{$request->method} $path"] ?? null;
             if ($route === null) {
                 throw new HttpError(404, 'not_found', 'No such address');
             }
             [$least, $handler] = $route;
-            $who = null;
             if ($least !== 'public') {
                 $who = $this->authenticate($request);
                 if (!$who->atLeast($least)) {
@@ -89,14 +89,14 @@ final class App
                 $this->checkForgery($request, $who);
             }
             $response = $this->$handler($request, $who);
-            if ($who?->kind === 'machine') {
-                $this->log->write('api', $who->id, $who->role, $request, "{$request->method} $path {$response->status}");
-            }
         } catch (HttpError $e) {
             $response = Response::json($e->status, ['error' => $e->errorCode, 'message' => $e->getMessage()]);
         } catch (\Throwable $e) {
             error_log('trader-dashboard: ' . $e::class . ': ' . $e->getMessage());
             $response = Response::json(500, ['error' => 'server_error', 'message' => 'Something went wrong on the server']);
+        }
+        if ($who?->kind === 'machine') { // every machine call, refused ones too
+            $this->log->write('api', $who->id, $who->role, $request, "{$request->method} $path {$response->status}");
         }
         return $response->withHeader('Cache-Control', 'no-store');
     }

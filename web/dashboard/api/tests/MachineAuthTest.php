@@ -86,7 +86,9 @@ final class MachineAuthTest extends TestCase
         [$id, $secret] = $this->kit->machine();
         $bearer = ['authorization' => 'Bearer ' . $this->kit->machineToken($id, $secret)->data()['access_token']];
         $this->kit->request('GET', '/api/status', ['headers' => $bearer]);
+        $this->kit->request('GET', '/api/users', ['headers' => $bearer]);
         $log = file_get_contents("{$this->kit->root}/logs/access.csv");
+        self::assertStringContainsString('"GET /api/users 403"', $log, 'refused calls are logged too');
         self::assertStringContainsString('m2m_token,claude,admin', $log);
         self::assertStringContainsString('api,claude,admin,203.0.113.7,PHPUnit,"GET /api/status 200"', $log);
         self::assertStringNotContainsString($secret, $log);
