@@ -34,6 +34,8 @@ final class App
         'POST /api/auth/logout' => ['viewer', 'logout'],
         'GET /api/me' => ['viewer', 'me'],
         'GET /api/status' => ['viewer', 'status'],
+        'GET /api/scout' => ['viewer', 'scout'],
+        'GET /api/scout/chart' => ['viewer', 'scoutChart'],
         'GET /api/users' => ['owner', 'usersOverview'],
         'POST /api/users/approve' => ['owner', 'usersApprove'],
         'POST /api/users/refuse' => ['owner', 'usersRefuse'],
@@ -98,7 +100,7 @@ final class App
         if ($who?->kind === 'machine') { // every machine call, refused ones too
             $this->log->write('api', $who->id, $who->role, $request, "{$request->method} $path {$response->status}");
         }
-        return $response->withHeader('Cache-Control', 'no-store');
+        return isset($response->headers['Cache-Control']) ? $response : $response->withHeader('Cache-Control', 'no-store');
     }
 
     // --- Who is calling --------------------------------------------------------------------
@@ -201,6 +203,23 @@ final class App
         return Response::json(200, is_array($status)
             ? ['available' => true] + $status
             : ['available' => false, 'reason' => 'No data uploaded yet']);
+    }
+
+    private function scout(Request $request): Response
+    {
+        $account = $request->query['account'] ?? '';
+        return Response::json(200, (new ScoutData("{$this->dataDir}/logs"))->day($account, $request->query['day'] ?? null));
+    }
+
+    /** An order picture (scout.md §3.1). Scout draws it; it is shown as an image only, so no script in it can run. */
+    private function scoutChart(Request $request): Response
+    {
+        $path = (new ScoutData("{$this->dataDir}/logs"))->chartPath($request->query['file'] ?? '');
+        return new Response(200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            'Cache-Control' => 'private, max-age=86400',
+        ], (string) file_get_contents($path));
     }
 
     // --- Users page (owner only) -----------------------------------------------------------

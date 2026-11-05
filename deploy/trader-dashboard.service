@@ -1,0 +1,17 @@
+# Dashboard data upload (dashboard.md §3.1): stages the allowlisted files, checks them for secrets and sends them
+# to trader.uzlabz.com over SSH. Started by trader-dashboard.timer; installed by scripts/deploy-dashboard-export.sh.
+# Only reads the bots' logs and asks systemd for their state; never starts, stops or restarts a bot (dashboard.md §6).
+#
+#   systemctl --user start trader-dashboard          upload now
+#   journalctl --user -u trader-dashboard -n 50      the last uploads' output
+
+[Unit]
+Description=Trader dashboard upload (allowlisted data to trader.uzlabz.com)
+
+[Service]
+Type=oneshot
+ExecStart=%h/tradebot/bin/DashboardExport/dashboard-push.sh
+WorkingDirectory=%h/tradebot
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+TimeoutStartSec=300
+Nice=10

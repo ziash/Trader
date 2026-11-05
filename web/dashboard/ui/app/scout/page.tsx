@@ -1,5 +1,5 @@
-import { Later } from "@/screens/Later";
+import { ScoutScreen } from "@/screens/ScoutScreen";
 
 export default function Page() {
-  return <Later title="Scout" step={4} what="Scout’s setups and orders with their pictures, and Keep / Skip" />;
+  return <ScoutScreen />;
 }

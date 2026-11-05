@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { usePrefs, type ThemeChoice } from "@/lib/prefs";
-import { StatusProvider, useStatus } from "@/lib/status";
+import { StatusProvider, useAccount, useStatus } from "@/lib/status";
 import { useData } from "@/lib/useData";
 import type { UsersOverview } from "@/api/types";
 import { FreshnessPill } from "./FreshnessPill";
@@ -58,6 +58,7 @@ function Shell({ role, id, signOut, children }: { role: "owner" | "admin" | "vie
   const path = usePathname();
   const { zone, setZone } = usePrefs();
   const status = useStatus();
+  const { accounts, account, setAccount } = useAccount();
   const isOwner = role === "owner";
   const users = useData<UsersOverview>(isOwner ? "/api/users" : null);
   const waiting = users.data?.requests.length ?? 0;
@@ -83,6 +84,9 @@ function Shell({ role, id, signOut, children }: { role: "owner" | "admin" | "vie
       <div className="main-col">
         <header className="topbar">
           <FreshnessPill generatedUtc={status.data?.available ? status.data.generated_utc : null} zone={zone} />
+          {accounts.length > 1 && account && (
+            <Segmented label="Account" value={account.id} onChange={setAccount} options={accounts.map((a) => ({ value: a.id, label: a.name }))} />
+          )}
           <Segmented label="Time display" value={zone} onChange={setZone} options={[{ value: "utc", label: "UTC" }, { value: "local", label: "Local" }]} />
           <span style={{ flex: 1 }} />
           {role === "viewer" && <span className="pill outline"><Lock size={12} />View only</span>}

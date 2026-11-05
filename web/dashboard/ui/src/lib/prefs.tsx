@@ -1,6 +1,6 @@
 "use client";
 
-// Per-viewer conveniences kept in this browser only: theme and time display.
+// Per-viewer conveniences kept in this browser only: theme, time display and the chosen account.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { TimeZoneChoice } from "./time";
 
@@ -11,6 +11,9 @@ type Prefs = {
   setTheme: (t: ThemeChoice) => void;
   zone: TimeZoneChoice;
   setZone: (z: TimeZoneChoice) => void;
+  /** An account id ("brokerA-49123893") as chosen last; checked against the uploaded list where it is used (useAccount). */
+  account: string | null;
+  setAccount: (a: string) => void;
 };
 
 const PrefsContext = createContext<Prefs | null>(null);
@@ -43,10 +46,16 @@ export const THEME_BOOT_SCRIPT = `try{var t=localStorage.getItem("td-theme");if(
 export function PrefsProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeChoice>("system");
   const [zone, setZoneState] = useState<TimeZoneChoice>("utc");
+  const [account, setAccountState] = useState<string | null>(null);
 
   useEffect(() => {
     setThemeState(stored("td-theme", ["system", "light", "dark"] as const, "system"));
     setZoneState(stored("td-zone", ["utc", "local"] as const, "utc"));
+    try {
+      setAccountState(window.localStorage.getItem("td-account"));
+    } catch {
+      /* private window */
+    }
   }, []);
 
   const setTheme = useCallback((t: ThemeChoice) => {
@@ -59,7 +68,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     store("td-zone", z);
   }, []);
 
-  return <PrefsContext.Provider value={{ theme, setTheme, zone, setZone }}>{children}</PrefsContext.Provider>;
+  const setAccount = useCallback((a: string) => {
+    setAccountState(a);
+    store("td-account", a);
+  }, []);
+
+  return <PrefsContext.Provider value={{ theme, setTheme, zone, setZone, account, setAccount }}>{children}</PrefsContext.Provider>;
 }
 
 export function usePrefs(): Prefs {

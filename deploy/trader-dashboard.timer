@@ -1,0 +1,14 @@
+# Runs trader-dashboard.service at :02 and :32 every hour (dashboard.md §3.1, decision 4: :02 catches Scout's orders
+# on each new 1H candle). Persistent=true: after sleep or a restart it runs once at once.
+#
+#   systemctl --user list-timers trader-dashboard    when it runs next
+
+[Unit]
+Description=Dashboard data upload every 30 min, at :02 and :32
+
+[Timer]
+OnCalendar=*-*-* *:02,32:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

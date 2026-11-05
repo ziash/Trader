@@ -7,7 +7,7 @@ info:
     People sign in with Google and are kept in by the session cookie `__Host-tdash`; a change made with the cookie
     must send the session's `csrf` value (from `GET /api/me`) in the `X-CSRF-Token` header.
     Machines get a 1-hour access token from `POST /api/auth/token` and send it as `Authorization: Bearer <token>`.
-    Every answer carries `Cache-Control: no-store`. Errors are `{"error": code, "message": text}`.
+    Every answer carries `Cache-Control: no-store`, except order pictures (private, 1 day). Errors are `{"error": code, "message": text}`.
     Roles: owner > admin > viewer; each operation names the least role it needs (`x-least-role`).
 servers:
   - url: https://trader.uzlabz.com
@@ -87,6 +87,35 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Status' }
         '401': { $ref: '#/components/responses/Error' }
+  /api/scout:
+    get:
+      summary: Scout's setups and orders for one account and UTC day (Scout page, dashboard.md §2.1)
+      x-least-role: viewer
+      parameters:
+        - { name: account, in: query, required: true, schema: { type: string, example: brokerA-49123893 }, description: an id from Status.accounts }
+        - { name: day, in: query, schema: { type: string, example: '2026-11-05' }, description: 'UTC day; default: the latest day with Scout files' }
+      responses:
+        '200':
+          description: The day's setups (newest activity first) and orders (newest first), from the uploaded setups.csv and orders.csv
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScoutDay' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/scout/chart:
+    get:
+      summary: An order picture (scout.md §3.1); the path from ScoutOrder.chart
+      x-least-role: viewer
+      parameters:
+        - { name: file, in: query, required: true, schema: { type: string, example: brokerA/49123893/Scout-6d48a6/2026-11-05/charts/AUDJPY-H1-202611042200-M-1035821352.svg } }
+      responses:
+        '200':
+          description: 'The SVG picture (720 × 400). Cache-Control: private, max-age=86400 (pictures never change)'
+          content:
+            image/svg+xml: {}
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/users:
     get:
       summary: Users page — people, requests, machines, settings and the newest 100 rows of the access log
@@ -202,6 +231,19 @@ components:
         available: { type: boolean }
         reason: { type: string }
         generated_utc: { type: string, description: when the laptop made this file (the data's age) }
+        accounts:
+          type: array
+          description: the demo accounts the dashboard shows (in scout.json or tm.json); `id` is the account parameter of the other calls
+          items:
+            type: object
+            required: [id, broker, ctid, name, scout, tm]
+            properties:
+              id: { type: string, example: brokerA-49123893 }
+              broker: { type: string }
+              ctid: { type: integer }
+              name: { type: string, example: IC Markets demo }
+              scout: { type: boolean, description: Scout trades this account now }
+              tm: { type: boolean }
         units:
           type: array
           description: each bot and timer (Scout, TM, Audit Bot, audit report, data upload, control sync)
@@ -258,6 +300,85 @@ components:
               applied: { type: string, enum: [waiting, applied, refused] }
               applied_utc: { type: [string, 'null'] }
               reason: { type: [string, 'null'] }
+    ScoutOrder:
+      type: object
+      description: One Scout order, merged from its orders.csv rows (scout.md §3). Prices are strings, as Scout logged them (the broker's digits).
+      required: [order_id, symbol, timeframe, setup_key, role, side, state]
+      properties:
+        order_id: { type: string }
+        placed_utc: { type: [string, 'null'] }
+        symbol: { type: string }
+        timeframe: { type: string, example: H1 }
+        setup_key: { type: string, example: GBPJPY-H1-202611041400 }
+        role: { type: string, enum: [M, R], description: main or reversal stop }
+        side: { type: string, enum: [Buy, Sell] }
+        lots: { type: [number, 'null'] }
+        level: { type: [string, 'null'], description: "the stop order's price, as Scout logged it (e.g. '1.12300')" }
+        stop_loss: { type: [string, 'null'] }
+        expires_utc: { type: [string, 'null'] }
+        state: { type: string, enum: [pending, filled, closed, cancelled, expired, rejected, refused] }
+        state_utc: { type: string }
+        reason: { type: [string, 'null'], description: why cancelled, refused or rejected }
+        price_fill: { type: [string, 'null'] }
+        slip_pips: { type: [number, 'null'] }
+        position_id: { type: [string, 'null'] }
+        gross_usd: { type: [number, 'null'] }
+        net_usd: { type: [number, 'null'], description: closed only; sum of the closing deals' net }
+        chart: { type: [string, 'null'], description: 'the picture, for GET /api/scout/chart?file=' }
+    ScoutSetup:
+      type: object
+      description: One setup (symbol, timeframe, pause start) with an event on the day, from setups.csv, with its current order
+      required: [key, symbol, timeframe, event, event_utc, candle_close_utc, orders, timeline]
+      properties:
+        key: { type: string, example: GBPJPY-H1-202611041400, description: the setup's part of Scout's order label (dashboard.md §3.4) }
+        symbol: { type: string }
+        timeframe: { type: string }
+        setup_utc: { type: string, description: the pause's start }
+        event: { type: string, enum: [NewStop, StopMoved, NewReversal, ReversalMoved, StopFilled, ReversalFilled, Cancelled, TrendTurned] }
+        event_utc: { type: string, description: the day's latest event }
+        candle_close_utc: { type: string, description: close of the candle that event came from (groups the page) }
+        reason: { type: [string, 'null'] }
+        role: { type: [string, 'null'], enum: [M, R, null] }
+        side: { type: [string, 'null'] }
+        level: { type: [string, 'null'] }
+        stop_loss: { type: [string, 'null'] }
+        lots: { type: [number, 'null'] }
+        higher_tf: { type: [string, 'null'] }
+        higher_trend: { type: [string, 'null'], enum: [up, down, null] }
+        with_higher: { type: [boolean, 'null'] }
+        mode: { type: [string, 'null'] }
+        pause_candles: { type: [number, 'null'] }
+        pause_height_atr: { type: [number, 'null'] }
+        move_atr: { type: [number, 'null'] }
+        atr: { type: [string, 'null'] }
+        order: { oneOf: [{ $ref: '#/components/schemas/ScoutOrder' }, { type: 'null' }] }
+        orders: { type: array, items: { type: string }, description: all its order IDs (main and reversal) }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [time_utc, kind, text]
+            properties:
+              time_utc: { type: string }
+              kind: { type: string, enum: [found, placed, moved, filled, closed, cancelled, info] }
+              text: { type: string }
+    ScoutDay:
+      type: object
+      required: [account, day, days, setups, orders, totals]
+      properties:
+        account: { type: string }
+        day: { type: string }
+        days: { type: array, items: { type: string }, description: days with Scout files, oldest first }
+        setups: { type: array, items: { $ref: '#/components/schemas/ScoutSetup' } }
+        orders: { type: array, items: { $ref: '#/components/schemas/ScoutOrder' }, description: orders placed on the day, newest first }
+        totals:
+          type: object
+          required: [orders, filled, closed, net_usd]
+          properties:
+            orders: { type: integer }
+            filled: { type: integer }
+            closed: { type: integer }
+            net_usd: { type: number }
     Me:
       type: object
       required: [kind, id, role]

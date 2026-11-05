@@ -45,6 +45,10 @@ $log->write('api', 'claude', 'admin', $req('203.0.113.24', 'curl/8'), 'GET /api/
 $t = fn (int $minAgo) => gmdate('Y-m-d H:i:s', time() - $minAgo * 60);
 $status = [
     'generated_utc' => $t(6),
+    'accounts' => [
+        ['id' => 'brokerA-49123893', 'broker' => 'brokerA', 'ctid' => 49123893, 'name' => 'IC Markets demo', 'scout' => true, 'tm' => true],
+        ['id' => 'brokerB-49124666', 'broker' => 'brokerB', 'ctid' => 49124666, 'name' => 'Pepperstone demo', 'scout' => false, 'tm' => true],
+    ],
     'units' => [
         ['name' => 'Scout', 'kind' => 'bot', 'state' => 'running', 'since_utc' => $t(960), 'build' => 'Scout-ae41f2c', 'last_log_utc' => $t(3), 'errors_today' => 0, 'warnings_today' => 2],
         ['name' => 'TM', 'kind' => 'bot', 'state' => 'running', 'since_utc' => $t(2400), 'build' => 'TM-41ca4d0', 'last_log_utc' => $t(4), 'errors_today' => 0, 'warnings_today' => 0],
@@ -62,4 +66,11 @@ $status = [
     'controls' => [],
 ];
 Files::writeAtomic("$root/data/status.json", json_encode($status, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+// Scout's logs for the Scout page: the laptop's own staged upload when there is one (stays in the git-ignored .data folder).
+$outbox = getenv('HOME') . '/tradebot/dashboard/outbox/logs';
+if (is_dir($outbox)) {
+    exec('cp -r ' . escapeshellarg($outbox) . ' ' . escapeshellarg("$root/data/"));
+    echo "Copied the staged logs from $outbox\n";
+}
 echo "Sample data in $root\n";

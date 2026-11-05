@@ -235,6 +235,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/scout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scout's setups and orders for one account and UTC day (Scout page, dashboard.md §2.1) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description an id from Status.accounts */
+                    account: string;
+                    /** @description UTC day; default: the latest day with Scout files */
+                    day?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The day's setups (newest activity first) and orders (newest first), from the uploaded setups.csv and orders.csv */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ScoutDay"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/scout/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An order picture (scout.md §3.1); the path from ScoutOrder.chart */
+        get: {
+            parameters: {
+                query: {
+                    file: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The SVG picture (720 × 400). Cache-Control: private, max-age=86400 (pictures never change) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/svg+xml": unknown;
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -486,6 +570,18 @@ export interface components {
             reason?: string;
             /** @description when the laptop made this file (the data's age) */
             generated_utc?: string;
+            /** @description the demo accounts the dashboard shows (in scout.json or tm.json); `id` is the account parameter of the other calls */
+            accounts?: {
+                /** @example brokerA-49123893 */
+                id: string;
+                broker: string;
+                ctid: number;
+                /** @example IC Markets demo */
+                name: string;
+                /** @description Scout trades this account now */
+                scout: boolean;
+                tm: boolean;
+            }[];
             /** @description each bot and timer (Scout, TM, Audit Bot, audit report, data upload, control sync) */
             units?: {
                 name: string;
@@ -535,6 +631,99 @@ export interface components {
                 applied_utc?: string | null;
                 reason?: string | null;
             }[];
+        };
+        /** @description One Scout order, merged from its orders.csv rows (scout.md §3). Prices are strings, as Scout logged them (the broker's digits). */
+        ScoutOrder: {
+            order_id: string;
+            placed_utc?: string | null;
+            symbol: string;
+            /** @example H1 */
+            timeframe: string;
+            /** @example GBPJPY-H1-202611041400 */
+            setup_key: string;
+            /**
+             * @description main or reversal stop
+             * @enum {string}
+             */
+            role: "M" | "R";
+            /** @enum {string} */
+            side: "Buy" | "Sell";
+            lots?: number | null;
+            /** @description the stop order's price, as Scout logged it (e.g. '1.12300') */
+            level?: string | null;
+            stop_loss?: string | null;
+            expires_utc?: string | null;
+            /** @enum {string} */
+            state: "pending" | "filled" | "closed" | "cancelled" | "expired" | "rejected" | "refused";
+            state_utc?: string;
+            /** @description why cancelled */
+            reason?: string | null;
+            price_fill?: string | null;
+            slip_pips?: number | null;
+            position_id?: string | null;
+            gross_usd?: number | null;
+            /** @description closed only; sum of the closing deals' net */
+            net_usd?: number | null;
+            /** @description the picture, for GET /api/scout/chart?file= */
+            chart?: string | null;
+        };
+        /** @description One setup (symbol, timeframe, pause start) with an event on the day, from setups.csv, with its current order */
+        ScoutSetup: {
+            /**
+             * @description the setup's part of Scout's order label (dashboard.md §3.4)
+             * @example GBPJPY-H1-202611041400
+             */
+            key: string;
+            symbol: string;
+            timeframe: string;
+            /** @description the pause's start */
+            setup_utc?: string;
+            /** @enum {string} */
+            event: "NewStop" | "StopMoved" | "NewReversal" | "ReversalMoved" | "StopFilled" | "ReversalFilled" | "Cancelled" | "TrendTurned";
+            /** @description the day's latest event */
+            event_utc: string;
+            /** @description close of the candle that event came from (groups the page) */
+            candle_close_utc: string;
+            reason?: string | null;
+            /** @enum {string|null} */
+            role?: "M" | "R" | null;
+            side?: string | null;
+            level?: string | null;
+            stop_loss?: string | null;
+            lots?: number | null;
+            higher_tf?: string | null;
+            /** @enum {string|null} */
+            higher_trend?: "up" | "down" | null;
+            with_higher?: boolean | null;
+            mode?: string | null;
+            pause_candles?: number | null;
+            pause_height_atr?: number | null;
+            move_atr?: number | null;
+            atr?: string | null;
+            order?: components["schemas"]["ScoutOrder"] | null;
+            /** @description all its order IDs (main and reversal) */
+            orders: string[];
+            timeline: {
+                time_utc: string;
+                /** @enum {string} */
+                kind: "found" | "placed" | "moved" | "filled" | "closed" | "cancelled" | "info";
+                text: string;
+            }[];
+        };
+        ScoutDay: {
+            account: string;
+            day: string;
+            /** @description days with Scout files */
+            days: string[];
+            setups: components["schemas"]["ScoutSetup"][];
+            /** @description orders placed on the day */
+            orders: components["schemas"]["ScoutOrder"][];
+            totals: {
+                orders: number;
+                filled: number;
+                closed: number;
+                net_usd: number;
+            };
         };
         Me: {
             /** @enum {string} */
