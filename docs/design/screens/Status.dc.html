@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.ch{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--border)}
+.ch h2{margin:0;font-size:16px;font-weight:600}
+.upd{font-size:12px;color:var(--text-3)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:500;color:var(--text-3);font-size:12px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.fchip{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:0 12px;min-height:32px;font-size:12px;color:var(--text-2)}
+.fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="Trades.dc.html">Trades</a><a href="Accounts.dc.html">Accounts</a><a href="Conditions.dc.html">Conditions</a><a href="Settings.dc.html">Settings</a><a href="#" class="on" aria-current="page">Status</a><a href="Audit.dc.html">Audit</a><a href="Users.dc.html">Users</a>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div style="flex: 1"></div>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">Z</span>Owner</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 1240px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; align-items: baseline; gap: 12px"><h1 style="margin: 0; font-size: 24px; font-weight: 600">Status</h1><span class="upd">As reported by the laptop at <span class="num">10:02</span> UTC</span></div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px">
+        <sc-for list="{{tiles}}" as="t" hint-placeholder-count="6">
+          <section class="card" aria-label="{{t.name}}" style="padding: 16px; display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <h2 style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">{{t.name}}</h2>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: {{t.bg}}; color: {{t.fg}}">
+                <sc-if value="{{t.isRun}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span></sc-if>
+                <sc-if value="{{t.isStop}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; border: 2px solid currentColor; box-sizing: border-box"></span></sc-if>
+                <sc-if value="{{t.isWait}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>
+                {{t.state}}
+              </span>
+            </div>
+            <dl style="display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: 13px">
+              <sc-for list="{{t.rows}}" as="r" hint-placeholder-count="3"><dt style="color: var(--text-3)">{{r.k}}</dt><dd class="num" style="margin: 0">{{r.v}}</dd></sc-for>
+            </dl>
+            <sc-if value="{{t.hasCounts}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; gap: 8px; font-size: 12px">
+                <span style="padding: 2px 8px; border-radius: 6px; background: {{t.errBg}}; color: {{t.errFg}}">✕ {{t.err}} errors</span>
+                <span style="padding: 2px 8px; border-radius: 6px; background: {{t.warnBg}}; color: {{t.warnFg}}">▲ {{t.warn}} warnings</span>
+              </div>
+            </sc-if>
+          </section>
+        </sc-for>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; align-items: start">
+        <section class="card" aria-labelledby="ev-h">
+          <div class="ch"><h2 id="ev-h">Recent warnings and errors</h2><div style="flex: 1"></div>
+            <sc-for list="{{bots}}" as="b" hint-placeholder-count="4"><button class="fchip {{b.cls}}" aria-pressed="{{b.on}}" onClick="{{b.pick}}">{{b.label}}</button></sc-for>
+          </div>
+          <sc-for list="{{events}}" as="e" hint-placeholder-count="3">
+            <div style="display: grid; grid-template-columns: 22px 60px 64px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 13px">
+              <span aria-label="{{e.level}}" style="color: {{e.color}}; font-weight: 700">{{e.icon}}</span>
+              <span class="num" style="color: var(--text-3)">{{e.t}}</span>
+              <span style="font-weight: 600">{{e.bot}}</span>
+              <span>{{e.msg}}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{noEvents}}" hint-placeholder-val="{{ false }}"><p style="margin: 0; padding: 24px; text-align: center; color: var(--text-3)">No warnings or errors today for this bot.</p></sc-if>
+        </section>
+
+        <section class="card" aria-labelledby="up-h">
+          <div class="ch"><h2 id="up-h">Uploads and sync</h2></div>
+          <dl style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0">
+            <div style="padding: 14px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border)"><dt class="upd">Last data upload</dt><dd class="num" style="margin: 2px 0 0; font-size: 18px; font-weight: 600">10:02</dd><span class="upd">3 s · 14 files</span></div>
+            <div style="padding: 14px 16px; border-bottom: 1px solid var(--border)"><dt class="upd">Next upload</dt><dd class="num" style="margin: 2px 0 0; font-size: 18px; font-weight: 600">10:32</dd><span class="upd">every 30 min, at :02 and :32</span></div>
+            <div style="padding: 14px 16px; border-right: 1px solid var(--border)"><dt class="upd">Last control sync</dt><dd class="num" style="margin: 2px 0 0; font-size: 18px; font-weight: 600">10:05</dd><span class="upd">ack from Scout received</span></div>
+            <div style="padding: 14px 16px"><dt class="upd">Next sync</dt><dd class="num" style="margin: 2px 0 0; font-size: 18px; font-weight: 600">10:06</dd><span class="upd">every minute</span></div>
+          </dl>
+        </section>
+      </div>
+
+      <section class="card" aria-labelledby="ctl-h">
+        <div class="ch"><h2 id="ctl-h">Control history</h2><span class="upd">Last 50 changes · newest first</span></div>
+        <div style="overflow-x: auto">
+          <table class="tbl">
+            <thead><tr><th scope="col">Time UTC</th><th scope="col">Change</th><th scope="col">By</th><th scope="col">Applied</th></tr></thead>
+            <tbody>
+              <sc-for list="{{history}}" as="h" hint-placeholder-count="5">
+                <tr><td class="num">{{h.t}}</td><td>{{h.what}}</td><td style="color: var(--text-2)">{{h.by}}</td><td><span style="display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 6px; background: {{h.bg}}; color: {{h.fg}}">{{h.icon}} {{h.applied}}</span></td></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { bot: 'All' }; }
+  renderVals() {
+    const S = {
+      run: { state: 'Running', bg: 'var(--green-bg)', fg: 'var(--green)', isRun: true, isStop: false, isWait: false },
+      stop: { state: 'Stopped', bg: 'var(--grey-bg)', fg: 'var(--grey)', isRun: false, isStop: true, isWait: false },
+      wait: { state: 'Waiting', bg: 'var(--blue-bg)', fg: 'var(--blue)', isRun: false, isStop: false, isWait: true }
+    };
+    const cnt = (err, warn) => ({ hasCounts: true, err, warn, errBg: err ? 'var(--red-bg)' : 'var(--surface-2)', errFg: err ? 'var(--red)' : 'var(--text-3)', warnBg: warn ? 'var(--amber-bg)' : 'var(--surface-2)', warnFg: warn ? 'var(--amber)' : 'var(--text-3)' });
+    const tiles = [
+      { name: 'Scout', ...S.run, rows: [{ k: 'Since', v: '04 Nov 18:07' }, { k: 'Build', v: 'Scout-ae41f2c' }, { k: 'Last log line', v: '10:04:51' }], ...cnt(0, 2) },
+      { name: 'TM', ...S.run, rows: [{ k: 'Since', v: '03 Nov 18:15' }, { k: 'Build', v: 'TM-41ca4d0' }, { k: 'Last log line', v: '10:04:12' }], ...cnt(0, 0) },
+      { name: 'Audit Bot', ...S.stop, rows: [{ k: 'Run finished', v: '04 Nov 18:11' }, { k: 'Build', v: 'AuditBot-[hash]' }, { k: 'Last log line', v: '04 Nov 18:11' }], ...cnt(0, 0) },
+      { name: 'Audit report', ...S.wait, hasCounts: false, rows: [{ k: 'Kind', v: 'timer, daily' }, { k: 'Next run', v: '00:15' }, { k: 'Last run', v: '04 Nov 00:15 ✓' }] },
+      { name: 'Data upload', ...S.wait, hasCounts: false, rows: [{ k: 'Kind', v: 'timer, every 30 min' }, { k: 'Last', v: '10:02 · 3 s · 14 files' }, { k: 'Next', v: '10:32' }] },
+      { name: 'Control sync', ...S.wait, hasCounts: false, rows: [{ k: 'Kind', v: 'timer, every minute' }, { k: 'Last', v: '10:05' }, { k: 'Next', v: '10:06' }] }
+    ];
+    const ev = [
+      { level: 'Warning', icon: '▲', color: 'var(--amber)', t: '08:31:07', bot: 'Scout', msg: 'XNGUSD spread above limit (0.006) — order not moved this candle' },
+      { level: 'Warning', icon: '▲', color: 'var(--amber)', t: '06:14:22', bot: 'Scout', msg: 'cTrader connection dropped; reconnected after 4 s' }
+    ];
+    const events = this.state.bot === 'All' ? ev : ev.filter((e) => e.bot === this.state.bot);
+    const ok = (t) => ({ applied: 'applied ' + t, icon: '✓', bg: 'var(--green-bg)', fg: 'var(--green)' });
+    const history = [
+      { t: '10:04', what: 'US500 timeframe 1H → 4H', by: 'owner@gmail.com', applied: 'waiting', icon: '◷', bg: 'var(--blue-bg)', fg: 'var(--blue)' },
+      { t: '10:03', what: 'XAUUSD timeframe 1H → 1D', by: 'owner@gmail.com', ...ok('10:05') },
+      { t: '10:02', what: 'Skip XAUUSD 1H 10:00 setup', by: 'owner@gmail.com', ...ok('10:03') },
+      { t: '09:12', what: 'Max open Scout orders 10 → 12', by: 'claude (machine)', ...ok('09:48') },
+      { t: '07:40', what: 'XNGUSD off', by: 'owner@gmail.com', ...ok('07:41') },
+      { t: '07:38', what: 'SOLUSD on', by: 'owner@gmail.com', applied: 'refused: symbol not in Scout’s list', icon: '▲', bg: 'var(--amber-bg)', fg: 'var(--amber)' }
+    ];
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', tiles, events, noEvents: events.length === 0, history,
+      bots: ['All', 'Scout', 'TM', 'Audit Bot'].map((b) => ({ label: b, on: this.state.bot === b, cls: this.state.bot === b ? 'on' : '', pick: () => this.setState({ bot: b }) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

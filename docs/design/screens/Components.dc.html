@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Component sheet and tokens</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--amber-line:#d98a1a;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grey-solid:#6b7482;--t-scout:#2f4f7f;--t-scout-bg:#e4ebf5;--t-tm:#5e3f94;--t-tm-bg:#efe8f8;--t-man:#6e4f1f;--t-man-bg:#f3ece0;font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--amber-line:#c98a2a;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grey-solid:#4f5865;--t-scout:#9dbbe8;--t-scout-bg:#1b2a40;--t-tm:#c6aef0;--t-tm-bg:#2a2042;--t-man:#e0c08e;--t-man-bg:#33281a}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.h2{margin:0;font-size:18px;font-weight:600}
+.cap{font-size:12px;color:var(--text-3)}
+.seg{border:0;border-radius:7px;padding:0 14px;min-height:40px;display:inline-flex;align-items:center;gap:6px;font-weight:600;background:transparent;color:var(--text-2)}
+.seg.on-keep{background:var(--green-solid);color:#fff}
+.seg.on-skip{background:var(--grey-solid);color:#fff}
+.segw{display:inline-flex;padding:3px;gap:3px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface)}
+.segw.warn{border-color:var(--amber-line);box-shadow:0 0 0 1px var(--amber-line)}
+.sw{width:46px;height:28px;border-radius:14px;border:0;padding:3px;background:var(--grey-solid);display:flex;flex:none}
+.sw .k{width:22px;height:22px;border-radius:50%;background:#fff}
+.sw.on{background:var(--green-solid)}.sw.on .k{margin-left:18px}
+.chs{display:inline-flex;padding:2px;gap:2px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2)}
+.chs span{border-radius:6px;min-width:40px;min-height:30px;padding:0 8px;display:grid;place-items:center;color:var(--text-2);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600}
+.chs span.sel{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border-strong)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:2px 8px;border-radius:6px}
+.ro{opacity:.6}
+@keyframes pulse{50%{opacity:.45}}
+.sk{background:var(--surface-2);border-radius:6px;animation:pulse 1.4s ease-in-out infinite}
+.blk{border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface)}
+.blkh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+.blkb{padding:14px 12px;display:flex;flex-direction:column;gap:8px;min-height:120px;box-sizing:border-box}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="width: 1440px; min-height: 2760px; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; gap: 24px">
+  <div>
+    <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.02em">Trader Dashboard — components &amp; tokens</h1>
+    <p style="margin: 6px 0 0; color: var(--text-2)">Cool-grey base, one indigo accent for navigation and focus. Green, red, grey, amber and blue are reserved for meaning and always come with an icon or word.</p>
+  </div>
+
+  <!-- Tokens -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <section class="panel" aria-label="Colour tokens">
+      <h2 class="h2">Colour tokens <span class="cap">(switch the theme tweak for the dark set)</span></h2>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+        <sc-for list="{{swatches}}" as="s" hint-placeholder-count="16">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var({{s.v}})"></div>
+            <span class="num" style="font-size: 11px">{{s.v}}</span>
+            <span class="cap" style="font-size: 11px">{{s.use}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+    <section class="panel" aria-label="Type scale">
+      <h2 class="h2">Type scale</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-display 28</span><span style="font-size: 28px; font-weight: 700">Trader Dashboard</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-h1 24</span><span style="font-size: 24px; font-weight: 600">Scout</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-symbol 20</span><span style="font-size: 20px; font-weight: 700">GBPUSD</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-h2 16</span><span style="font-size: 16px; font-weight: 600">Orders of the day</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-body 14</span><span>Scout is watching 18 symbols.</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-small 12</span><span style="font-size: 12px; color: var(--text-3)">Last 1H candle closed 10:00 UTC</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">--fs-figure 26</span><span class="num" style="font-size: 26px; font-weight: 600">$10 182.40</span></div>
+        <div style="display: flex; align-items: baseline; gap: 16px"><span class="num cap" style="width: 120px">mono 13</span><span class="num" style="font-size: 13px">1.08452 · 152.418 · 2 650.20 · 69 420.5</span></div>
+      </div>
+      <p class="cap" style="margin: 0">Inter for text · JetBrains Mono (tabular figures) for every number. Spacing 4 · 8 · 12 · 16 · 24 · 32 · 48. Radii 6 · 8 · 10 · 12 · pill. Touch targets ≥ 44 px.</p>
+    </section>
+  </div>
+
+  <!-- Keep / Skip -->
+  <section class="panel" aria-label="Keep or skip control">
+    <h2 class="h2">7.1 Keep / Skip — every state</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+      <sc-for list="{{ks}}" as="k" hint-placeholder-count="8">
+        <div style="border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: {{k.bg}}">
+          <span style="font-size: 12px; font-weight: 600; color: var(--text-2)">{{k.name}}</span>
+          <sc-if value="{{k.seg}}" hint-placeholder-val="{{ true }}">
+            <div class="segw {{k.warnCls}}">
+              <span class="seg {{k.keepCls}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="m5 12 5 5 9-10"></path></svg>Keep</span>
+              <span class="seg {{k.skipCls}}">Skip</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{k.locked}}" hint-placeholder-val="{{ false }}">
+            <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 13px; font-weight: 500"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>Filled 09:41 — managed by TM</span>
+          </sc-if>
+          <span style="font-size: 12px; color: {{k.color}}; display: inline-flex; gap: 6px; align-items: center"><span aria-hidden="true">{{k.icon}}</span>{{k.text}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; gap: 16px; align-items: center">
+      <div role="status" style="display: inline-flex; align-items: center; gap: 16px; background: #1c222b; color: #e6eaf0; padding: 10px 10px 10px 16px; border-radius: 10px; font-size: 14px">Skipped XAUUSD · waiting for laptop <span style="color: #aab0ff; font-weight: 600; padding: 8px 12px">Undo</span></div>
+      <span class="cap">Undo toast, 5 seconds. One tap toggles; no confirmation. Skipped cards stay in the list, greyed.</span>
+    </div>
+  </section>
+
+  <!-- Setting rows -->
+  <section class="panel" aria-label="Setting rows">
+    <h2 class="h2">7.2 Setting row — four types, every delivery state</h2>
+    <p class="cap" style="margin: 0">Anatomy: label · ⓘ help · configured value &amp; when it takes effect · delivery state · Reset to configured · control. Desktop: control right-aligned. Phone: control drops under the label.</p>
+    <div style="display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+        <div class="{{r.cls}}" style="display: grid; grid-template-columns: 90px minmax(0, 1fr) minmax(0, 280px) 260px; gap: 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border)">
+          <span class="num" style="font-size: 11px; color: var(--text-3)">{{r.type}}</span>
+          <div><div style="font-weight: 500">{{r.label}} <span style="color: var(--text-3)" aria-label="Help">ⓘ</span></div><div class="cap">{{r.sub}}</div></div>
+          <div style="display: flex; gap: 10px; align-items: center; font-size: 12px; flex-wrap: wrap"><span style="color: {{r.stColor}}; display: inline-flex; gap: 6px; align-items: center"><span aria-hidden="true">{{r.stIcon}}</span>{{r.st}}</span><sc-if value="{{r.reset}}" hint-placeholder-val="{{ false }}"><a href="#" style="font-weight: 600">Reset to configured</a></sc-if></div>
+          <div style="display: flex; justify-content: flex-end">
+            <sc-if value="{{r.isSwitch}}" hint-placeholder-val="{{ false }}"><span class="sw {{r.swCls}}"><span class="k"></span></span></sc-if>
+            <sc-if value="{{r.isChoice}}" hint-placeholder-val="{{ false }}"><div class="chs"><sc-for list="{{r.opts}}" as="o" hint-placeholder-count="3"><span class="{{o.cls}}">{{o.v}}</span></sc-for></div></sc-if>
+            <sc-if value="{{r.isMulti}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 6px"><sc-for list="{{r.opts}}" as="o" hint-placeholder-count="3"><span class="num" style="font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; border: 1px solid {{o.bd}}; background: {{o.bg}}; color: {{o.fg}}">{{o.mark}}{{o.v}}</span></sc-for></div></sc-if>
+            <sc-if value="{{r.isNumber}}" hint-placeholder-val="{{ false }}"><div style="display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 8px"><span style="width: 40px; height: 36px; display: grid; place-items: center">−</span><span class="num" style="min-width: 56px; text-align: center; font-weight: 600">{{r.val}}</span><span style="width: 40px; height: 36px; display: grid; place-items: center">+</span></div></sc-if>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+    <!-- View only -->
+    <section class="panel" aria-label="View-only state">
+      <h2 class="h2">7.3 View only</h2>
+      <p class="cap" style="margin: 0">Same current state, dimmed, with a lock. Hover or tap shows “View only” — never an error, never hidden.</p>
+      <div style="display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: center; gap: 12px"><div class="segw ro"><span class="seg on-keep">Keep</span><span class="seg">Skip</span></div><span class="cap"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align: -1px"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg> View only · set by owner</span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><span class="sw on ro"><span class="k"></span></span><span class="cap"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align: -1px"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg> View only</span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div class="chs ro"><span>1H</span><span>4H</span><span class="sel">1D</span></div><span class="cap"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align: -1px"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg> View only</span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div class="ro" style="display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 8px"><span style="width: 40px; height: 36px; display: grid; place-items: center">−</span><span class="num" style="min-width: 56px; text-align: center; font-weight: 600">10</span><span style="width: 40px; height: 36px; display: grid; place-items: center">+</span></div><span class="cap"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="vertical-align: -1px"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg> View only</span></div>
+        <div style="display: flex; gap: 10px; align-items: center"><span style="display: inline-flex; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12px; font-weight: 600">View only</span><span class="chip" style="background: var(--accent-soft); color: var(--accent); font-weight: 600">Owner</span><span class="chip" style="background: var(--grey-bg); color: var(--grey); font-weight: 600">Viewer</span><span class="chip" style="background: var(--t-scout-bg); color: var(--t-scout); font-weight: 600">Administrator · machine</span></div>
+      </div>
+    </section>
+
+    <!-- Pills, banners -->
+    <section class="panel" aria-label="Freshness and banners">
+      <h2 class="h2">Freshness pill · banners · empty state</h2>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <span class="chip" style="border-radius: 999px; padding: 6px 12px; background: var(--green-bg); color: var(--green)">● Data 10:02 UTC · 6 min ago</span>
+        <span class="chip" style="border-radius: 999px; padding: 6px 12px; background: var(--amber-bg); color: var(--amber)">◷ Data 09:02 UTC · 66 min ago</span>
+        <span class="chip" style="border-radius: 999px; padding: 6px 12px; background: var(--red-bg); color: var(--red); font-weight: 600">▲ Laptop offline? Last data 3 h ago</span>
+      </div>
+      <div role="alert" style="padding: 12px 14px; border-radius: 10px; background: var(--amber-bg); color: var(--amber); font-weight: 500">▲ Data is 66 minutes old. Switches still work and apply when the laptop sends again.</div>
+      <div role="alert" style="padding: 12px 14px; border-radius: 10px; background: var(--red-bg); color: var(--red); font-weight: 500">✕ Scout is stopped since 09:14 UTC. No new setups until it runs again.</div>
+      <div style="border: 1px dashed var(--border-strong); border-radius: 12px; padding: 28px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center">
+        <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <strong>Nothing new since 08:00</strong>
+        <span class="cap">Scout is watching 18 symbols.</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- Data states -->
+  <section class="panel" aria-label="Data block states">
+    <h2 class="h2">Data block states <span class="cap">— every block fetched from the API (brief v1.3 §4)</span></h2>
+    <p class="cap" style="margin: 0">One wrapper for every block: a header with “Updated HH:MM” and Refresh, then one of five bodies. A refresh keeps the old content in place and only swaps the header text to “Updating…”, so nothing jumps. Controls save in place: <em>saving…</em> → <em>saved · waiting for laptop</em> → <em>applied</em>, with no page reload.</p>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+      <div class="blk">
+        <div class="blkh">Ready<span style="flex: 1"></span><span class="cap" style="font-weight: 400">Updated 10:02</span></div>
+        <div class="blkb"><div class="num" style="font-size: 22px; font-weight: 600">$10 182.40</div><span class="cap">Balance · IC Markets demo</span></div>
+      </div>
+      <div class="blk" aria-busy="true">
+        <div class="blkh">Loading<span style="flex: 1"></span><span class="cap" style="font-weight: 400">Loading…</span></div>
+        <div class="blkb"><div class="sk" style="height: 26px; width: 70%"></div><div class="sk" style="height: 12px; width: 50%"></div><div class="sk" style="height: 12px; width: 85%"></div></div>
+      </div>
+      <div class="blk">
+        <div class="blkh">Refreshing<span style="flex: 1"></span><span class="cap" style="font-weight: 400; color: var(--blue)">↻ Updating…</span></div>
+        <div class="blkb"><div class="num" style="font-size: 22px; font-weight: 600">$10 182.40</div><span class="cap">Old value stays until the new one arrives</span></div>
+      </div>
+      <div class="blk">
+        <div class="blkh">Empty<span style="flex: 1"></span><span class="cap" style="font-weight: 400">Updated 10:02</span></div>
+        <div class="blkb" style="align-items: center; justify-content: center; text-align: center"><strong style="font-size: 13px">No open positions</strong><span class="cap">Positions appear here when TM or Scout opens one.</span></div>
+      </div>
+      <div class="blk">
+        <div class="blkh">Error<span style="flex: 1"></span><span class="cap" style="font-weight: 400; color: var(--red)">✕ Not loaded</span></div>
+        <div class="blkb" role="alert"><span style="font-size: 13px; color: var(--text-2)">Couldn’t load this block (error 503).</span><span style="align-self: flex-start; border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 12px; font-size: 13px">Try again</span></div>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+      <div class="blk">
+        <div class="blkh">Out of date (data older than 45 min)<span style="flex: 1"></span><span class="chip" style="background: var(--amber-bg); color: var(--amber)">◷ Data 09:02 · 66 min ago</span></div>
+        <div class="blkb"><div class="num" style="font-size: 22px; font-weight: 600; color: var(--text-2)">$10 182.40</div><span class="cap">Shown with the age beside it; the page-wide banner explains why.</span></div>
+      </div>
+      <div class="blk">
+        <div class="blkh">Signed out mid-session<span style="flex: 1"></span></div>
+        <div class="blkb" role="alert"><span style="font-size: 13px; color: var(--text-2)">Your session ended. Nothing you changed was lost.</span><a href="SignIn.dc.html" style="font-size: 13px; font-weight: 600">Sign in again</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chips & tags -->
+  <section class="panel" aria-label="Chips and tags">
+    <h2 class="h2">Chips, tags, markers</h2>
+    <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 14px 20px; align-items: center">
+      <span class="cap">Order status</span>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <span class="chip" style="background: var(--blue-bg); color: var(--blue)">◷ Pending</span>
+        <span class="chip" style="background: var(--accent-soft); color: var(--accent)">● Filled</span>
+        <span class="chip" style="background: var(--grey-bg); color: var(--grey)">Expired</span>
+        <span class="chip" style="background: var(--grey-bg); color: var(--grey)">Cancelled</span>
+        <span class="chip" style="background: var(--grey-bg); color: var(--grey)">⊘ Skipped</span>
+        <span class="chip num" style="background: var(--green-bg); color: var(--green)">Closed +$12.40</span>
+        <span class="chip num" style="background: var(--red-bg); color: var(--red)">Closed −$8.15</span>
+        <span class="chip" style="background: var(--red-bg); color: var(--red)">✕ Refused</span>
+      </div>
+      <span class="cap">Bot state</span>
+      <div style="display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; font-weight: 500">
+        <span style="display: inline-flex; gap: 6px; align-items: center; color: var(--green)"><span style="width: 10px; height: 10px; border-radius: 50%; background: currentColor"></span>Running</span>
+        <span style="display: inline-flex; gap: 6px; align-items: center; color: var(--grey)"><span style="width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; box-sizing: border-box"></span>Stopped</span>
+        <span style="display: inline-flex; gap: 6px; align-items: center; color: var(--red)"><span style="width: 10px; height: 10px; background: currentColor; transform: rotate(45deg)"></span>Failed</span>
+        <span style="display: inline-flex; gap: 6px; align-items: center; color: var(--blue)">◷ Waiting</span>
+      </div>
+      <span class="cap">Owner tags</span>
+      <div style="display: flex; gap: 8px"><span class="chip" style="background: var(--t-scout-bg); color: var(--t-scout); font-weight: 600">Scout</span><span class="chip" style="background: var(--t-tm-bg); color: var(--t-tm); font-weight: 600">TM</span><span class="chip" style="background: var(--t-man-bg); color: var(--t-man); font-weight: 600">Manual</span></div>
+      <span class="cap">TM role chips</span>
+      <div class="num" style="display: flex; gap: 8px"><span class="chip" style="background: var(--t-tm-bg); color: var(--t-tm); font-weight: 700; font-size: 11px">MAIN</span><span class="chip" style="background: var(--t-tm-bg); color: var(--t-tm); font-weight: 700; font-size: 11px">MIR</span><span class="chip" style="border: 1px solid var(--t-tm); color: var(--t-tm); font-weight: 700; font-size: 11px">HMAIN</span><span class="chip" style="border: 1px solid var(--t-tm); color: var(--t-tm); font-weight: 700; font-size: 11px">HMIR</span></div>
+      <span class="cap">Profit · direction</span>
+      <div style="display: flex; gap: 20px; align-items: center"><span class="num" style="color: var(--green); font-weight: 600">+$12.40</span><span class="num" style="color: var(--red); font-weight: 600">−$8.15</span><span class="num" style="color: var(--text-3)">$0.00</span><span style="font-weight: 600">↑ Buy stop</span><span style="font-weight: 600">↓ Sell stop</span><span class="cap">Direction is neutral so green and red stay for money.</span></div>
+      <span class="cap">Timeframe · trend</span>
+      <div style="display: flex; gap: 8px; align-items: center"><span class="num" style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--text); color: var(--surface)">1H</span><span class="num" style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--text); color: var(--surface)">4H</span><span class="num" style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--accent); color: var(--on-accent)">1D</span><span class="chip" style="background: var(--surface-2); color: var(--text-2)">With 4H ↑</span><span class="chip" style="background: var(--amber-bg); color: var(--amber)">▲ Against 4H ↑</span><span class="chip" style="background: var(--grey-solid); color: #fff; font-weight: 600">Symbol off</span></div>
+    </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":3300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const swatches = [
+      ['--bg', 'Page'], ['--surface', 'Cards'], ['--surface-2', 'Wells, headers'], ['--border', 'Dividers'],
+      ['--text', 'Primary text'], ['--text-2', 'Secondary'], ['--text-3', 'Labels (AA)'], ['--accent', 'Nav, focus'],
+      ['--green-solid', 'Keep, on, profit'], ['--red', 'Loss, failed'], ['--grey-solid', 'Skip, off'], ['--amber-line', 'Warning, against'],
+      ['--blue', 'Waiting, info'], ['--t-scout', 'Owner: Scout'], ['--t-tm', 'Owner: TM'], ['--t-man', 'Owner: Manual']
+    ].map(([v, use]) => ({ v, use }));
+    const K = (name, o) => ({ name, seg: true, locked: false, keepCls: '', skipCls: '', warnCls: '', bg: 'var(--surface)', color: 'var(--text-3)', icon: '', ...o });
+    const ks = [
+      K('Keep (default)', { keepCls: 'on-keep', text: 'Pending order' }),
+      K('Skip · saved', { skipCls: 'on-skip', bg: 'var(--surface-2)', color: 'var(--blue)', icon: '◷', text: 'Skipped · waiting for laptop' }),
+      K('Skip · applied', { skipCls: 'on-skip', bg: 'var(--surface-2)', color: 'var(--grey)', icon: '✓', text: 'Skipped · applied 10:03 · 1 order cancelled' }),
+      K('Keep · saved (after skip)', { keepCls: 'on-keep', color: 'var(--blue)', icon: '◷', text: 'Kept · waiting for laptop' }),
+      K('Keep · applied (after skip)', { keepCls: 'on-keep', color: 'var(--green)', icon: '✓', text: 'Kept · applied 10:05 · order again at next candle' }),
+      K('Too late', { seg: false, locked: true, text: 'Locked: the order already filled' }),
+      K('Not available', { seg: false, text: 'Cancelled by Scout · trend turned' }),
+      K('Refused / error', { keepCls: 'on-keep', warnCls: 'warn', color: 'var(--amber)', icon: '▲', text: 'Not applied: symbol not in Scout’s list' })
+    ];
+    const tf = (sel) => ['1H', '4H', '1D'].map((v) => ({ v, cls: v === sel ? 'sel' : '' }));
+    const R = (o) => ({ cls: '', isSwitch: false, isChoice: false, isMulti: false, isNumber: false, reset: false, stColor: 'var(--text-3)', stIcon: '', ...o });
+    const rows = [
+      R({ type: 'switch', label: 'Pause all new orders', sub: 'Configured: off · takes effect now', isSwitch: true, swCls: '', st: 'As configured' }),
+      R({ type: 'switch', label: 'XNGUSD on for Scout', sub: 'Configured: on · takes effect now', isSwitch: true, swCls: '', st: 'Saved · waiting for laptop', stIcon: '◷', stColor: 'var(--blue)', reset: true }),
+      R({ type: 'choice', label: 'Timeframe · XAUUSD', sub: 'Configured: 1H · takes effect at the next candle', isChoice: true, opts: tf('1D'), st: 'Applied by Scout 10:05', stIcon: '✓', stColor: 'var(--green)', reset: true }),
+      R({ type: 'choice', label: 'Order expiry', sub: 'Configured: 24 h · takes effect at the next candle', isChoice: true, opts: ['12 h', '24 h', '48 h'].map((v) => ({ v, cls: v === '48 h' ? 'sel' : '' })), st: 'Refused: value not allowed by this Scout', stIcon: '▲', stColor: 'var(--amber)', reset: true }),
+      R({ type: 'multi', label: 'Timeframes to watch', sub: 'Configured: 1H · takes effect at the next candle', isMulti: true, opts: [
+        { v: '1H', mark: '✓ ', bd: 'var(--green-solid)', bg: 'var(--green-bg)', fg: 'var(--green)' },
+        { v: '4H', mark: '✓ ', bd: 'var(--green-solid)', bg: 'var(--green-bg)', fg: 'var(--green)' },
+        { v: '1D', mark: '', bd: 'var(--border-strong)', bg: 'transparent', fg: 'var(--text-2)' }], st: 'Saved · waiting for laptop', stIcon: '◷', stColor: 'var(--blue)', reset: true }),
+      R({ type: 'number', label: 'Max open Scout orders', sub: 'Configured: 10 · range 1–30, step 1', isNumber: true, val: '10', st: 'As configured' }),
+      R({ type: 'number', label: 'Order size · XAUUSD', sub: 'Future option', isNumber: true, val: '0.01', st: 'Needs a newer Scout', stIcon: 'ⓘ', stColor: 'var(--blue)', cls: 'ro' })
+    ];
+    return { themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', swatches, ks, rows };
+  }
+}
+</script>
+</body>
+</html>

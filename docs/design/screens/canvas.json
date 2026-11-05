@@ -1,0 +1,29 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-05T15:52:00Z"},
+  "title": "Trader Dashboard",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 1760, "title": "Scout home · desktop", "expand": "fill", "is_interactive": true},
+    "ScoutPhone.dc.html": {"x": 1520, "y": 0, "w": 390, "h": 1960, "title": "Scout home · phone"},
+    "SignIn.dc.html": {"x": 1990, "y": 0, "w": 390, "h": 844, "title": "Sign in · phone", "is_interactive": true},
+    "Symbols.dc.html": {"x": 0, "y": 2400, "w": 1440, "h": 1560, "title": "Symbols · desktop", "expand": "fill", "is_interactive": true},
+    "Components.dc.html": {"x": 1520, "y": 2400, "w": 1440, "h": 3300, "title": "Component sheet & tokens"},
+    "Conditions.dc.html": {"x": 0, "y": 6100, "w": 1440, "h": 1300, "title": "Conditions + what-if · desktop", "expand": "fill", "is_interactive": true},
+    "Accounts.dc.html": {"x": 1520, "y": 6100, "w": 1440, "h": 1400, "title": "Accounts · desktop", "expand": "fill", "is_interactive": true},
+    "Trades.dc.html": {"x": 3040, "y": 6100, "w": 1440, "h": 1500, "title": "Trades (TM) · desktop", "expand": "fill", "is_interactive": true},
+    "Settings.dc.html": {"x": 0, "y": 7960, "w": 1440, "h": 1200, "title": "Settings · desktop", "expand": "fill", "is_interactive": true},
+    "Status.dc.html": {"x": 1520, "y": 7960, "w": 1440, "h": 1500, "title": "Status · desktop", "expand": "fill", "is_interactive": true},
+    "Audit.dc.html": {"x": 3040, "y": 7960, "w": 1440, "h": 1200, "title": "Audit · desktop", "expand": "fill"},
+    "Users.dc.html": {"x": 4560, "y": 7960, "w": 1440, "h": 1400, "title": "Users · desktop", "expand": "fill", "is_interactive": true}
+  },
+  "order": ["Main.dc.html", "ScoutPhone.dc.html", "SignIn.dc.html", "Symbols.dc.html", "Components.dc.html", "Conditions.dc.html", "Accounts.dc.html", "Trades.dc.html", "Settings.dc.html", "Status.dc.html", "Audit.dc.html", "Users.dc.html"],
+  "notes": {
+    "row1": {"x": 0, "y": -300, "text": "Scout · Sign in", "kind": "title1", "maxW": 2380},
+    "row2": {"x": 0, "y": 2100, "text": "Symbols · Components", "kind": "title1", "maxW": 2960},
+    "row3": {"x": 0, "y": 5800, "text": "Money · Conditions · Trades", "kind": "title1", "maxW": 4480},
+    "row4": {"x": 0, "y": 7660, "text": "Settings · Status · Audit · Users", "kind": "title1", "maxW": 6000}
+  },
+  "designSystems": []
+}

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout home — phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grey-solid:#6b7482;--frame:#e3e7ec;font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grey-solid:#4f5865;--frame:#2a323d}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.card.is-skipped{background:var(--surface-2)}
+.card.is-skipped .thumb{opacity:.45;filter:grayscale(1)}
+.card.is-skipped .sym{color:var(--text-3)}
+.seg{flex:1;border:0;border-radius:8px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:600;background:transparent;color:var(--text-2)}
+.seg.on-keep{background:var(--green-solid);color:#fff}
+.seg.on-skip{background:var(--grey-solid);color:#fff}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;font-size:11px;color:var(--text-3);text-decoration:none;position:relative;min-height:44px}
+.tab.on{color:var(--accent);font-weight:600}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="width: 390px; min-height: 1960px; display: flex; flex-direction: column; position: relative">
+
+  <!-- Top bar -->
+  <header style="position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700; flex: 1">Scout</h1>
+      <span role="status" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 12px; font-weight: 500"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: currentColor"></span><span class="num">10:02</span> · 6 min ago</span>
+      <button aria-label="User menu, owner@gmail.com, Owner" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--accent-soft); color: var(--accent); font-weight: 600">Z</button>
+    </div>
+    <div style="display: flex; gap: 8px">
+      <button aria-label="Account: IC Markets demo. Change" style="flex: 1; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); background: var(--surface-2); border-radius: 9px; padding: 0 12px; min-height: 40px; font-size: 13px; font-weight: 600">IC Markets demo <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+      <div role="group" aria-label="Time display" style="display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 12px">
+        <button aria-pressed="true" style="border: 0; border-radius: 6px; padding: 0 10px; background: var(--surface); font-weight: 600">UTC</button>
+        <button aria-pressed="false" style="border: 0; border-radius: 6px; padding: 0 10px; background: transparent; color: var(--text-2)">Local</button>
+      </div>
+    </div>
+  </header>
+
+  <main style="flex: 1; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 14px">
+    <!-- Last hour strip -->
+    <section aria-label="Last hour" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: 12px">
+      <div style="padding: 10px 12px; border-right: 1px solid var(--border)"><div style="font-size: 11px; color: var(--text-3)">New · 1 h</div><div class="num" style="font-size: 22px; font-weight: 600">3</div></div>
+      <div style="padding: 10px 12px; border-right: 1px solid var(--border)"><div style="font-size: 11px; color: var(--text-3)">Orders · 1 h</div><div class="num" style="font-size: 22px; font-weight: 600">2</div></div>
+      <div style="padding: 10px 12px"><div style="font-size: 11px; color: var(--text-3)">Scout</div><div style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--green); margin-top: 6px; font-size: 13px"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Running</div></div>
+    </section>
+    <p style="margin: -4px 0 0; font-size: 12px; color: var(--text-3)">Last 1H candle closed <span class="num">10:00</span> UTC · <span class="num">15:00</span> PKT</p>
+
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+      <section aria-label="{{g.label}}" style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <h2 class="num" style="margin: 0; font-size: 14px; font-weight: 600">{{g.label}}</h2>
+          <sc-if value="{{g.highlight}}" hint-placeholder-val="{{ false }}"><span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 6px">Last hour</span></sc-if>
+          <div aria-hidden="true" style="flex: 1; height: 1px; background: var(--border)"></div>
+        </div>
+        <sc-for list="{{g.cards}}" as="c" hint-placeholder-count="2">
+          <article class="card {{c.cardCls}}" aria-label="{{c.sym}} setup" style="position: relative; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid {{g.rail}}; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: hidden">
+            <sc-if value="{{c.symOff}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 0; right: 0; background: var(--grey-solid); color: #fff; font-size: 11px; font-weight: 600; padding: 3px 10px; border-bottom-left-radius: 8px">Symbol off</span></sc-if>
+            <div style="display: flex; gap: 12px">
+              <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+                  <span class="sym" style="font-size: 18px; font-weight: 700">{{c.sym}}</span>
+                  <span class="num" style="font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--text); color: var(--surface)">{{c.tf}}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-3)">{{c.mkt}} · {{c.ev}} <span class="num">{{c.evTime}}</span></div>
+                <div style="font-size: 13px; font-weight: 600">{{c.arrow}} {{c.side}} <span style="font-weight: 400; color: var(--text-3)">· {{c.mr}}</span></div>
+                <sc-if value="{{c.against}}" hint-placeholder-val="{{ false }}"><span style="align-self: flex-start; font-size: 11px; font-weight: 500; color: var(--amber); background: var(--amber-bg); padding: 2px 7px; border-radius: 5px">⚠ Against 4H {{c.ta}}</span></sc-if>
+                <sc-if value="{{c.withTrend}}" hint-placeholder-val="{{ true }}"><span style="align-self: flex-start; font-size: 11px; color: var(--text-2); background: var(--surface-2); padding: 2px 7px; border-radius: 5px">With 4H {{c.ta}}</span></sc-if>
+              </div>
+              <button class="thumb" aria-label="Open {{c.sym}} detail" style="border: 0; padding: 3px; background: var(--frame); border-radius: 8px; align-self: flex-start">
+                <svg role="img" aria-label="Order picture (sample)" width="150" height="83" viewBox="0 0 720 400" style="display: block; border-radius: 5px; background: #fff"><rect width="720" height="400" fill="#fff"></rect><rect x="400" y="132" width="180" height="40" fill="#f59e0b" opacity=".2"></rect><path d="M60 250V310M105 220V280M150 228V262M195 196V262M240 168V218M285 140V188M330 146V176M375 132V175M420 136V166M465 138V164M510 140V164M555 138V162" stroke="#6b7280" stroke-width="3"></path><g fill="#26a69a"><rect x="49" y="260" width="22" height="40"></rect><rect x="94" y="230" width="22" height="40"></rect><rect x="184" y="205" width="22" height="50"></rect><rect x="229" y="175" width="22" height="35"></rect><rect x="274" y="150" width="22" height="30"></rect><rect x="364" y="140" width="22" height="28"></rect><rect x="454" y="146" width="22" height="12"></rect><rect x="544" y="144" width="22" height="12"></rect></g><g fill="#ef5350"><rect x="139" y="235" width="22" height="20"></rect><rect x="319" y="152" width="22" height="18"></rect><rect x="409" y="142" width="22" height="18"></rect><rect x="499" y="148" width="22" height="10"></rect></g><path d="M380 122H700" stroke="#1e66f5" stroke-width="4" stroke-dasharray="10 6"></path><path d="M380 182H700" stroke="#e11d48" stroke-width="4"></path></svg>
+              </button>
+            </div>
+            <dl class="num" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; margin: 0; font-size: 12px">
+              <div><dt style="font-family: Inter, sans-serif; font-size: 10px; color: var(--text-3)">Level</dt><dd style="margin: 0">{{c.level}}</dd></div>
+              <div><dt style="font-family: Inter, sans-serif; font-size: 10px; color: var(--text-3)">Stop-loss</dt><dd style="margin: 0">{{c.sl}}</dd></div>
+              <div><dt style="font-family: Inter, sans-serif; font-size: 10px; color: var(--text-3)">Pips</dt><dd style="margin: 0">{{c.pips}}</dd></div>
+              <div><dt style="font-family: Inter, sans-serif; font-size: 10px; color: var(--text-3)">Lots</dt><dd style="margin: 0">{{c.lots}}</dd></div>
+            </dl>
+            <sc-if value="{{c.decidable}}" hint-placeholder-val="{{ true }}">
+              <div role="group" aria-label="Decision for {{c.sym}}" style="display: flex; padding: 3px; gap: 3px; border: 1px solid var(--border-strong); border-radius: 11px">
+                <button class="seg {{c.keepCls}}" aria-pressed="{{c.isKeep}}" disabled="{{ro}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>Keep</button>
+                <button class="seg {{c.skipCls}}" aria-pressed="{{c.isSkip}}" disabled="{{ro}}">Skip</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{c.late}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); font-size: 13px; font-weight: 500"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>{{c.lateText}}</div>
+            </sc-if>
+            <sc-if value="{{c.hasSt}}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 12px; color: {{c.stColor}}; text-align: center">{{c.stText}}</div>
+            </sc-if>
+          </article>
+        </sc-for>
+      </section>
+    </sc-for>
+    <a href="#" style="text-align: center; font-size: 13px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-decoration: none">Orders of the day · 8 · Net <span class="num" style="color: var(--green); font-weight: 600">+$4.25</span></a>
+  </main>
+
+  <!-- Bottom tab bar -->
+  <nav aria-label="Sections" style="position: sticky; bottom: 0; display: flex; background: var(--surface); border-top: 1px solid var(--border); padding-bottom: 14px">
+    <a href="#" class="tab on" aria-current="page"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Scout<span class="num" aria-label="3 new" style="position: absolute; top: 4px; left: 52%; font-size: 10px; font-weight: 700; background: var(--accent); color: var(--on-accent); border-radius: 8px; padding: 0 5px">3</span></a>
+    <a href="#" class="tab"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>Symbols</a>
+    <a href="#" class="tab"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M17 4v16M4 8l3-4 3 4M14 16l3 4 3-4"></path></svg>Trades</a>
+    <a href="#" class="tab"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path></svg>Accounts</a>
+    <a href="#" class="tab"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>More</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"dark"},"role":{"editor":"enum","options":["owner","viewer"],"default":"owner"},"$preview":{"width":390,"height":1960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ro = (this.props.role ?? 'owner') === 'viewer';
+    const mk = (c) => {
+      const isKeep = c.kind === 'decide' && c.d === 'keep';
+      const isSkip = c.kind === 'decide' && c.d === 'skip';
+      let stText = c.st || '';
+      if (ro && c.kind === 'decide') stText = 'View only · set by owner';
+      return { ...c, arrow: c.up ? '↑' : '↓', side: c.up ? 'Buy stop' : 'Sell stop', withTrend: !c.against,
+        decidable: c.kind === 'decide', late: c.kind === 'late', isKeep, isSkip,
+        keepCls: isKeep ? 'on-keep' : '', skipCls: isSkip ? 'on-skip' : '', cardCls: isSkip ? 'is-skipped' : '',
+        hasSt: !!stText, stText, stColor: c.stColor || 'var(--text-3)' };
+    };
+    const groups = [
+      { label: '10:00 UTC', highlight: true, rail: 'var(--accent)', cards: [
+        mk({ sym: 'GBPUSD', mkt: 'Forex', tf: '1H', up: true, mr: 'Main', level: '1.35030', sl: '1.34546', pips: '48.4', lots: '0.10', against: false, ta: '↑', ev: 'New', evTime: '10:00', kind: 'decide', d: 'keep' }),
+        mk({ sym: 'XAUUSD', mkt: 'Metals', tf: '1H', up: false, mr: 'Main', level: '2 650.20', sl: '2 661.80', pips: '116.0', lots: '0.01', against: true, ta: '↑', ev: 'New', evTime: '10:00', kind: 'decide', d: 'skip', st: '✓ Skipped · applied 10:03 · 1 order cancelled', stColor: 'var(--grey)' }),
+        mk({ sym: 'BTCUSD', mkt: 'Crypto', tf: '1H', up: true, mr: 'Main', level: '69 420.5', sl: '68 910.0', pips: '510.5', lots: '0.02', against: false, ta: '↑', ev: 'Moved', evTime: '10:00', kind: 'decide', d: 'skip', st: '◷ Skipped · waiting for laptop', stColor: 'var(--blue)' })
+      ] },
+      { label: '09:00 UTC', highlight: false, rail: 'var(--border)', cards: [
+        mk({ sym: 'GBPJPY', mkt: 'Forex', tf: '1H', up: true, mr: 'Main', level: '212.686', sl: '212.474', pips: '21.2', lots: '0.10', against: false, ta: '↑', ev: 'Filled', evTime: '09:41', kind: 'late', lateText: 'Filled 09:41 — managed by TM' })
+      ] },
+      { label: '08:00 UTC', highlight: false, rail: 'var(--border)', cards: [
+        mk({ sym: 'XNGUSD', mkt: 'Energies', tf: '1H', up: false, mr: 'Main', level: '3.412', sl: '3.498', pips: '86.0', lots: '0.50', against: false, ta: '↓', ev: 'New', evTime: '08:00', kind: 'decide', d: 'keep', symOff: true })
+      ] }
+    ];
+    return { themeCls: (this.props.theme ?? 'dark') === 'dark' ? 'dark' : '', ro, groups };
+  }
+}
+</script>
+</body>
+</html>

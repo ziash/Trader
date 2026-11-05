@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--amber:#8f4f00;--amber-bg:#fdf1dc;--blue:#1b56c0;--blue-bg:#e7effd;--grey-solid:#8a93a0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--amber:#f2b555;--amber-bg:#3a2a10;--blue:#8cb4ff;--blue-bg:#15264a;--grey-solid:#4f5865;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}.app button:disabled{cursor:not-allowed}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.gh{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.gh h2{margin:0;font-size:14px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.row:last-child{border-bottom:0}
+.sw{width:46px;height:28px;border-radius:14px;border:0;padding:3px;background:var(--grey-solid);display:flex;flex:none}
+.sw .k{width:22px;height:22px;border-radius:50%;background:#fff;transition:margin .15s}
+.sw.on{background:var(--green-solid)}.sw.on .k{margin-left:18px}
+.sw:disabled,.chs button:disabled,.stp button:disabled{opacity:.6}
+.chs{display:inline-flex;padding:2px;gap:2px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2)}
+.chs button{border:0;border-radius:6px;min-height:34px;padding:0 12px;background:transparent;color:var(--text-2);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600}
+.chs button.sel{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--border-strong)}
+.stp{display:inline-flex;align-items:center;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface)}
+.stp button{border:0;background:transparent;width:40px;height:38px;font-size:16px;color:var(--text-2)}
+.chg{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:5px}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="Trades.dc.html">Trades</a><a href="Accounts.dc.html">Accounts</a><a href="Conditions.dc.html">Conditions</a><a href="#" class="on" aria-current="page">Settings</a><a href="Status.dc.html">Status</a><a href="Audit.dc.html">Audit</a>
+    <sc-if value="{{isOwner}}" hint-placeholder-val="{{ true }}"><a href="Users.dc.html">Users</a></sc-if>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div style="flex: 1"></div>
+      <sc-if value="{{ro}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12px; font-weight: 600"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>View only</span></sc-if>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">{{initial}}</span>{{roleLabel}}</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 920px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 18px">
+      <div>
+        <h1 style="margin: 0; font-size: 24px; font-weight: 600">Settings</h1>
+        <p style="margin: 4px 0 0; color: var(--text-3); font-size: 13px">Options for all of Scout or for one account. Per-symbol options are on <a href="Symbols.dc.html">Symbols</a>. The list comes from the laptop’s options catalogue.</p>
+      </div>
+
+      <sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+        <div class="card" style="padding: 48px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; border-style: dashed; box-shadow: none">
+          <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+          <strong style="font-size: 16px">No general options yet</strong>
+          <span style="color: var(--text-3); max-width: 420px">They appear here when they are added on the laptop (scout-controls.json). Nothing to set for now.</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isFilled}}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <section class="card" aria-label="{{g.name}}">
+            <div class="gh"><h2>{{g.name}}</h2><span style="font-size: 12px; color: var(--text-3)">{{g.sub}}</span></div>
+            <sc-if value="{{g.none}}" hint-placeholder-val="{{ false }}"><p style="margin: 0; padding: 16px; color: var(--text-3); font-size: 13px">No options for this account yet.</p></sc-if>
+            <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="2">
+              <div class="row">
+                <div style="flex: 1 1 300px; min-width: 0">
+                  <div style="display: flex; align-items: center; gap: 8px; font-weight: 500">{{r.label}} <span title="{{r.help}}" aria-label="Help: {{r.help}}" style="color: var(--text-3); cursor: help">ⓘ</span><sc-if value="{{r.changed}}" hint-placeholder-val="{{ false }}"><span class="chg">changed</span></sc-if></div>
+                  <div style="font-size: 12px; color: var(--text-3)">{{r.sub}}</div>
+                  <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; margin-top: 4px; min-height: 18px">
+                    <span style="display: inline-flex; gap: 6px; align-items: center; color: {{r.stColor}}">
+                      <sc-if value="{{r.stWait}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></sc-if>
+                      <sc-if value="{{r.stOk}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="m5 12 5 5 9-10"></path></svg></sc-if>
+                      {{r.st}}
+                    </span>
+                    <sc-if value="{{r.canReset}}" hint-placeholder-val="{{ false }}"><button onClick="{{r.reset}}" style="border: 0; background: transparent; color: var(--accent); font-weight: 600; padding: 4px 0; font-size: 12px">Reset to configured</button></sc-if>
+                  </div>
+                </div>
+                <sc-if value="{{r.isSwitch}}" hint-placeholder-val="{{ false }}"><button role="switch" class="sw {{r.swCls}}" aria-checked="{{r.on}}" aria-label="{{r.label}}" disabled="{{ro}}" onClick="{{r.toggle}}"><span class="k"></span></button></sc-if>
+                <sc-if value="{{r.isChoice}}" hint-placeholder-val="{{ false }}"><div class="chs" role="radiogroup" aria-label="{{r.label}}"><sc-for list="{{r.opts}}" as="o" hint-placeholder-count="3"><button role="radio" aria-checked="{{o.sel}}" class="{{o.cls}}" disabled="{{ro}}" onClick="{{o.pick}}">{{o.v}}</button></sc-for></div></sc-if>
+                <sc-if value="{{r.isNumber}}" hint-placeholder-val="{{ false }}"><div class="stp" role="group" aria-label="{{r.label}}"><button onClick="{{r.dec}}" disabled="{{r.decOff}}" aria-label="Decrease">−</button><span class="num" aria-live="polite" style="min-width: 48px; text-align: center; font-weight: 600; font-size: 15px">{{r.val}}</span><button onClick="{{r.inc}}" disabled="{{r.incOff}}" aria-label="Increase">+</button></div></sc-if>
+                <sc-if value="{{ro}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: var(--text-3); width: 100%; text-align: right">View only · set by owner</span></sc-if>
+              </div>
+            </sc-for>
+          </section>
+        </sc-for>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"role":{"editor":"enum","options":["owner","viewer"],"default":"owner"},"content":{"editor":"enum","options":["filled","empty"],"default":"filled"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  constructor(p) {
+    super(p);
+    this.state = { v: { pause: { val: false, ph: 'conf' }, maxOpen: { val: 12, ph: 'applied', at: '09:48' }, expiry: { val: '24 h', ph: 'conf' } }, clock: 6 };
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  set(key, val) {
+    if ((this.props.role ?? 'owner') === 'viewer') return;
+    this.setState((s) => ({ v: { ...s.v, [key]: { val, ph: 'wait' } } }));
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState((s) => { const c = s.clock + 1; return { clock: c, v: { ...s.v, [key]: { ...s.v[key], ph: 'applied', at: '10:' + String(c).padStart(2, '0') } } }; }), 2600);
+  }
+  renderVals() {
+    const ro = (this.props.role ?? 'owner') === 'viewer';
+    const conf = { pause: false, maxOpen: 10, expiry: '24 h' };
+    const st = (k) => {
+      const x = this.state.v[k]; const changed = x.val !== conf[k];
+      if (x.ph === 'wait') return { st: 'Saved · waiting for laptop', stColor: 'var(--blue)', stWait: true, stOk: false, changed, canReset: false };
+      if (x.ph === 'applied') return { st: (changed ? 'Applied by Scout ' : 'Back to configured · applied ') + x.at, stColor: 'var(--green)', stWait: false, stOk: true, changed, canReset: changed && !ro };
+      return { st: 'As configured', stColor: 'var(--text-3)', stWait: false, stOk: false, changed, canReset: changed && !ro };
+    };
+    const base = { isSwitch: false, isChoice: false, isNumber: false };
+    const p = this.state.v.pause, m = this.state.v.maxOpen, e = this.state.v.expiry;
+    const groups = [
+      { name: 'Scout', sub: 'All symbols, all accounts', none: false, rows: [
+        { ...base, ...st('pause'), isSwitch: true, label: 'Pause all new orders', help: 'Scout keeps watching and logging setups, but places no new orders. Pending orders stay.', sub: 'Configured: off · takes effect now', on: p.val, swCls: p.val ? 'on' : '', toggle: () => this.set('pause', !p.val), reset: () => this.set('pause', conf.pause) },
+        { ...base, ...st('maxOpen'), isNumber: true, label: 'Max open Scout orders', help: 'The most pending and filled Scout orders at the same time.', sub: 'Configured: 10 · range 1–30, step 1 · takes effect at the next candle', val: String(m.val), dec: () => this.set('maxOpen', Math.max(1, m.val - 1)), inc: () => this.set('maxOpen', Math.min(30, m.val + 1)), decOff: ro || m.val <= 1, incOff: ro || m.val >= 30, reset: () => this.set('maxOpen', conf.maxOpen) }
+      ] },
+      { name: 'IC Markets demo', sub: '49123893', none: false, rows: [
+        { ...base, ...st('expiry'), isChoice: true, label: 'Order expiry', help: 'How long a Scout stop order waits to fill before it is cancelled.', sub: 'Configured: 24 h · takes effect at the next candle', opts: ['12 h', '24 h', '48 h'].map((v) => ({ v, sel: e.val === v, cls: e.val === v ? 'sel' : '', pick: () => { if (e.val !== v) this.set('expiry', v); } })), reset: () => this.set('expiry', conf.expiry) }
+      ] },
+      { name: 'Pepperstone demo', sub: '49124666', none: true, rows: [] }
+    ];
+    const content = this.props.content ?? 'filled';
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '', ro, isOwner: !ro,
+      initial: ro ? 'V' : 'Z', roleLabel: ro ? 'Viewer' : 'Owner',
+      isEmpty: content === 'empty', isFilled: content !== 'empty', groups
+    };
+  }
+}
+</script>
+</body>
+</html>

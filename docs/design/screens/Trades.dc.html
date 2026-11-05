@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trades (TM) — desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.app{--bg:#f3f5f8;--surface:#ffffff;--surface-2:#f0f2f5;--border:#dde2e9;--border-strong:#c4ccd6;--text:#141922;--text-2:#465061;--text-3:#5f6978;--accent:#4447c9;--accent-soft:#ecedfc;--on-accent:#ffffff;--green:#11703f;--green-bg:#e2f3e9;--green-solid:#177a47;--red:#b42328;--red-bg:#fcebeb;--amber:#8f4f00;--amber-bg:#fdf1dc;--blue:#1b56c0;--blue-bg:#e7effd;--grey:#545d6a;--grey-bg:#e9ecf0;--grey-solid:#8a93a0;--t-scout:#2f4f7f;--t-scout-bg:#e4ebf5;--t-tm:#5e3f94;--t-tm-bg:#efe8f8;--t-man:#6e4f1f;--t-man-bg:#f3ece0;--shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.07);font-family:Inter,system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app.dark{--bg:#0e1116;--surface:#151a21;--surface-2:#1c222b;--border:#2a323d;--border-strong:#3a4350;--text:#e6eaf0;--text-2:#b4bdc9;--text-3:#96a0ad;--accent:#9aa0ff;--accent-soft:#262a52;--on-accent:#0e1116;--green:#5ccf95;--green-bg:#11301f;--green-solid:#237a4d;--red:#ff8a8a;--red-bg:#3b1619;--amber:#f2b555;--amber-bg:#3a2a10;--blue:#8cb4ff;--blue-bg:#15264a;--grey:#a3acb8;--grey-bg:#252b34;--grey-solid:#4f5865;--t-scout:#9dbbe8;--t-scout-bg:#1b2a40;--t-tm:#c6aef0;--t-tm-bg:#2a2042;--t-man:#e0c08e;--t-man-bg:#33281a;--shadow:none}
+.num{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;cursor:pointer}
+.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}a:hover{color:var(--text)}
+.nav a{color:var(--text-2);text-decoration:none;padding:10px 12px;border-radius:8px}.nav a:hover{background:var(--surface-2);color:var(--text)}.nav a.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.ch{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--border)}
+.ch h2{margin:0;font-size:16px;font-weight:600}
+.upd{font-size:12px;color:var(--text-3)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.role{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:2px 0;width:52px;text-align:center;border-radius:4px;display:inline-block}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-weight:500;color:var(--text-3);font-size:12px;text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl .r{text-align:right}
+.tbl .pin{position:sticky;left:0;background:var(--surface)}
+.seg{display:inline-flex;padding:3px;gap:2px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);font-size:13px}
+.seg button{border:0;border-radius:6px;padding:6px 12px;background:transparent;color:var(--text-2)}
+.seg button.sel{background:var(--surface);color:var(--text);font-weight:600;box-shadow:var(--shadow)}
+.fchip{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:0 12px;min-height:34px;font-size:13px;display:inline-flex;align-items:center;gap:6px;color:var(--text-2)}
+.fchip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.sw{width:42px;height:26px;border-radius:13px;border:0;padding:3px;background:var(--grey-solid);display:flex;flex:none}
+.sw .k{width:20px;height:20px;border-radius:50%;background:#fff;transition:margin .15s}
+.sw.on{background:var(--green-solid)}.sw.on .k{margin-left:16px}
+.act{display:grid;grid-template-columns:76px 60px minmax(0,1.6fr) 110px 70px minmax(0,1fr);gap:12px;align-items:center;padding:8px 16px 8px 40px;font-size:13px;border-top:1px solid var(--border)}
+.act.bad{background:var(--red-bg)}
+</style>
+</helmet>
+<div class="app {{themeCls}}" style="min-height: 100vh; display: flex; flex-wrap: wrap">
+  <nav class="nav" aria-label="Sections" style="flex: 1 1 232px; max-width: 232px; min-width: 200px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px"><div aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 13px">TD</div><span style="font-weight: 600">Trader Dashboard</span></div>
+    <a href="Main.dc.html">Scout</a><a href="Symbols.dc.html">Symbols</a><a href="#" class="on" aria-current="page">Trades</a><a href="Accounts.dc.html">Accounts</a><a href="Conditions.dc.html">Conditions</a><a href="Settings.dc.html">Settings</a><a href="Status.dc.html">Status</a><a href="Audit.dc.html">Audit</a><a href="Users.dc.html">Users</a>
+  </nav>
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 28px; background: var(--surface); border-bottom: 1px solid var(--border)">
+      <span role="status" style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></span>Data <span class="num">10:02</span> UTC · 6 min ago</span>
+      <div class="seg" role="group" aria-label="Account">
+        <sc-for list="{{accts}}" as="a" hint-placeholder-count="3"><button class="{{a.cls}}" aria-pressed="{{a.sel}}" onClick="{{a.pick}}">{{a.label}}</button></sc-for>
+      </div>
+      <div style="flex: 1"></div>
+      <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600">Z</span>Owner</span>
+    </header>
+
+    <main style="padding: 24px 28px 64px; max-width: 1240px; box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 16px">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 600">Trades <span style="font-size: 14px; font-weight: 400; color: var(--text-3)">· what TM did with each trade</span></h1>
+
+      <section class="card" aria-labelledby="open-h">
+        <div class="ch"><h2 id="open-h">Open now</h2><span class="upd">Updated <span class="num">10:02</span> UTC</span></div>
+        <sc-if value="{{hasOpen}}" hint-placeholder-val="{{ true }}">
+          <div style="overflow-x: auto">
+            <table class="tbl">
+              <thead><tr><th scope="col" class="pin">Symbol</th><th scope="col">Side</th><th scope="col" class="r">Lots</th><th scope="col" class="r">Entry</th><th scope="col" class="r">Stop-loss</th><th scope="col" class="r">Open profit</th><th scope="col">Owner</th><th scope="col">Role</th><th scope="col">Account</th></tr></thead>
+              <tbody>
+                <sc-for list="{{open}}" as="o" hint-placeholder-count="1">
+                  <tr><td class="pin" style="font-weight: 700">{{o.sym}}</td><td style="font-weight: 600">{{o.side}}</td><td class="num r">{{o.lots}}</td><td class="num r">{{o.entry}}</td><td class="num r">{{o.sl}} <span class="upd">{{o.slNote}}</span></td><td class="num r" style="font-weight: 700; color: {{o.pColor}}">{{o.p}}</td><td><span class="chip" style="background: var(--t-tm-bg); color: var(--t-tm)">{{o.owner}}</span></td><td><span class="role" style="background: var(--t-tm-bg); color: var(--t-tm)">{{o.role}}</span></td><td style="color: var(--text-2)">{{o.acct}}</td></tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+        <sc-if value="{{noOpen}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; padding: 28px; text-align: center; color: var(--text-3)">No open positions on this account.</p>
+        </sc-if>
+      </section>
+
+      <!-- Filters -->
+      <div role="group" aria-label="Filters" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <div style="display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--surface)"><button aria-label="Previous day" style="border: 0; background: transparent; width: 36px; height: 34px">‹</button><span style="font-size: 13px; font-weight: 600; padding: 0 6px">Today · Wed 04 Nov</span><button aria-label="Next day" disabled="{{ true }}" style="border: 0; background: transparent; width: 36px; height: 34px; color: var(--text-3)">›</button></div>
+        <span class="upd" style="margin-left: 6px">Owner</span>
+        <sc-for list="{{owners}}" as="w" hint-placeholder-count="3"><button class="fchip {{w.cls}}" aria-pressed="{{w.on}}" onClick="{{w.toggle}}">{{w.mark}}{{w.label}}</button></sc-for>
+        <div style="flex: 1"></div>
+        <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2)"><button role="switch" class="sw {{refCls}}" aria-checked="{{onlyRef}}" onClick="{{toggleRef}}" aria-label="Only refused actions"><span class="k"></span></button>Only refused</label>
+      </div>
+
+      <section aria-labelledby="hist-h" style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: baseline; gap: 10px"><h2 id="hist-h" style="margin: 0; font-size: 16px; font-weight: 600">History by trade</h2><span class="upd">{{histCount}}</span></div>
+        <sc-for list="{{trades}}" as="t" hint-placeholder-count="3">
+          <article class="card" style="overflow: hidden">
+            <button onClick="{{t.toggle}}" aria-expanded="{{t.open}}" style="width: 100%; border: 0; background: transparent; display: flex; align-items: center; gap: 12px; padding: 14px 16px; text-align: left; flex-wrap: wrap">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2.2" stroke-linecap="round"><path d="{{t.chev}}"></path></svg>
+              <span style="font-weight: 700; font-size: 16px">{{t.sym}}</span>
+              <span style="font-weight: 600">{{t.side}}</span>
+              <span class="num upd">{{t.id}}</span>
+              <span class="upd">opened <span class="num">{{t.opened}}</span></span>
+              <span class="chip" style="background: var(--t-scout-bg); color: var(--t-scout)">{{t.owner}}</span>
+              <sc-if value="{{t.hasRefused}}" hint-placeholder-val="{{ false }}"><span class="chip" style="background: var(--red-bg); color: var(--red)">✕ 1 refused</span></sc-if>
+              <span style="flex: 1"></span>
+              <span class="num" style="font-weight: 700; color: {{t.resColor}}">{{t.result}}</span>
+            </button>
+            <sc-if value="{{t.open}}" hint-placeholder-val="{{ false }}">
+              <div role="list" aria-label="TM actions for {{t.sym}}">
+                <div class="act" style="color: var(--text-3); font-size: 11px; padding-top: 6px; padding-bottom: 6px"><span>Time UTC</span><span>Role</span><span>Action</span><span style="text-align: right">Price</span><span style="text-align: right">Latency</span><span>Result</span></div>
+                <sc-for list="{{t.acts}}" as="a" hint-placeholder-count="5">
+                  <div role="listitem" class="act {{a.cls}}">
+                    <span class="num" style="color: var(--text-3)">{{a.t}}</span>
+                    <span class="role" style="background: {{a.rBg}}; color: {{a.rFg}}; border: 1px solid {{a.rBd}}">{{a.role}}</span>
+                    <span>{{a.text}}</span>
+                    <span class="num" style="text-align: right">{{a.price}}</span>
+                    <span class="num" style="text-align: right; color: var(--text-3)">{{a.ms}}</span>
+                    <span style="font-weight: 600; color: {{a.resColor}}">{{a.res}}</span>
+                  </div>
+                </sc-for>
+                <div style="padding: 10px 16px 14px 40px; border-top: 1px solid var(--border); font-size: 13px"><a href="Main.dc.html">Open Scout order and picture</a></div>
+              </div>
+            </sc-if>
+          </article>
+        </sc-for>
+        <sc-if value="{{noTrades}}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="padding: 32px; text-align: center; color: var(--text-3)">No trades match these filters.</div>
+        </sc-if>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { acct: 'ic', owners: { Scout: true, TM: true, Manual: true }, onlyRef: false, open: { gbpjpy: true } }; }
+  renderVals() {
+    const R = { MAIN: ['var(--t-tm-bg)', 'var(--t-tm)', 'transparent'], MIR: ['var(--t-tm-bg)', 'var(--t-tm)', 'transparent'], HMAIN: ['transparent', 'var(--t-tm)', 'var(--t-tm)'], HMIR: ['transparent', 'var(--t-tm)', 'var(--t-tm)'] };
+    const A = (t, role, text, price, ms, ok, why) => ({ t, role, text, price, ms: ms ? ms + ' ms' : '', rBg: R[role][0], rFg: R[role][1], rBd: R[role][2], cls: ok ? '' : 'bad', res: ok ? '✓ ok' : '✕ refused: ' + why, resColor: ok ? 'var(--green)' : 'var(--red)', ok });
+    const all = [
+      { id: 'P692232259', key: 'gbpjpy', sym: 'GBPJPY', side: '↑ Buy', opened: '09:41', owner: 'Scout', acct: 'ic', result: 'Closed +$12.40', resColor: 'var(--green)', acts: [
+        A('09:41:02', 'MAIN', 'Entry filled', '212.688', 0, true), A('09:41:03', 'MIR', 'Mirror placed · 0.10 buy', '212.688', 212, true),
+        A('09:41:04', 'HMAIN', 'Hedge placed · sell stop', '212.474', 148, true), A('09:41:04', 'HMIR', 'Hedge placed · sell stop', '212.474', 151, true),
+        A('10:15:20', 'MAIN', 'Stop moved to break-even', '212.688', 96, true), A('10:15:21', 'HMAIN', 'Hedge cancelled', '', 88, true),
+        A('10:16:05', 'MAIN', 'Position closed · +$12.40 net', '212.812', 102, true)] },
+      { id: 'P692219874', key: 'ethusd', sym: 'ETHUSD', side: '↑ Buy', opened: '07:00', owner: 'Scout', acct: 'ic', result: 'Closed −$8.15', resColor: 'var(--red)', acts: [
+        A('07:00:04', 'MAIN', 'Entry filled', '[price]', 0, true), A('07:00:05', 'MIR', 'Mirror placed · 0.05 buy', '[price]', 230, true),
+        A('07:00:06', 'HMAIN', 'Hedge placed · sell stop', '[price]', 175, false, 'size below broker minimum'),
+        A('08:12:40', 'MAIN', 'Stop-loss hit · −$8.15 net', '[price]', 0, true)] },
+      { id: 'O692214402', key: 'audjpy', sym: 'AUDJPY', side: '↓ Sell', opened: '—', owner: 'Scout', acct: 'ic', result: 'Expired · not filled', resColor: 'var(--text-3)', acts: [
+        A('06:00:03', 'MIR', 'Mirror order placed · 0.10', '[level]', 190, true), A('09:58:12', 'MIR', 'Mirror order cancelled · entry expired', '', 120, true)] }
+    ];
+    const s = this.state;
+    const trades = all.filter((t) => (s.acct === 'both' || t.acct === s.acct) && s.owners[t.owner] && (!s.onlyRef || t.acts.some((a) => !a.ok)))
+      .map((t) => { const open = !!s.open[t.key]; return { ...t, open, chev: open ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6', hasRefused: t.acts.some((a) => !a.ok), acts: s.onlyRef ? t.acts.filter((a) => !a.ok) : t.acts, toggle: () => this.setState((x) => ({ open: { ...x.open, [t.key]: !x.open[t.key] } })) }; });
+    const open = s.acct === 'pp' ? [] : [{ sym: 'GBPJPY', side: '↑ Buy', lots: '0.10', entry: '212.688', sl: '212.688', slNote: 'break-even', p: '+$27.35', pColor: 'var(--green)', owner: 'TM', role: 'MIR', acct: 'IC Markets demo' }];
+    return {
+      themeCls: (this.props.theme ?? 'light') === 'dark' ? 'dark' : '',
+      accts: [['ic', 'IC Markets demo'], ['pp', 'Pepperstone demo'], ['both', 'Both']].map(([k, label]) => ({ label, sel: s.acct === k, cls: s.acct === k ? 'sel' : '', pick: () => this.setState({ acct: k }) })),
+      owners: ['Scout', 'TM', 'Manual'].map((w) => ({ label: w, on: s.owners[w], cls: s.owners[w] ? 'on' : '', mark: s.owners[w] ? '✓ ' : '', toggle: () => this.setState((x) => ({ owners: { ...x.owners, [w]: !x.owners[w] } })) })),
+      onlyRef: s.onlyRef, refCls: s.onlyRef ? 'on' : '', toggleRef: () => this.setState({ onlyRef: !s.onlyRef }),
+      open, hasOpen: open.length > 0, noOpen: open.length === 0,
+      trades, noTrades: trades.length === 0, histCount: trades.length + (trades.length === 1 ? ' trade' : ' trades')
+    };
+  }
+}
+</script>
+</body>
+</html>
