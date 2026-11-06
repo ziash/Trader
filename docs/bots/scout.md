@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: **IC Markets only, 18 symbols** (§7) |
-| Document version | v1.8 (06-Nov-2026) — history in §8 |
+| Document version | v1.9 (07-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | IC Markets demo 49123893 (`brokerA`) only from 04-Nov-2026 (Pepperstone demo 49124666, `brokerB`, until then) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
@@ -72,7 +72,7 @@ The owner can steer Scout from the dashboard ([dashboard.md §3.4](../dashboard.
 
 - **Setup key** = `<symbol>-<timeframe>-<pause start yyyyMMddHHmm>`, the setup part of Scout's order label; one key covers the main and the reversal stop. Entries older than 7 days are ignored.
 - **Every entry is checked again:** an option not in the catalogue or unknown to this Scout, a value the catalogue does not allow, a symbol not in `scout.json` (or with more than one chart, for `timeframe`), a malformed setup key, or a file for another account is **refused — that entry only**; the rest apply. A file Scout cannot read is refused whole: Scout keeps the last good one and warns (pop-up `ControlFileBad`). No file = everything as configured.
-- **Acknowledgement:** after applying a changed file Scout writes `~/tradebot/control/scout-<broker>-<ctid>.ack.json`: the file version, when, each entry *applied* (with the orders it cancelled) or *refused* (why), and the options this Scout knows. Events `ControlApplied`, `ControlRefused` in `events.csv`.
+- **Acknowledgement:** after applying a changed file Scout writes `~/tradebot/control/scout-<broker>-<ctid>.ack.json`: the file version, when, each entry *applied* (with the orders it cancelled) or *refused* (why), the options this Scout knows, and the last 50 file versions it applied with when (`applied`, kept across restarts, so the site can show when each change was applied). Values as JSON (`false`, not `False`). Events `ControlApplied`, `ControlRefused`, and `ControlReset` for a control put back as configured, in `events.csv`.
 - A restart applies the current file again (it describes the wanted state, so applying it twice changes nothing).
 - Controls never move, close or resize anything: they only hold Scout back or change which chart it reads. Order size, mode and the symbol list stay in `scout.json`.
 
@@ -162,3 +162,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.6 | 04 Nov 2026 | XNGUSD stays in trade mode at its 0.5-lot minimum (owner, §7); its bigger size is weighed at the review |
 | v1.7 | 06 Nov 2026 | **Margin budget** (§2.5, after the IC Markets margin call, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): a new order only while margin in use + 4 × (waiting orders + the new one) ≤ 50 % of equity (`marginUsePercent`, `marginFactor` in `scout.json`); otherwise `skip` / `no margin` in `orders.csv`, tried again while the setup lasts. Code: `MarginBudget`, `AccountScout` (Trader.Core `AccountStatus`, `GetExpectedMarginAsync`, [Open Code Pieces](../open-code-pieces.md) v1.9). Tests: 27 (3 new). Open: sizes against the account size (XNGUSD, SOLUSD) at the trial review |
 | v1.8 | 06 Nov 2026 | **Controls from the dashboard** (§2.6, owner; dashboard build step 6): symbol on/off, timeframe per symbol (old chart's pending orders stay, owner), keep/skip per setup; the catalogue and control file, entry-by-entry checks, the acknowledgement file |
+| v1.9 | 07 Nov 2026 | Controls checked live (EURUSD off and on again, applied in 1½–3 min). Three fixes (§2.6): the acknowledgement keeps each applied file version with its time (`applied`, last 50, across restarts); switch values written as JSON (`false`); `ControlReset` logged when a control goes back as configured. Tests: 34 (2 new) |

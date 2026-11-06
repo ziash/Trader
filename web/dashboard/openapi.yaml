@@ -415,7 +415,7 @@ components:
               change: { type: string }
               by: { type: string }
               applied: { type: string, enum: [waiting, applied, refused] }
-              applied_utc: { type: [string, 'null'] }
+              applied_utc: { type: [string, 'null'], description: when Scout applied this change (the first file version it applied at or after it) }
               reason: { type: [string, 'null'] }
     ScoutOrder:
       type: object
@@ -755,7 +755,7 @@ components:
       type: object
       properties:
         state: { type: string, enum: [saved, applied, refused] }
-        utc: { type: [string, 'null'] }
+        utc: { type: [string, 'null'], description: saved = when the file was written; applied / refused = when Scout applied this control's last change }
         reason: { type: [string, 'null'] }
         cancelled: { type: array, items: { type: integer }, description: orders Scout cancelled for it }
     ControlOption:

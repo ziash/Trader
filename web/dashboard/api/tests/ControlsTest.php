@@ -91,4 +91,29 @@ final class ControlsTest extends TestCase
         self::assertSame(['old', 'new'], array_slice($history[0], 8));
         self::assertSame(['EURUSD-H1-202611061400', 'decision', 'skip', 'as configured'], array_slice($history[4], 6));
     }
+
+    public function testEachChangeShowsWhenScoutAppliedItNotTheLatestAcknowledgementTime(): void
+    {
+        $this->set(['scope' => 'symbol', 'target' => 'EURUSD', 'key' => 'enabled', 'value' => false]);    // version 1
+        $this->set(['scope' => 'symbol', 'target' => 'XNGUSD', 'key' => 'timeframe', 'value' => 'H4']);   // version 2
+        $this->set(['scope' => 'symbol', 'target' => 'XNGUSD', 'key' => 'timeframe', 'value' => 'D1']);   // version 3, not read by Scout yet
+        file_put_contents("{$this->kit->root}/controls/scout-brokerA-49123893.ack.json", json_encode(['version' => 2, 'applied_utc' => '2026-11-06 19:34:22',
+            'applied' => [['version' => 1, 'utc' => '2026-11-06 19:31:49'], ['version' => 2, 'utc' => '2026-11-06 19:34:22']],
+            'entries' => [['scope' => 'symbol', 'target' => 'EURUSD', 'key' => 'enabled', 'value' => 'false', 'state' => 'applied', 'reason' => null, 'cancelled' => []],
+                ['scope' => 'symbol', 'target' => 'XNGUSD', 'key' => 'timeframe', 'value' => 'H4', 'state' => 'applied', 'reason' => null, 'cancelled' => []]]]));
+
+        $v = $this->kit->request('GET', '/api/controls', ['headers' => $this->viewer, 'query' => ['account' => 'brokerA-49123893']])->data();
+        self::assertSame(['applied', '2026-11-06 19:31:49'], [$v['symbols'][0]['state']['enabled']['state'], $v['symbols'][0]['state']['enabled']['utc']]);
+        self::assertSame('saved', $v['symbols'][1]['state']['timeframe']['state']);            // its last change (3) is newer than Scout's file
+
+        file_put_contents("{$this->kit->root}/data/status.json", json_encode(['generated_utc' => '2026-11-06 19:35:00']));
+        $h = $this->kit->request('GET', '/api/status', ['headers' => $this->admin])->data()['controls'];
+        self::assertSame([['waiting', null], ['applied', '2026-11-06 19:34:22'], ['applied', '2026-11-06 19:31:49']],
+            array_map(fn ($r) => [$r['applied'], $r['applied_utc']], $h));
+
+        // An older Scout's acknowledgement has no list: its own time stands in.
+        self::assertSame('2026-11-06 19:34:22', \TraderDash\ControlsData::appliedAt(['version' => 2, 'applied_utc' => '2026-11-06 19:34:22'], 1));
+        // Two quick changes read as one file: both applied when that file was.
+        self::assertSame('2026-11-06 19:34:22', \TraderDash\ControlsData::appliedAt(['applied' => [['version' => 2, 'utc' => '2026-11-06 19:34:22']]], 1));
+    }
 }

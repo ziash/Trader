@@ -70,6 +70,7 @@ internal sealed class AccountScout(
     private static readonly TimeSpan ControlCheck = TimeSpan.FromSeconds(30);
     private Controls _controls = Controls.None;
     private DateTime _nextControlCheck = DateTime.MinValue;
+    private IReadOnlyList<AppliedVersion>? _appliedVersions;
     private (DateTime File, DateTime Catalogue)? _controlStamps;
     private bool _ackDue;
     private readonly HashSet<string> _heldLogged = [];
@@ -193,6 +194,8 @@ internal sealed class AccountScout(
         if (next == Controls.None && _controls == Controls.None)
             return; // no file, and there never was one: nothing to do or acknowledge
 
+        foreach (var e in Controls.Reset(_controls, next))
+            _log.Event("ControlReset").Information("{Broker}: dashboard control {Scope} {Target} {Key} back as configured", account.Broker, e.Scope, e.Target, e.Key);
         _controls = next;
         foreach (var e in next.Entries)
         {
@@ -235,9 +238,13 @@ internal sealed class AccountScout(
     {
         try
         {
+            // Each applied version with its time, carried over from the last acknowledgement across restarts (dashboard.md §3.4).
+            _appliedVersions ??= ControlAck.Load(AckPath)?.Applied;
+            if (error is null && _controls.Version > 0)
+                _appliedVersions = ControlAck.History(_appliedVersions, _controls.Version, CsvFormat.Time(now));
             new ControlAck(version ?? _controls.Version, CsvFormat.Time(now), identity.InstanceId, Controls.Known,
                 _controls.Entries.Select(e => new AckEntry(e.Scope, e.Target, e.Key, e.Value, e.Applied ? "applied" : "refused", e.Reason, e.Cancelled.ToList())).ToList(),
-                error).Write(AckPath);
+                error, _appliedVersions).Write(AckPath);
         }
         catch (IOException ex)
         {

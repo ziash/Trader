@@ -120,7 +120,7 @@ public sealed class Controls
         foreach (var (symbol, options) in file.Symbols)
         foreach (var (key, raw) in options)
         {
-            var value = raw.ValueKind == JsonValueKind.String ? raw.GetString()! : raw.ToString();
+            var value = raw.ValueKind == JsonValueKind.String ? raw.GetString()! : raw.GetRawText(); // false, not False
             var why = Check(file, catalogue, accountId, "symbol", key, value);
             var charts = account.Charts.Where(ch => ch.Symbol == symbol).ToList();
             if (why is null && charts.Count == 0)
@@ -164,6 +164,10 @@ public sealed class Controls
         return c;
     }
 
+    /// <summary>The controls in force before that are gone now (the owner put them back as configured, or the file went).</summary>
+    public static IEnumerable<ControlEntry> Reset(Controls before, Controls after) =>
+        before.Entries.Where(b => b.Applied && !after.Entries.Any(a => a.Scope == b.Scope && a.Target == b.Target && a.Key == b.Key));
+
     private static string? Check(ControlFile file, ControlCatalogue? catalogue, string accountId, string scope, string key, string value)
     {
         if (file.Account is { Length: > 0 } a && a != accountId)
@@ -187,9 +191,41 @@ public sealed record ControlAck(
     [property: JsonPropertyName("instance")] string Instance,
     [property: JsonPropertyName("knows")] IReadOnlyList<string> Knows,
     [property: JsonPropertyName("entries")] IReadOnlyList<AckEntry> Entries,
-    [property: JsonPropertyName("error")] string? Error = null)
+    [property: JsonPropertyName("error")] string? Error = null,
+    [property: JsonPropertyName("applied")] IReadOnlyList<AppliedVersion>? Applied = null)
 {
+    /// <summary>How many applied file versions the acknowledgement remembers, so the site can tell when each change was applied.</summary>
+    public const int VersionsKept = 50;
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+
+    /// <summary>The last acknowledgement written, or null (none yet, or not readable).</summary>
+    public static ControlAck? Load(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? JsonSerializer.Deserialize<ControlAck>(File.ReadAllText(path)) : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The applied versions with <paramref name="version"/> added at <paramref name="utc"/>: a version already there keeps its
+    /// first time (the same file read again after a restart); when versions above it are there the file started again at 1, so
+    /// those and its own old time are dropped.
+    /// </summary>
+    public static IReadOnlyList<AppliedVersion> History(IReadOnlyList<AppliedVersion>? before, long version, string utc)
+    {
+        before ??= [];
+        var restarted = before.Any(a => a.Version > version);
+        var list = before.Where(a => restarted ? a.Version < version : a.Version <= version).ToList();
+        if (list.Count == 0 || list[^1].Version < version)
+            list.Add(new AppliedVersion(version, utc));
+        return list.TakeLast(VersionsKept).ToList();
+    }
 
     public void Write(string path)
     {
@@ -199,6 +235,10 @@ public sealed record ControlAck(
         File.Move(tmp, path, overwrite: true);
     }
 }
+
+public sealed record AppliedVersion(
+    [property: JsonPropertyName("version")] long Version,
+    [property: JsonPropertyName("utc")] string Utc);
 
 public sealed record AckEntry(
     [property: JsonPropertyName("scope")] string Scope,

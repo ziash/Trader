@@ -31,6 +31,7 @@ final class ControlsData
         $file = $this->file($broker, $ctid);
         $ack = $this->ack($broker, $ctid);
         $configured = $options['accounts'][$accountId] ?? [];
+        $changed = $this->lastChanged($accountId);
 
         $symbols = [];
         foreach ($configured as $c) {
@@ -38,7 +39,7 @@ final class ControlsData
             $set = $file['symbols'][$s] ?? [];
             $state = [];
             foreach ($set as $key => $value) {
-                $state[$key] = $this->state($file, $ack, 'symbol', $s, $key);
+                $state[$key] = $this->state($file, $ack, 'symbol', $s, $key, $changed["symbol|$s|$key"] ?? null);
             }
             $symbols[] = [
                 'symbol' => $s, 'configured' => ['enabled' => true, 'timeframe' => $c['timeframe'] ?? null, 'mode' => $c['mode'] ?? 'watch'],
@@ -48,7 +49,7 @@ final class ControlsData
         }
         $setups = [];
         foreach ($file['setups'] ?? [] as $key => $s) {
-            $setups[$key] = $s + ['state' => $this->state($file, $ack, 'setup', $key, 'decision')];
+            $setups[$key] = $s + ['state' => $this->state($file, $ack, 'setup', $key, 'decision', $changed["setup|$key|decision"] ?? null)];
         }
 
         return [
@@ -185,9 +186,35 @@ final class ControlsData
                 'change' => "{$r['account']} · {$r['target']} {$r['key']}: {$r['old']} → {$r['new']}",
                 'by' => $r['by'],
                 'applied' => !$done ? 'waiting' : (($entry['state'] ?? 'applied') === 'refused' ? 'refused' : 'applied'),
-                'applied_utc' => $done ? ($ack['applied_utc'] ?? null) : null,
+                'applied_utc' => $done ? self::appliedAt($ack, (int) $r['version']) : null,
                 'reason' => $entry['reason'] ?? null,
             ];
+        }
+        return $out;
+    }
+
+    /**
+     * When Scout applied file version $version: the first version it applied at or after it, from the acknowledgement's list
+     * (Scout may read two quick changes as one file); the acknowledgement's own time when the list does not reach that far back.
+     */
+    public static function appliedAt(array $ack, int $version): ?string
+    {
+        foreach ($ack['applied'] ?? [] as $a) {
+            if ((int) ($a['version'] ?? 0) >= $version) {
+                return $a['utc'] ?? null;
+            }
+        }
+        return $ack['applied_utc'] ?? null;
+    }
+
+    /** "scope|target|key" => the file version of the account's last change to it, from the history. */
+    private function lastChanged(string $accountId): array
+    {
+        $out = [];
+        foreach (ScoutData::readCsv("{$this->controlsDir}/control-history.csv") as $r) {
+            if (($r['account'] ?? '') === $accountId) {
+                $out["{$r['scope']}|{$r['target']}|{$r['key']}"] = (int) $r['version'];
+            }
         }
         return $out;
     }
@@ -220,18 +247,23 @@ final class ControlsData
         return is_array($d) ? $d : null;
     }
 
-    /** saved (Scout has not seen this version yet), applied (with when) or refused (with why). */
-    private function state(?array $file, ?array $ack, string $scope, string $target, string $key): array
+    /**
+     * saved (Scout has not seen this control's last change yet), applied (with when) or refused (with why). $version is the
+     * file version of that change (from the history; the file's own version when the history does not have it).
+     */
+    private function state(?array $file, ?array $ack, string $scope, string $target, string $key, ?int $version): array
     {
-        if ($ack === null || (int) ($ack['version'] ?? 0) < (int) ($file['version'] ?? 0)) {
+        $version ??= (int) ($file['version'] ?? 0);
+        if ($ack === null || (int) ($ack['version'] ?? 0) < $version) {
             return ['state' => 'saved', 'utc' => $file['updated_utc'] ?? null, 'reason' => null];
         }
+        $utc = self::appliedAt($ack, $version);
         foreach ($ack['entries'] ?? [] as $e) {
             if ($e['scope'] === $scope && $e['target'] === $target && $e['key'] === $key) {
-                return ['state' => $e['state'] === 'refused' ? 'refused' : 'applied', 'utc' => $ack['applied_utc'] ?? null, 'reason' => $e['reason'] ?? null,
+                return ['state' => $e['state'] === 'refused' ? 'refused' : 'applied', 'utc' => $utc, 'reason' => $e['reason'] ?? null,
                     'cancelled' => $e['cancelled'] ?? []];
             }
         }
-        return ['state' => 'applied', 'utc' => $ack['applied_utc'] ?? null, 'reason' => null];
+        return ['state' => 'applied', 'utc' => $utc, 'reason' => null];
     }
 }

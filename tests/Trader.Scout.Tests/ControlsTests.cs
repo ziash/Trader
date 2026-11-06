@@ -95,6 +95,42 @@ public sealed class ControlsTests
     }
 
     [Fact]
+    public void Switches_are_acknowledged_as_json_and_controls_put_back_are_reported_as_reset()
+    {
+        var off = Controls.Evaluate(File("""{ "version": 1, "account": "brokerA-49123893", "symbols": { "EURUSD": { "enabled": false }, "SOLUSD": { "timeframe": "D1" } } }"""), Catalogue, Account, Now);
+        Assert.Equal("false", off.Entries.Single(e => e.Target == "EURUSD").Value);
+
+        var back = Controls.Evaluate(File("""{ "version": 2, "account": "brokerA-49123893", "symbols": { "SOLUSD": { "timeframe": "D1" } } }"""), Catalogue, Account, Now);
+        Assert.Equal([("EURUSD", "enabled")], Controls.Reset(off, back).Select(e => (e.Target, e.Key)));
+        Assert.Equal(2, Controls.Reset(off, Controls.None).Count());
+        Assert.Empty(Controls.Reset(Controls.None, off));
+    }
+
+    [Fact]
+    public void The_acknowledgement_remembers_when_each_version_was_applied()
+    {
+        var h = ControlAck.History(null, 1, "2026-11-06 19:31:49");
+        h = ControlAck.History(h, 2, "2026-11-06 19:34:22");
+        h = ControlAck.History(h, 2, "2026-11-06 20:00:00");                  // the same file again after a restart: first time kept
+        Assert.Equal([new AppliedVersion(1, "2026-11-06 19:31:49"), new AppliedVersion(2, "2026-11-06 19:34:22")], h);
+        Assert.Equal([new AppliedVersion(1, "2026-11-07 08:00:00")], ControlAck.History(h, 1, "2026-11-07 08:00:00")); // the file started again
+        Assert.Equal(ControlAck.VersionsKept, Enumerable.Range(1, 80).Aggregate((IReadOnlyList<AppliedVersion>)[], (l, v) => ControlAck.History(l, v, "t")).Count);
+
+        var path = Path.Combine(Path.GetTempPath(), $"ack-{Guid.NewGuid():N}.json");
+        try
+        {
+            new ControlAck(2, "2026-11-06 19:34:22", "Scout-x", Controls.Known, [], null, h).Write(path);
+            Assert.Equal(h, ControlAck.Load(path)!.Applied);
+            System.IO.File.WriteAllText(path, "{ not json");
+            Assert.Null(ControlAck.Load(path));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void The_repository_catalogue_lists_exactly_the_options_this_scout_knows()
     {
         var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../config", ControlCatalogue.FileName));
