@@ -39,6 +39,8 @@ final class App
         'GET /api/accounts' => ['viewer', 'accounts'],
         'GET /api/trades' => ['viewer', 'trades'],
         'GET /api/trades/chart' => ['viewer', 'tradeChart'],
+        'GET /api/conditions' => ['viewer', 'conditions'],
+        'GET /api/audit' => ['viewer', 'audit'],
         'GET /api/users' => ['owner', 'usersOverview'],
         'POST /api/users/approve' => ['owner', 'usersApprove'],
         'POST /api/users/refuse' => ['owner', 'usersRefuse'],
@@ -233,6 +235,16 @@ final class App
     private function trades(Request $request): Response
     {
         return Response::json(200, (new TradesData($this->dataDir))->trades($request->query['account'] ?? '', $request->query['day'] ?? null));
+    }
+
+    private function conditions(Request $request): Response
+    {
+        return Response::json(200, (new TradesData($this->dataDir))->conditions($request->query['account'] ?? ''));
+    }
+
+    private function audit(Request $request): Response
+    {
+        return Response::json(200, (new AuditData($this->dataDir))->view($request->query['report'] ?? null, $request->query['period'] ?? null));
     }
 
     /** A trade picture (dashboard.md §2.3). The laptop draws it; it is shown as an image only, so no script in it can run. */

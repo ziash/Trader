@@ -157,6 +157,25 @@ public sealed class CTraderSession : IAsyncDisposable
         return res.Symbol;
     }
 
+    /// <summary>A symbol's leverage tiers (ProtoOASymbol.LeverageId): leverage falls as the position grows. Read-only.</summary>
+    public async Task<ProtoOADynamicLeverage> GetDynamicLeverageAsync(long ctidTraderAccountId, long leverageId)
+    {
+        var res = await RequestAsync<ProtoOAGetDynamicLeverageByIDRes>(new ProtoOAGetDynamicLeverageByIDReq
+        {
+            CtidTraderAccountId = ctidTraderAccountId,
+            LeverageId = leverageId,
+        });
+        return res.Leverage;
+    }
+
+    /// <summary>Stops the spot events of the symbols (e.g. after a short price check).</summary>
+    public Task UnsubscribeSpotsAsync(long ctidTraderAccountId, IEnumerable<long> symbolIds)
+    {
+        var req = new ProtoOAUnsubscribeSpotsReq { CtidTraderAccountId = ctidTraderAccountId };
+        req.SymbolId.AddRange(symbolIds);
+        return RequestAsync<ProtoOAUnsubscribeSpotsRes>(req);
+    }
+
     /// <summary>Starts ProtoOASpotEvent (bid/ask) messages for the symbols, with server timestamps.</summary>
     public Task SubscribeSpotsAsync(long ctidTraderAccountId, IEnumerable<long> symbolIds)
     {

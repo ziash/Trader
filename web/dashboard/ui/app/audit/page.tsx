@@ -1,5 +1,5 @@
-import { Later } from "@/screens/Later";
+import { AuditScreen } from "@/screens/AuditScreen";
 
 export default function Page() {
-  return <Later title="Audit" step={5} what="The Audit Bot’s broker comparison" />;
+  return <AuditScreen />;
 }

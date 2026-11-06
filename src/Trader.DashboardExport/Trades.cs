@@ -82,7 +82,7 @@ public sealed record SnapshotOrder(
 /// <summary>snapshot-&lt;broker&gt;-&lt;ctid&gt;.json (dashboard.md §3.2): the account's latest values.</summary>
 public sealed record SnapshotFile(
     string Account, string Broker, long Ctid, string TimeUtc, SnapshotAccount Status,
-    IReadOnlyList<SnapshotPosition> Positions, IReadOnlyList<SnapshotOrder> Orders);
+    IReadOnlyList<SnapshotPosition> Positions, IReadOnlyList<SnapshotOrder> Orders, IReadOnlyList<ConditionsRow>? Conditions = null);
 
 /// <summary>Turns the broker's replies into the snapshot, deal rows and trade links. No connection here: the tests feed it directly.</summary>
 public static class SnapshotBuilder

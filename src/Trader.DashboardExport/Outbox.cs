@@ -35,7 +35,7 @@ public sealed class Outbox(string tradebotHome, string outboxDir, IReadOnlyColle
         new($@"^logs/{Account}/Scout-{Instance}/{Day}/(orders|setups|events)\.csv$"),
         new($@"^logs/{Account}/Scout-{Instance}/{Day}/charts/[A-Za-z0-9._-]{{1,120}}\.svg$"),
         new($@"^logs/{Account}/TM-{Instance}/{Day}/(actions|events)\.csv$"),
-        new($@"^logs/{Account}/Dashboard/{Day}/(account|deals)\.csv$"),
+        new($@"^logs/{Account}/Dashboard/{Day}/(account|deals|conditions)\.csv$"),
         new($@"^logs/{Account}/Dashboard/{Day}/charts/trade-[PO]\d{{1,20}}\.svg$"),
         new($@"^reports/(daily-compare-{Day}|summary-{Day}_{Day})\.csv$"),
         new(@"^status\.json$"),

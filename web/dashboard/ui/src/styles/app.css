@@ -220,3 +220,13 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: var(--fw-semibold); }
 .trade-events tr.fill td { background: var(--surface-2); }
 .role { font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Trading conditions (Conditions.dc.html) and Audit (Audit.dc.html) */
+.cond td { vertical-align: top; }
+.cond .two { display: flex; flex-direction: column; gap: 2px; }
+.whatif { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 18px; padding: 16px; align-items: end; }
+.whatif label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-small); color: var(--text-3); }
+.whatif input, .whatif select { font: inherit; font-size: 14px; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-md); height: 38px; padding: 0 10px; }
+.whatif-out { border-top: 1px solid var(--border); }
+.better { background: var(--better, var(--green-bg)); font-weight: var(--fw-semibold); }
+.audit td.pair { border-left: 1px solid var(--border); }

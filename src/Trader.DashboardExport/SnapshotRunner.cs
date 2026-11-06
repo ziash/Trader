@@ -89,10 +89,21 @@ public sealed class SnapshotRunner(string home, Outbox outbox, ILogger log)
             .ToList();
 
         var snapshot = SnapshotBuilder.Snapshot(account, now, trader, reconcile, pnl, symbols, linker);
+        var dir = AccountDir(account);
+        var conditions = 0;
+        try
+        {
+            var rows2 = await ConditionsAsync(session, account, trader, snapshot.Status.FreeMargin);
+            snapshot = snapshot with { Conditions = rows2 };
+            conditions = ConditionsMath.AppendChanged(DayFile(dir, DateOnly.FromDateTime(now), "conditions.csv"), rows2, now);
+        }
+        catch (Exception e) when (e is CTraderApiException or TimeoutException or InvalidOperationException)
+        {
+            log.Warning("Trading conditions of {Account} not read: {Message}", account.Id, e.Message); // the rest of the snapshot still goes up
+        }
         if (!outbox.Write($"snapshot-{account.Broker}-{ctid}.json", JsonSerializer.Serialize(snapshot, StatusReport.Json)))
             throw new InvalidOperationException("the snapshot would contain a secret value");
 
-        var dir = AccountDir(account);
         var added = AppendDeals(dir, rows, DateOnly.FromDateTime(now).AddDays(-Days - 1));
         using (var accountCsv = new DailyCsvWriter(d => DayFile(dir, d, "account.csv"), AccountHeader))
         {
@@ -141,8 +152,80 @@ public sealed class SnapshotRunner(string home, Outbox outbox, ILogger log)
             drawn++;
         }
 
-        log.Information("Snapshot {Account}: {Status}; {Positions} positions, {Orders} orders; {Deals} deals in {Days} days ({Added} new); {Trades} trades, {Drawn} pictures drawn",
-            account.Id, AccountStatus.From(trader, reconcile, pnl, now).Describe(), snapshot.Positions.Count, snapshot.Orders.Count, rows.Count, Days, added, trades.Count, drawn);
+        log.Information("Snapshot {Account}: {Status}; {Positions} positions, {Orders} orders; {Deals} deals in {Days} days ({Added} new); {Trades} trades, {Drawn} pictures drawn; conditions of {Symbols} symbols ({Changed} rows written)",
+            account.Id, AccountStatus.From(trader, reconcile, pnl, now).Describe(), snapshot.Positions.Count, snapshot.Orders.Count, rows.Count, Days, added, trades.Count, drawn,
+            snapshot.Conditions?.Count ?? 0, conditions);
+    }
+
+    /// <summary>How long prices are listened to for the spread and the USD conversion (dashboard.md §2.5).</summary>
+    private static readonly TimeSpan PriceWait = TimeSpan.FromSeconds(3);
+
+    /// <summary>The trading conditions of the symbols Scout and TM work on (dashboard.md §2.5). Read-only.</summary>
+    private async Task<List<ConditionsRow>> ConditionsAsync(CTraderSession session, DashAccount account, ProtoOATrader trader, double freeMargin)
+    {
+        var ctid = account.AccountId;
+        var names = ConditionsMath.ConfiguredSymbols(Path.Combine(home, "config")).GetValueOrDefault(account.Id) ?? [];
+        if (names.Count == 0)
+            return [];
+        var catalog = await SymbolCatalog.LoadAsync(session, ctid);
+        var light = names.Select(n => (Name: n, Light: catalog.Find(n))).Where(x => x.Light is not null).ToList();
+        var details = (await session.GetSymbolDetailsAsync(ctid, light.Select(x => x.Light!.SymbolId))).ToDictionary(s => s.SymbolId);
+
+        // The symbols that convert each quote currency into USD (as the Audit Bot does).
+        var conversions = new Dictionary<string, (long SymbolId, bool Invert)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var q in light.Select(x => catalog.AssetName(x.Light!.QuoteAssetId)).Distinct(StringComparer.OrdinalIgnoreCase).Where(q => !q.Equals("USD", StringComparison.OrdinalIgnoreCase)))
+            if (catalog.FindConversion(q, "USD") is { } c && catalog.Find(c.Symbol) is { } cs)
+                conversions[q] = (cs.SymbolId, c.Invert);
+
+        // A short price subscription: bid and ask now, for the spread and the conversions.
+        var feed = new PriceFeed();
+        var ids = light.Select(x => x.Light!.SymbolId).Concat(conversions.Values.Select(v => v.SymbolId)).Distinct().ToList();
+        session.MessageReceived += feed.Handle;
+        try
+        {
+            await session.SubscribeSpotsAsync(ctid, ids);
+            var until = DateTime.UtcNow + PriceWait;
+            while (DateTime.UtcNow < until && ids.Any(id => feed.Last(ctid, id) is null))
+                await Task.Delay(200);
+            await session.UnsubscribeSpotsAsync(ctid, ids);
+        }
+        finally
+        {
+            session.MessageReceived -= feed.Handle;
+        }
+
+        // A closed market sends no price: its last 1H close stands in for the USD figures.
+        var closes = new Dictionary<long, double?>();
+        async Task<double?> Price(long symbolId)
+        {
+            if (feed.Last(ctid, symbolId) is { } q)
+                return q.Mid;
+            if (!closes.TryGetValue(symbolId, out var close))
+            {
+                var now = DateTime.UtcNow;
+                var candles = await session.GetTrendbarsAsync(ctid, symbolId, ProtoOATrendbarPeriod.H1, now.AddDays(-5), now);
+                await Task.Delay(CandlePause);
+                closes[symbolId] = close = candles.Count > 0 ? candles[^1].Close : null;
+            }
+            return close;
+        }
+
+        var leverages = new Dictionary<long, ProtoOADynamicLeverage?>();
+        var rows = new List<ConditionsRow>();
+        foreach (var (name, l) in light)
+        {
+            if (!details.TryGetValue(l!.SymbolId, out var f))
+                continue;
+            var quoteAsset = catalog.AssetName(l.QuoteAssetId);
+            double? usdPerQuote = quoteAsset.Equals("USD", StringComparison.OrdinalIgnoreCase) ? 1
+                : conversions.TryGetValue(quoteAsset, out var conv) && await Price(conv.SymbolId) is { } cp and > 0 ? (conv.Invert ? 1 / cp : cp) : null;
+            if (f.HasLeverageId && !leverages.ContainsKey(f.LeverageId))
+                leverages[f.LeverageId] = await session.GetDynamicLeverageAsync(ctid, f.LeverageId);
+            var margins = await session.GetExpectedMarginAsync(ctid, f.SymbolId, ConditionsMath.MarginVolumes(f));
+            rows.Add(ConditionsMath.Compute(f, name, catalog.AssetName(l.BaseAssetId), quoteAsset, trader.LeverageInCents,
+                f.HasLeverageId ? leverages[f.LeverageId] : null, feed.Last(ctid, f.SymbolId), await Price(f.SymbolId), usdPerQuote, margins, freeMargin));
+        }
+        return rows;
     }
 
     private async Task<Dictionary<long, SymbolFacts>> SymbolsAsync(CTraderSession session, long ctid, IReadOnlyList<long> ids)

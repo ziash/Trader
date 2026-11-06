@@ -159,6 +159,36 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/conditions:
+    get:
+      summary: Each symbol's trading conditions per lot in USD and the largest size the free margin allows (Trading conditions page, dashboard.md §2.5)
+      x-least-role: viewer
+      parameters:
+        - { name: account, in: query, required: true, schema: { type: string, example: brokerA-49123893 } }
+      responses:
+        '200':
+          description: From the latest uploaded snapshot (dashboard.md §3.2)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConditionsView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/audit:
+    get:
+      summary: The Audit Bot's comparison of the two brokers, per symbol side by side (Audit page, dashboard.md §2.7)
+      x-least-role: viewer
+      parameters:
+        - { name: report, in: query, schema: { type: string, example: summary }, description: '"summary" (default: the newest summary, else the newest day) or a day like 2026-11-04' }
+        - { name: period, in: query, schema: { type: string, example: day }, description: 'day (default), main, offpeak or a probe window' }
+      responses:
+        '200':
+          description: From the uploaded reports/summary-*.csv and daily-compare-*.csv
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/users:
     get:
       summary: Users page — people, requests, machines, settings and the newest 100 rows of the access log
@@ -579,6 +609,104 @@ components:
         open_positions: { type: array, items: { $ref: '#/components/schemas/OpenPosition' } }
         open_orders: { type: array, items: { $ref: '#/components/schemas/OpenOrder' } }
         trades: { type: array, items: { $ref: '#/components/schemas/Trade' } }
+    MarginPoint:
+      type: object
+      properties: { lots: { type: number }, buy: { type: number }, sell: { type: number } }
+    ConditionsRow:
+      type: object
+      description: One symbol's conditions as the broker stated them at the snapshot; money per lot in USD (dashboard.md §2.5)
+      required: [symbol, market_open, account_leverage, symbol_leverage, tiers, lot_units, lot_asset, min_lots, step_lots, max_lots, pip_size, digits, commission_type, swap_type, triple_swap_day, margin]
+      properties:
+        symbol: { type: string }
+        market_open: { type: boolean, description: false when no price came in (market closed); the last close was used for USD figures }
+        account_leverage: { type: string, example: '1:500' }
+        symbol_leverage: { type: string, example: '1:1000' }
+        tiers: { type: array, items: { type: string } }
+        lot_units: { type: number, example: 100000 }
+        lot_asset: { type: string, example: EUR }
+        min_lots: { type: number }
+        step_lots: { type: number }
+        max_lots: { type: number }
+        margin_buy_per_lot_usd: { type: [number, 'null'] }
+        margin_sell_per_lot_usd: { type: [number, 'null'] }
+        pip_size: { type: number }
+        digits: { type: integer }
+        pip_value_per_lot_usd: { type: [number, 'null'] }
+        bid: { type: [number, 'null'] }
+        ask: { type: [number, 'null'] }
+        spread_pips: { type: [number, 'null'] }
+        spread_per_lot_usd: { type: [number, 'null'] }
+        commission_per_lot_usd: { type: [number, 'null'], description: open and close together }
+        commission_type: { type: string }
+        commission_rate: { type: number }
+        swap_type: { type: string, enum: [Pips, Percentage, Points] }
+        swap_long: { type: number }
+        swap_short: { type: number }
+        swap_long_per_lot_usd: { type: [number, 'null'] }
+        swap_short_per_lot_usd: { type: [number, 'null'] }
+        triple_swap_day: { type: string, description: weekday charged three nights }
+        largest_lots_now: { type: [number, 'null'] }
+        margin: { type: array, items: { $ref: '#/components/schemas/MarginPoint' }, description: "the broker's margin for 1, 10, 100 lots and the largest order" }
+    ConditionsView:
+      type: object
+      required: [account, available, symbols]
+      properties:
+        account: { type: string }
+        available: { type: boolean }
+        snapshot_utc: { type: [string, 'null'] }
+        free_margin: { type: [number, 'null'] }
+        margin_level_pct: { type: [number, 'null'] }
+        leverage: { type: [string, 'null'] }
+        symbols: { type: array, items: { $ref: '#/components/schemas/ConditionsRow' } }
+    AuditFigures:
+      type: object
+      description: One broker's figures for a symbol and period; spread and slippage in pips (forex, XAGUSD) or USD per lot (the rest)
+      properties:
+        spread_median: { type: [number, 'null'] }
+        spread_p95: { type: [number, 'null'] }
+        spread_max: { type: [number, 'null'] }
+        slip_avg: { type: [number, 'null'], description: negative = worse for us }
+        slip_worst: { type: [number, 'null'] }
+        latency_avg_ms: { type: [number, 'null'] }
+        latency_median_ms: { type: [number, 'null'] }
+        latency_max_ms: { type: [number, 'null'] }
+        orders: { type: [integer, 'null'] }
+        filled: { type: [integer, 'null'] }
+        rejected: { type: [integer, 'null'] }
+        order_errors: { type: [integer, 'null'] }
+        commission_usd: { type: [number, 'null'] }
+        ticks: { type: [integer, 'null'] }
+        logged_min: { type: [integer, 'null'] }
+        gap_rows: { type: [integer, 'null'] }
+    AuditView:
+      type: object
+      required: [available, reports, periods, brokers, symbols, totals]
+      properties:
+        available: { type: boolean }
+        reports:
+          type: array
+          items:
+            type: object
+            properties: { id: { type: string }, kind: { type: string, enum: [summary, day] }, from: { type: string }, to: { type: string } }
+        report:
+          oneOf:
+            - type: object
+              properties: { id: { type: string }, kind: { type: string }, from: { type: string }, to: { type: string } }
+            - type: 'null'
+        periods: { type: array, items: { type: string } }
+        period: { type: [string, 'null'] }
+        brokers: { type: object, additionalProperties: { type: string }, example: { brokerA: IC Markets, brokerB: Pepperstone } }
+        symbols:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              unit: { type: string, enum: [pips, usd] }
+              brokers: { type: object, additionalProperties: { $ref: '#/components/schemas/AuditFigures' } }
+              better: { type: object, additionalProperties: { type: string }, description: 'per figure: the better broker, or "equal"' }
+        totals: { type: object, additionalProperties: { type: object, additionalProperties: { type: [number, 'null'] } }, description: "each broker's ALL row" }
+        broker_choice: { type: [string, 'null'], description: once recorded in the Audit Bot's document }
     Me:
       type: object
       required: [kind, id, role]

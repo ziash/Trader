@@ -444,6 +444,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conditions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each symbol's trading conditions per lot in USD and the largest size the free margin allows (Trading conditions page, dashboard.md §2.5) */
+        get: {
+            parameters: {
+                query: {
+                    account: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description From the latest uploaded snapshot (dashboard.md §3.2) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConditionsView"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Audit Bot's comparison of the two brokers, per symbol side by side (Audit page, dashboard.md §2.7) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description "summary" (default: the newest summary, else the newest day) or a day like 2026-11-04 */
+                    report?: string;
+                    /** @description day (default), main, offpeak or a probe window */
+                    period?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description From the uploaded reports/summary-*.csv and daily-compare-*.csv */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditView"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -1005,6 +1089,129 @@ export interface components {
             open_positions: components["schemas"]["OpenPosition"][];
             open_orders: components["schemas"]["OpenOrder"][];
             trades: components["schemas"]["Trade"][];
+        };
+        MarginPoint: {
+            lots?: number;
+            buy?: number;
+            sell?: number;
+        };
+        /** @description One symbol's conditions as the broker stated them at the snapshot; money per lot in USD (dashboard.md §2.5) */
+        ConditionsRow: {
+            symbol: string;
+            /** @description false when no price came in (market closed); the last close was used for USD figures */
+            market_open: boolean;
+            /** @example 1:500 */
+            account_leverage: string;
+            /** @example 1:1000 */
+            symbol_leverage: string;
+            tiers: string[];
+            /** @example 100000 */
+            lot_units: number;
+            /** @example EUR */
+            lot_asset: string;
+            min_lots: number;
+            step_lots: number;
+            max_lots: number;
+            margin_buy_per_lot_usd?: number | null;
+            margin_sell_per_lot_usd?: number | null;
+            pip_size: number;
+            digits: number;
+            pip_value_per_lot_usd?: number | null;
+            bid?: number | null;
+            ask?: number | null;
+            spread_pips?: number | null;
+            spread_per_lot_usd?: number | null;
+            /** @description open and close together */
+            commission_per_lot_usd?: number | null;
+            commission_type: string;
+            commission_rate?: number;
+            /** @enum {string} */
+            swap_type: "Pips" | "Percentage" | "Points";
+            swap_long?: number;
+            swap_short?: number;
+            swap_long_per_lot_usd?: number | null;
+            swap_short_per_lot_usd?: number | null;
+            /** @description weekday charged three nights */
+            triple_swap_day: string;
+            largest_lots_now?: number | null;
+            /** @description the broker's margin for 1, 10, 100 lots and the largest order */
+            margin: components["schemas"]["MarginPoint"][];
+        };
+        ConditionsView: {
+            account: string;
+            available: boolean;
+            snapshot_utc?: string | null;
+            free_margin?: number | null;
+            margin_level_pct?: number | null;
+            leverage?: string | null;
+            symbols: components["schemas"]["ConditionsRow"][];
+        };
+        /** @description One broker's figures for a symbol and period; spread and slippage in pips (forex, XAGUSD) or USD per lot (the rest) */
+        AuditFigures: {
+            spread_median?: number | null;
+            spread_p95?: number | null;
+            spread_max?: number | null;
+            /** @description negative = worse for us */
+            slip_avg?: number | null;
+            slip_worst?: number | null;
+            latency_avg_ms?: number | null;
+            latency_median_ms?: number | null;
+            latency_max_ms?: number | null;
+            orders?: number | null;
+            filled?: number | null;
+            rejected?: number | null;
+            order_errors?: number | null;
+            commission_usd?: number | null;
+            ticks?: number | null;
+            logged_min?: number | null;
+            gap_rows?: number | null;
+        };
+        AuditView: {
+            available: boolean;
+            reports: {
+                id?: string;
+                /** @enum {string} */
+                kind?: "summary" | "day";
+                from?: string;
+                to?: string;
+            }[];
+            report?: {
+                id?: string;
+                kind?: string;
+                from?: string;
+                to?: string;
+            } | null;
+            periods: string[];
+            period?: string | null;
+            /**
+             * @example {
+             *       "brokerA": "IC Markets",
+             *       "brokerB": "Pepperstone"
+             *     }
+             */
+            brokers: {
+                [key: string]: string;
+            };
+            symbols: {
+                symbol?: string;
+                /** @enum {string} */
+                unit?: "pips" | "usd";
+                brokers?: {
+                    [key: string]: components["schemas"]["AuditFigures"];
+                };
+                /** @description per figure: the better broker, or "equal" */
+                better?: {
+                    [key: string]: string;
+                };
+            }[];
+            /** @description each broker's ALL row */
+            totals: {
+                [key: string]: {
+                    [key: string]: number | null;
+                };
+            };
+            /** @description once recorded in the Audit Bot's document */
+            broker_choice?: string | null;
         };
         Me: {
             /** @enum {string} */

@@ -129,7 +129,8 @@ public sealed class ExportTests : IDisposable
     [InlineData("logs/brokerA/49123893/Dashboard/2026-11-06/deals.csv", true)]
     [InlineData("logs/brokerA/49123893/Dashboard/2026-11-05/charts/trade-P692692856.svg", true)]
     [InlineData("logs/brokerA/49123893/Dashboard/2026-11-05/charts/trade-P692692856.svg.tmp", false)]
-    [InlineData("logs/brokerA/49123893/Dashboard/2026-11-05/conditions.csv", false)]
+    [InlineData("logs/brokerA/49123893/Dashboard/2026-11-05/conditions.csv", true)]
+    [InlineData("logs/brokerA/49123893/Dashboard/2026-11-05/conditions.json", false)]
     [InlineData("logs/brokerA/49123893/Dashboard-x/2026-11-05/deals.csv", false)]
     public void The_allowlist(string path, bool allowed) => Assert.Equal(allowed, Outbox.IsAllowed(path));
 

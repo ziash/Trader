@@ -92,6 +92,25 @@ final class TradesData
         ];
     }
 
+    // --- Trading conditions page ------------------------------------------------------------
+
+    /** Each symbol's conditions from the latest snapshot (dashboard.md §2.5), with the free margin the "largest size" was read for. */
+    public function conditions(string $accountId): array
+    {
+        [$broker, $ctid] = ScoutData::account($accountId);
+        $snapshot = $this->snapshot($broker, $ctid);
+        $rows = $snapshot['conditions'] ?? [];
+        return [
+            'account' => $accountId,
+            'available' => $snapshot !== null && $rows !== [],
+            'snapshot_utc' => $snapshot['time_utc'] ?? null,
+            'free_margin' => $snapshot['status']['free_margin'] ?? null,
+            'margin_level_pct' => $snapshot['status']['margin_level_pct'] ?? null,
+            'leverage' => $snapshot['status']['leverage'] ?? null,
+            'symbols' => $rows,
+        ];
+    }
+
     // --- TM trades page --------------------------------------------------------------------
 
     /** The trades with a fill or a TM action on $day (default: the latest such day), and what is open now. */
