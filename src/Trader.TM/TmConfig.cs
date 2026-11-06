@@ -20,7 +20,9 @@ public sealed record TmConfig(
     int AlertMinutesBefore = 10,       // pop-up this long before each NFP/CPI release and the Friday close (tm.md §6)
     int DisconnectAlertSeconds = 60,   // pop-up when the connection has been down this long (tm.md §6)
     IReadOnlyDictionary<string, double>? FallbackDistance = null, // per symbol, in price, when the candle history is unavailable
-    IReadOnlyList<string>? TakeOver = null) // labels whose positions and pending orders TM takes over as mains (tm.md §2)
+    IReadOnlyList<string>? TakeOver = null, // labels whose positions and pending orders TM takes over as mains (tm.md §2)
+    double MarginWarnLevel = 300,      // margin level %: below it no new mirrors, and a pop-up (tm.md §5.1)
+    double MarginRescueLevel = 100)    // margin level %: below it TM closes the trade holding the most margin, one at a time
 {
     public const string FileName = "tm.json";
 
@@ -74,6 +76,8 @@ public sealed record TmConfig(
             throw new TmConfigException($"{FileName}: an account appears twice");
         if (RangePercent <= 0 || RangeDays < 1 || SpreadFloor < 0 || ArmR <= 0 || HedgeStopR <= 0 || WarnR <= 0 || CloseR <= WarnR)
             throw new TmConfigException($"{FileName}: rule values must be above 0, and closeR above warnR");
+        if (MarginRescueLevel <= 0 || MarginWarnLevel <= MarginRescueLevel)
+            throw new TmConfigException($"{FileName}: marginRescueLevel must be above 0, and marginWarnLevel above it");
         if (AlertMinutesBefore < 1 || DisconnectAlertSeconds < 1)
             throw new TmConfigException($"{FileName}: alertMinutesBefore and disconnectAlertSeconds must be at least 1");
         if (TakeOver is { Count: 0 } || TakeOver?.Any(t => t is null) == true)

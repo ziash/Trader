@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.10 (06-Nov-2026) — history in §10 |
+| Document version | v1.11 (06-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -56,7 +56,8 @@ Broker login numbers differ from the `ctidTraderAccountId` the API uses (`dotnet
 - **Demo only.** No bot connects to the live endpoint or places orders on a live account until a go-live is decided and recorded in that bot's document. A go-live means: a small live account, strict risk limits, a VPS near the broker servers, and a review after one month. The code refuses `live` unless explicitly enabled by the owner.
 - **Replay** (`CTRADER_ENV=replay`) connects only to a broker simulator on this computer ([Rewind](https://github.com/ziash/Rewind), a separate project), with its own secrets file of fake values (`TRADER_SECRETS_FILE`); the code refuses any other host ([Open Code Pieces §3](open-code-pieces.md#3-connection-and-tokens)).
 - **Secrets** live only in `~/.config/trader/secrets.env` (permissions 600), never in Git, logs or chat; only "set / not set" or a masked form may be shown. The refresh token is replaced on every refresh and written back atomically by the shared code only.
-- **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server — a hedge order, a stop-loss, or (for the Audit Bot's one-second probes) a wide backup stop-loss. Each bot's document says how.
+- **Protection rule:** because home power or internet can drop, every live position must be protected by an order held on the broker's server — a hedge order, a stop-loss, or (for the Audit Bot's one-second probes) a wide backup stop-loss. Each bot's document says how. **A hedge order alone is not enough**: it needs free margin when it triggers, and a refused one is simply gone, so TM keeps a backstop stop-loss behind it ([tm.md §5.1](bots/tm.md#51-margin-and-the-backstop-v19-06-nov-2026), [issue-log.md #1](issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)).
+- **Margin:** a bot that adds exposure reads the account status first (balance, equity, margin level: `AccountStatus`, [Open Code Pieces](open-code-pieces.md) v1.9) and holds back when margin is short (TM §5.1, Scout §2.5). What went wrong and why: [issue-log.md](issue-log.md).
 - **Ownership:** a bot touches only its own orders and positions, by `positionId` — with one recorded exception, TM ([Open Code Pieces §4](open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
 - **Orders only from the Primary** copy of a bot on an account ([Open Code Pieces §6](open-code-pieces.md#6-instance-registry-one-primary-per-bot-per-account)).
 
@@ -131,6 +132,8 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | ATR (Average True Range) | The average size of a candle's range (high to low, including any gap from the previous close) over recent candles. TM uses the last 3 daily candles to size its default hedge distance. |
 | TM, main, mirror | TM = Trade Manually bot ([TM](bots/tm.md)). Main = the owner's manual position; mirror = TM's same-size copy of it. Each has its own hedge. |
 | Trendbar | A candle (open, high, low, close) for a given timeframe. |
+| Equity, margin, margin level | Equity = balance + the open positions' profit or loss. Margin = the deposit the broker holds for open positions; free margin = equity − margin, what new orders (and hedges) can use. Margin level = equity ÷ margin × 100 %. IC Markets calls margin at 100 % and closes positions itself at 50 % (stop-out). |
+| Backstop | TM's stop-loss at the 3R loss limit on a leg that has no filled hedge, so the leg keeps a stop on the server even when a hedge is refused ([tm.md §5.1](bots/tm.md#51-margin-and-the-backstop-v19-06-nov-2026)). |
 | Webhook | An HTTP POST sent automatically by one system (e.g. TradingView) to a URL when an event fires. |
 | systemd service | Linux mechanism that keeps a program running in the background and restarts it on failure. |
 | Link (symbolic link) | A small file that points at another file or folder by name; opening the link opens the target. Switching it to another target is one step, so a program started through it gets either the old or the new build, never a mix. |
@@ -150,7 +153,6 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | 21 EMA | Exponential moving average of the last 21 candle closes, weighting recent prices more heavily. |
 | Lower high | In a downtrend, a swing high that is lower than the previous swing high. |
 | Effective leverage | Total position value divided by account equity. |
-| Margin level | Equity divided by used margin, as a percentage; low values lead to margin calls. |
 | Markdown | A plain-text format where simple symbols (`#`, `|`, `**`) become headings, tables and bold text when displayed. |
 | Commit | A saved snapshot of the repository with a short message describing what changed. |
 | LTS (Long-Term Support) | A software release that receives security fixes for an extended period (3 years for .NET). |
@@ -209,3 +211,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.8 | 05 Nov 2026 | Dashboard added to the projects (§1, [dashboard.md](dashboard.md) v1.3); its folders and credential files (§5); glossary: SSH / rsync, PHP, subdomain, HTTPS, API / JSON, Sign in with Google, M2M sign-in, hash, session cookie, options catalogue |
 | v1.9 | 05 Nov 2026 | Glossary: PHP now for the dashboard's API; React / Next.js added (dashboard stack, [dashboard.md](dashboard.md) v1.4) |
 | v1.10 | 06 Nov 2026 | Dashboard live with the 30-min upload and the Scout page ([dashboard.md](dashboard.md) v1.10): §1 status, §5 `~/tradebot/dashboard/outbox/`; glossary: outbox |
+| v1.11 | 06 Nov 2026 | New [issue log](issue-log.md) (#1: IC Markets demo margin call); §4 protection rule: a hedge order alone is not enough (backstop), and a margin rule for bots that add exposure ([TM](bots/tm.md) v1.9, [Scout](bots/scout.md) v1.7, [Open Code Pieces](open-code-pieces.md) v1.9); glossary: equity, margin, margin level (merged), backstop |

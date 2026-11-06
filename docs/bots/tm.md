@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout.md)'s orders (`takeOver`, decision 12) |
-| Document version | v1.8 (04-Nov-2026) — history in §13 |
+| Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout.md)'s orders (`takeOver`, decision 12); from v1.9 reads the account's margin and acts on it (§5.1, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) |
+| Document version | v1.9 (06-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -78,7 +78,7 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 | Only ABC | `["ABC"]` |
 
 - TM refuses to start if the list is empty or an entry would match TM's own labels (`TM-…`), so TM never takes over its own mirrors and hedges. It logs the list at start (`Takes over: …`).
-- A main with a label is handled exactly like a manual one (§3–§5): mirror, hedges, its stop-loss removed once hedged, TP copied, 3R close. This is the ownership-rule exception below, extended to the listed labels.
+- A main with a label is handled exactly like a manual one (§3–§5): mirror, hedges, its stop-loss replaced by the backstop once hedged (§5.1), TP copied, 3R close. This is the ownership-rule exception below, extended to the listed labels.
 - **Live setting: `[""]`** (unchanged behaviour). Adding another bot's label is a separate decision: that bot's own closing (e.g. Audit Bot probes close within ~1 s) then interacts with TM's rules (§12).
 - **Exception to the ownership rule ([Open Code Pieces §4](../open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)), owner's decision:** TM modifies the main (also a main with a listed label, §2.1) (removes or copies its stop-loss and take-profit) — the only case in which a bot touches a position it did not open. TM never closes the main except under the 3R rule (§5).
 
@@ -90,10 +90,10 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 | 2 | | **H:** the main's stop-loss if set; otherwise E + D, where **D = 15 % of the average daily range of the last 3 completed daily candles** (ATR(3) on D1 from the broker's own candles), at least **5 × the current spread**; if the history cannot be fetched, a fixed per-symbol fallback from the config (and a warning) |
 | 3 | | Opens the **mirror** at market: same side and volume, with a server-side stop-loss at H so it is never unprotected |
 | 4 | | Places **two hedge stop orders at H**, one per leg, each of that leg's volume |
-| 5 | Both hedges confirmed by the server | Removes the stop-loss from the main and from the mirror |
+| 5 | Both hedges confirmed by the server | Replaces the stop-loss of the main and of the mirror by the **backstop** at the 3R loss limit (§5.1; until v1.8: removed) |
 
 - If the main has a **take-profit**, TM copies it to the mirror and follows later changes (Q14).
-- If the mirror is rejected, the main still gets its hedge (and a warning). Risk limits (leverage 1:10, margin level 300 %, as in [Auto Bot §5](auto-bot.md#5-risk-guardrails)) do **not** block TM: it always mirrors and hedges; when a limit is broken it only warns (Q12, owner's decision: "Trade Manually — if I am opening, just follow the rules").
+- If the mirror is rejected, the main still gets its hedge (and a warning). Risk limits (leverage 1:10, as in [Auto Bot §5](auto-bot.md#5-risk-guardrails)) do **not** block TM (Q12, owner's decision: "Trade Manually — if I am opening, just follow the rules"); **the margin level does since v1.9**: below 300 % no mirror, below 100 % the margin rescue (§5.1, decision 13).
 - Every further manual position is a **separate trade** with its own mirror and hedges; TM never opens adds of its own and never rotates (rules R4, R5 of [Auto Bot §7.3](auto-bot.md#73-lifecycle-rules) are not used by TM) (Q6).
 
 ### 3.1 Entry by a pending order (owner, 22-Oct-2026)
@@ -118,7 +118,7 @@ Directions are mirrored: for a **short** the hedge is a **buy-stop above**; for 
 | Price reaches **Fh + A** (1R beyond the fill) | Moves the hedge's stop up to **X = Fh + 1 pip** (the hedge exit is armed; Scenario 1) |
 | Hedge closed by its **B stop** (price fell back before arming; Scenario 2) | Places a new hedge stop order at the original **H**. Cost of the cycle ≈ B + spread |
 | Hedge closed at **X** (the wick reversed) | Places a new hedge stop order **1R above the current price** (a buy-stop cannot sit below the price); as soon as price is back below the original H, moves it down to **H** |
-| Owner sets a **new stop-loss** on the main, or **drags a hedge order** | Moves both legs' pending hedges to that level (and removes the stop-loss again). Accepted only on the protective side of the entry; ignored while a hedge of that trade is filled (Q15) |
+| Owner sets a **new stop-loss** on the main, or **drags a hedge order** | Moves both legs' pending hedges to that level (and replaces the stop-loss by the new backstop, §5.1). Accepted only on the protective side of the entry; ignored while a hedge of that trade is filled (Q15) |
 
 Every leg always has a protective order on the server: the hedge order (pending), the hedge's own stop (filled), or a stop-loss (after 1R).
 
@@ -127,13 +127,27 @@ Every leg always has a protective order on the server: the hedge order (pending)
 | Rule | Trigger | TM action |
 |---|---|---|
 | Break-even (R2) | A leg is **1R in profit** from its own entry | **First** a server-side stop-loss at its entry on that leg, **then** cancels its hedge order. The leg can no longer lose |
-| Owner's trailing stop | The main has a trailing stop (set with the order, on the position, or switched on later) | While the leg is hedged it is removed like any stop-loss (a trailing stop at H would close the main exactly when its hedge fills). TM remembers it: the break-even stops of **both legs** are then set as **server-side trailing stops** (`trailingStopLoss = true`), which trail about 1R behind the best price. TM follows the main's switch whenever the main has a stop-loss: switched off (or on) after break-even, the mirror follows. Owner's decision 22-Oct-2026 |
+| Owner's trailing stop | The main has a trailing stop (set with the order, on the position, or switched on later) | While the leg is hedged it is replaced like any stop-loss (§5.1) (a trailing stop at H would close the main exactly when its hedge fills). TM remembers it: the break-even stops of **both legs** are then set as **server-side trailing stops** (`trailingStopLoss = true`), which trail about 1R behind the best price. TM follows the main's switch whenever the main has a stop-loss: switched off (or on) after break-even, the mirror follows. Owner's decision 22-Oct-2026 |
 | Trailing (R3) | Per-symbol switch, **off at first** | When switched on: [Auto Bot §7.3](auto-bot.md#73-lifecycle-rules) R3 (M5 lower highs). Needs the swing definition (open item) |
 | Loss warning | A leg's loss (its own open P/L plus its hedges' realised and open P/L) reaches **2R** | Warning and pop-up |
 | Loss limit | It reaches **3R** | Closes that leg and its hedge (cancels a pending one), accepting the loss; pop-up |
 | Owner closes a leg (or its stop-loss / take-profit closes it) | | Removes that leg's hedge (cancel if pending, close if filled) and stop; the **other leg carries on**, still managed. Closing both = full exit; closing one = half off |
 
 The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned later by a backtest (§12).
+
+### 5.1 Margin and the backstop (v1.9, 06-Nov-2026)
+
+After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)), TM reads the account's balance, equity and margin with every full reconcile (every 30 s; read-only, [Open Code Pieces](../open-code-pieces.md) v1.9) and follows these rules:
+
+| Rule | Trigger | TM action |
+|---|---|---|
+| **Backstop** | A leg whose own stop-loss TM has replaced (a hedge order was placed), while **no hedge is filled** | A server-side stop-loss at the **3R loss limit** (entry ∓ `closeR` × 1R). The leg then always has a stop on the server, even if a hedge is refused or TM is down. A filled hedge replaces it (the loss is frozen); it comes back when the hedge closes. If the price is already past it, the 3R rule closes the leg. TM recognises its own backstop, so it is never read as the owner moving the hedge level, nor as switching trailing off. Replaces "the stop-loss is removed once hedged" (v1.0) |
+| **No money for a hedge** | The broker refuses a hedge with `NOT_ENOUGH_MONEY` | A stop hedge is sent again after **one minute**, not every second; the backstop protects meanwhile. **If the price is already past H** (a market hedge would be needed and was refused), TM **closes the leg at market** (Critical pop-up `HedgeNoMoney`). That freezes the loss as the hedge would, and frees margin instead of needing it |
+| **No mirror** | Margin level below **`marginWarnLevel`** (300 %) when a trade starts | Hedges only, no mirror and no mirror order (`MirrorSkipped`): a mirror doubles the exposure |
+| **Margin rescue** | Margin level below **`marginRescueLevel`** (100 %: IC's margin call; it stops accounts out at 50 %) | TM closes **one whole trade** (main, mirror, hedges, and cancels its hedge orders), the one whose positions hold the most margin. It closes the next only after a fresh account status, at least 20 s later, still shows the level too low (Critical pop-up `MarginRescue`). TM chooses before the broker's stop-out closes positions in its own order |
+| **Seeing it** | — | An `AccountStatus` line in `events.csv` every 15 min (balance, equity, margin used / free, level); the `MarginLow` pop-up at most once an hour below 300 % (Critical below 100 %). A refused action pops up once per 10 minutes, not on every retry (every refusal stays a row in `actions.csv`) |
+
+If the broker does not answer the status (e.g. a replay broker without it), the margin rules wait and TM asks again after 5 minutes. Hedging, the backstop and the 3R rule work without it.
 
 ## 6. Start-up, restarts and news (Q13, Q20)
 
@@ -158,7 +172,7 @@ The 2R/3R values, 15 %, A, B and the spread floor are config values, to be tuned
 | Price jumps past H (news, gaps) | Hedge fills far beyond H; one jump can pass 3R | Pop-up before news / Friday close; slippage logged |
 | Chop around H | Each hedge cycle costs ≈ B + spread, or adds up to 1R after an armed exit | 2R warning, 3R limit |
 | TM down when the owner opens a trade without a stop-loss | Main unprotected until TM is back | Set a stop-loss on manual orders; TM hedges at once on start |
-| Risk limits not enforced | Many mirrored trades can exceed leverage 1:10 / margin level 300 % | Warning only (owner's choice) |
+| Many trades for the account | Mirrors and hedges hold margin; a full account refuses hedges | Since v1.9 (§5.1): no mirrors below 300 %, a backstop on every unhedged leg, legs closed when a hedge has no money, margin rescue below 100 %. Sizes themselves are Scout's and the owner's (Scout's margin budget, [scout.md §2.5](scout.md#25-margin-budget-v17-06-nov-2026)) |
 | Mirror entry differs from the main's | A fraction of a pip | Logged in `actions.csv` |
 
 ## 9. How TM is built, build steps and live findings
@@ -227,7 +241,7 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 1 | TM is the first trading bot: the owner opens every position by hand in cTrader; TM mirrors it and hedges both legs, manages the hedges, protects at 1R, and cleans up when the owner closes (agreed 19-Oct-2026, 20 questions, §1–§8) | The owner keeps every trading decision; the bot does the hedge bookkeeping that is impossible by hand across many positions |
 | 2 | Longs and shorts; both demo accounts; the Audit Bot's six symbols | Free to trade either way; symbols with audit data |
 | 3 | Hedge level = your stop-loss, else 15 % of the 3-day average daily range (at least 5 × spread) | You set the level on the chart when you want; a forgotten stop-loss still gets a hedge |
-| 4 | Risk limits never block TM; it warns and follows the rules (owner: "Trade Manually — if I am opening, just follow the rules") | Your trades are your decision |
+| 4 | Risk limits never block TM; it warns and follows the rules (owner: "Trade Manually — if I am opening, just follow the rules"). **Changed by decision 13** for margin | Your trades are your decision |
 | 5 | Trailing off at first; you close | "Trade Manually"; the swing definition is still open |
 | 6 | Built without a dry-run stage (owner: "we are on demo already") | Speed; demo money |
 | 7 | One loop per account that compares the server with the rules every second, plus a saved state file (§9) | Missed messages, reconnects and restarts heal themselves |
@@ -236,6 +250,7 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | 10 | The owner's pending order gets a mirror order of the same type at the same price (stop-loss at H, the owner's take-profit), following the owner's changes; hedges once both fill (owner, 22-Oct-2026; replaces v1.4's "pending orders left alone, mirror at market after the fill") | Main and mirror enter at the same price, as with a market entry; hedges cannot sit at H before the entry (§3.1) |
 | 11 | Which labels TM takes over is configurable: `"takeOver"` in `tm.json`, `""` = no label, other entries match by the start of the label; default and live `[""]` (owner, 24-Oct-2026) | The owner decides per label, without code changes; prefix matching survives bot restarts (instance IDs change) |
 | 12 | **`"Scout-"` in the live `takeOver`** (`["", "Scout-"]`, owner, 03-Nov-2026): Scout places the first stop order of each setup, TM manages it like the owner's own pending order (mirror order, hedges at its stop-loss, break-even, trailing — Scout sets the trailing switch). Scout never closes a position; it only cancels its own unfilled orders, and TM then cancels the mirror (§3.1) | The owner's rule: Scout makes the entry, TM does the rest ([scout.md §2.4](scout.md#24-with-tm)). The open item below about bots that close their own mains does not arise for Scout |
+| 13 | **The account's margin is a rule, not only a warning** (§5.1, owner, 06-Nov-2026: "improve the API … let bots handle the issues and resolve them"): backstop stop-loss at the 3R limit while no hedge is filled; a hedge refused for money is retried after a minute, and past H the leg is closed; no mirror below 300 %; below 100 % TM closes the trade holding the most margin, one at a time | The margin call of 06-Nov-2026 ([issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): hedges need margin, so a full account left five trades without protection, and TM retried the same refused hedge 5,490 times |
 
 ## 12. Open items
 
@@ -263,3 +278,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.6 | 24 Oct 2026 | **Take-over list** (§2.1, decision 11, owner): `"takeOver"` in `tm.json` sets which labels TM takes over (`""` = no label; others by prefix); default and live `[""]`, so behaviour is unchanged. TM refuses a list that is empty or matches its own labels; logs the list at start. Code: `TmConfig.TakeOver` / `TakesOver`, `Planner` (mains); TM tests: 47 (11 new) |
 | v1.7 | 03 Nov 2026 | **TM manages Scout's orders** (decision 12, owner): live `takeOver` = `["", "Scout-"]` in `tm.json`; TM restarted with it on both demos for the Scout trial ([scout.md](scout.md)). No TM code change |
 | v1.8 | 04 Nov 2026 | **IC Markets symbols for Scout** (owner): brokerA's list in `tm.json` = Scout's 18 symbols (top three per market) plus EURGBP; TM also takes over the owner's unlabelled positions on them there. Pepperstone unchanged. TM restarted with it 04-Nov-2026 18:14:30Z (`TM-38ade9`; all 19 symbols found, 6 + 6 remembered trades picked up). No TM code change |
+| v1.9 | 06 Nov 2026 | **Margin rules** (§5.1, decision 13, after the IC Markets margin call, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): TM reads balance, equity and margin (Trader.Core `AccountStatus`, [Open Code Pieces](../open-code-pieces.md) v1.9); backstop stop-loss at 3R replaces "stop-loss removed once hedged"; `NOT_ENOUGH_MONEY` on a hedge → retry after 1 min, past H the leg is closed; no mirror below `marginWarnLevel` 300 %; margin rescue below `marginRescueLevel` 100 %; `AccountStatus` line every 15 min, `MarginLow` pop-up; a refused action pops up once per 10 min. Code: `Planner` (`Rescue`, backstop, no-money branch), `AccountManager.ReadStatusAsync`, `LegState.Backstop` / `NoMoneyUtc`, `Pos.Margin`, `TmConfig.MarginWarnLevel` / `MarginRescueLevel`. TM tests: 57 (10 new in `MarginTests` and `PlannerTests`, 6 updated for the backstop) |

@@ -34,6 +34,12 @@ internal sealed class AccountManager(
     private static readonly TimeSpan Cycle = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan FullReconcile = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan OrderTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan StatusEvery = TimeSpan.FromSeconds(30);     // account status with the full reconcile
+    private static readonly TimeSpan StatusLogEvery = TimeSpan.FromMinutes(15);  // an AccountStatus line in events.csv
+    private static readonly TimeSpan MarginAlertEvery = TimeSpan.FromHours(1);   // the margin-low pop-up at most this often
+    private static readonly TimeSpan RescueGap = TimeSpan.FromSeconds(20);       // between two margin rescues
+    private static readonly TimeSpan StatusRetry = TimeSpan.FromMinutes(5);      // after the broker did not answer the status (e.g. a replay broker without it)
+    private static readonly TimeSpan FailedAlertEvery = TimeSpan.FromMinutes(10); // the same refusal pops up at most this often
     private const int MaxActionsPerCycle = 20;
 
     private readonly ILogger _log = log.ForAccount(account.AccountId);
@@ -46,6 +52,10 @@ internal sealed class AccountManager(
     private volatile bool _dirty = true;
     private DateTime _lastReconcile = DateTime.MinValue;
     private volatile IReadOnlyList<string> _openTrades = Describe(book, account);
+    private readonly Dictionary<string, DateTime> _failedAlerts = [];
+    private AccountStatus? _status;
+    private bool _statusDue = true;
+    private DateTime _statusLogged = DateTime.MinValue, _marginAlerted = DateTime.MinValue, _lastRescue = DateTime.MinValue, _statusFailed = DateTime.MinValue;
 
     public long AccountId => account.AccountId;
 
@@ -106,11 +116,15 @@ internal sealed class AccountManager(
     private async Task RunOnceAsync(CTraderSession session)
     {
         var now = DateTime.UtcNow;
-        if (_dirty || _snapshot is null || now - _lastReconcile >= FullReconcile)
+        var statusDue = (_statusDue || _status is null || now - _status.TimeUtc >= StatusEvery) && now - _statusFailed >= StatusRetry;
+        if (_dirty || _snapshot is null || now - _lastReconcile >= FullReconcile || statusDue)
         {
             _dirty = false;
-            _snapshot = Snapshot.From(await session.ReconcileAsync(account.AccountId));
+            var reconcile = await session.ReconcileAsync(account.AccountId);
+            _snapshot = Snapshot.From(reconcile);
             _lastReconcile = now;
+            if (statusDue)
+                await ReadStatusAsync(session, reconcile, now);
         }
 
         var symbols = _symbols;
@@ -124,9 +138,13 @@ internal sealed class AccountManager(
             Distance = id => _distances.TryGetValue(id, out var d) && d.Day == DateOnly.FromDateTime(now) ? d.Distance : null,
             ClosePrice = id => _closePrices.TryGetValue(id, out var p) ? p : null,
             FilledPosition = id => _orderFills.TryGetValue(id, out var p) ? p : null,
+            Account = _status is { } st && now - st.TimeUtc < 5 * StatusEvery ? st : null,
+            RescueAllowed = _status is { } fresh && fresh.TimeUtc > _lastRescue.AddSeconds(5) && now - _lastRescue >= RescueGap,
         };
 
         var actions = Planner.Plan(book, _snapshot, env);
+        if (actions.Any(a => a is Notify { Event: "MarginRescue" }))
+            (_lastRescue, _statusDue) = (now, true);
         var changed = false;
         foreach (var action in actions.Take(MaxActionsPerCycle))
             changed |= await ExecuteAsync(session, action, symbols);
@@ -134,6 +152,43 @@ internal sealed class AccountManager(
             _dirty = true;
         book.Save();
         _openTrades = Describe(book, account);
+    }
+
+    /// <summary>
+    /// Balance, equity and margin (tm.md §5.1, issue-log.md #1): what the planner's margin rules read, a line in events.csv
+    /// every 15 minutes, and a pop-up when the margin level is below the warning level. Read-only.
+    /// </summary>
+    private async Task ReadStatusAsync(CTraderSession session, ProtoOAReconcileRes reconcile, DateTime now)
+    {
+        try
+        {
+            _status = await session.GetAccountStatusAsync(account.AccountId, reconcile);
+            _statusDue = false;
+        }
+        catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
+        {
+            if (now - _statusFailed >= MarginAlertEvery)
+                _log.Event("TmNoAccountStatus").Warning("{Broker}: account status not available ({Message}); margin rules wait for it", account.Broker, ex.Message);
+            _statusFailed = now;
+            return;
+        }
+
+        var level = _status.MarginLevel;
+        var low = level < config.MarginWarnLevel;
+        if (now - _statusLogged >= StatusLogEvery || low && now - _marginAlerted >= MarginAlertEvery)
+        {
+            _statusLogged = now;
+            _log.Event("AccountStatus").Information("{Broker} account {Account}: {Status}; {Positions} positions, {Orders} orders",
+                account.Broker, account.AccountId, _status.Describe(), _status.Positions, _status.Orders);
+        }
+        if (low && now - _marginAlerted >= MarginAlertEvery)
+        {
+            _marginAlerted = now;
+            notify.Send(level < config.MarginRescueLevel ? NotificationLevel.Critical : NotificationLevel.Warning, "MarginLow",
+                $"{account.Broker}: margin level {level:0} %",
+                $"{_status.Describe()}. Below {config.MarginWarnLevel:0} % TM opens no mirrors; below {config.MarginRescueLevel:0} % it closes trades, the one holding the most margin first.",
+                account.AccountId);
+        }
     }
 
     /// <summary>Carries out one action. Returns true when it changed something on the server.</summary>
@@ -210,8 +265,17 @@ internal sealed class AccountManager(
         {
             Row(sent, t, s, action.Role, kind, side, lots, requested, null, ex.ErrorCode, $"{Target(action)} {ex.Message}".Trim());
             action.Failed?.Invoke(ex.ErrorCode);
-            notify.Warning("TmActionFailed", $"{account.Broker} {s.Name}: {Describe(action)} refused",
-                $"Trade {t.Name}: {ex.ErrorCode} {ex.Message}. TM tries again next second if the rule still applies.", ctid);
+            if (ex.ErrorCode == Planner.NotEnoughMoney)
+                _statusDue = true;
+            // Every refusal is a row in actions.csv; the same one pops up (and is an events.csv line) once per 10 minutes.
+            var key = $"{t.Name}|{action.Role}|{kind}|{ex.ErrorCode}";
+            if (DateTime.UtcNow - _failedAlerts.GetValueOrDefault(key, DateTime.MinValue) >= FailedAlertEvery)
+            {
+                _failedAlerts[key] = DateTime.UtcNow;
+                notify.Warning("TmActionFailed", $"{account.Broker} {s.Name}: {Describe(action)} refused",
+                    $"Trade {t.Name}: {ex.ErrorCode} {ex.Message}. TM tries again if the rule still applies"
+                    + (ex.ErrorCode == Planner.NotEnoughMoney ? " (after a minute; past the hedge level it closes the leg instead)." : "."), ctid);
+            }
         }
         return true;
     }

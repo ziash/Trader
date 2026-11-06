@@ -51,6 +51,10 @@
     "ETHUSD": 0.9,    // 1 ETH; ≈ $16
     "SOLUSD": 20      // 1 SOL; ≈ $15 (minimum 1 lot)
   },
+  // Margin budget (scout.md §2.5, issue-log.md #1): a new order only while the margin in use plus marginFactor × the
+  // margin of Scout's waiting orders and the new one (TM's mirror and two hedges) stays within marginUsePercent of equity.
+  "marginUsePercent": 50,
+  "marginFactor": 4,
   "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
   "historyDays": 30,      // past candles read at start to rebuild the state
 

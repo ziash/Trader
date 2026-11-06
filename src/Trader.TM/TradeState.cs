@@ -76,8 +76,15 @@ internal sealed class LegState
     /// <summary>Stop-loss at break-even placed at 1R; the hedge is gone for good.</summary>
     public bool Protected { get; set; }
 
-    /// <summary>The leg's original stop-loss has been removed (it is hedged).</summary>
+    /// <summary>The leg's original stop-loss has been replaced (it is hedged): by the backstop, or by nothing while a hedge is filled.</summary>
     public bool StopCleared { get; set; }
+
+    /// <summary>The backstop stop-loss TM last set on the leg (tm.md §5.1): at the loss limit, so the leg is never without a
+    /// server-side stop while no hedge is filled — even when a hedge is refused or TM is down. Null before TM set one.</summary>
+    public double? Backstop { get; set; }
+
+    /// <summary>When the broker last refused this leg's hedge for lack of money (NOT_ENOUGH_MONEY); null once one is placed.</summary>
+    public DateTime? NoMoneyUtc { get; set; }
 
     public bool Warned { get; set; }
 

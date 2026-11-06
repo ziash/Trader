@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: **IC Markets only, 18 symbols** (§7) |
-| Document version | v1.6 (04-Nov-2026) — history in §8 |
+| Document version | v1.7 (06-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | IC Markets demo 49123893 (`brokerA`) only from 04-Nov-2026 (Pepperstone demo 49124666, `brokerB`, until then) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
@@ -41,13 +41,24 @@ Per chart (symbol × timeframe) in `scout.json`: `"watch"` sends an alert for ea
 | A level moves on later candles | Nothing: Scout never moves or amends an order |
 | A position opened from its order | Nothing: TM manages it (mirror, hedges at H = the stop-loss, break-even at 1R, trailing) |
 
-- Each setup role (pause × main/reversal) gets **at most one order, ever**: the memory file keeps it across restarts. A refused order (e.g. the price is already beyond the level) is logged and not retried.
+- Each setup role (pause × main/reversal) gets **at most one order, ever**: the memory file keeps it across restarts. A refused order (e.g. the price is already beyond the level) is logged and not retried. An order held back for margin (§2.5) is not an order: it is tried again while the setup lasts.
 - After a restart, Scout's pending orders are found by label (`Scout-` + timeframe + pause start), whatever instance placed them.
 - Acts only while Primary on the account (open-code-pieces.md §6); a second copy only watches.
 
 ### 2.4 With TM
 
 TM takes over orders whose label starts with `"Scout-"` (`takeOver` in `tm.json`, [tm.md §2.1](tm.md#21-take-over-list-v16-owner-24-oct-2026), decision 12): a mirror order of the same size beside Scout's, hedges once both fill. When Scout cancels its order or it expires, TM cancels the mirror ([tm.md §3.1](tm.md#31-entry-by-a-pending-order-owner-22-oct-2026)). Scout never closes a position, so TM's open item about bots that close their own mains does not arise.
+
+### 2.5 Margin budget (v1.7, 06-Nov-2026)
+
+After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)), Scout checks the account before each new order. It reads the balance, equity and margin in use (read-only, [Open Code Pieces](../open-code-pieces.md) v1.9) and the margin the order would hold once filled (`ProtoOAExpectedMarginReq`):
+
+- An order of Scout's holds no margin while it waits, but once filled TM mirrors it and hedges both legs: up to **`marginFactor` = 4 ×** its own margin.
+- Scout places the order only if **margin in use + 4 × (its waiting orders + this one) ≤ `marginUsePercent` = 50 % of equity**.
+- Otherwise: one `skip` row in `orders.csv` (result `no margin`, the numbers in `detail`), a `ScoutNoMargin` line in `events.csv`, and a pop-up at most once an hour. The setup is tried again at each check (every minute) while it lasts.
+- No account status (the broker did not answer): no new orders, and Scout asks again after 5 minutes.
+
+On IC Markets at 14:47Z on 06-Nov-2026 (equity $2,491.85, margin in use $2,707.70), the budget was −$1,461: Scout would have placed nothing.
 
 ## 3. Logs and outputs
 
@@ -133,3 +144,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.4 | 04 Nov 2026 | **IC Markets only, 18 symbols** (owner, §7): top three per market on 1H — forex majors and crosses, metals, indices, energies, crypto; Pepperstone dropped. TM lists the same ([TM](tm.md) v1.8); Scout spec §4.6 updated (Scout v1.3). Open item: one lot size for every symbol |
 | v1.5 | 04 Nov 2026 | **Order size per symbol** (owner, §7): `lotsBySymbol` in `scout.json` (≈ $15 per 1H ATR on every symbol; forex 0.1 lot; XNGUSD at its 0.5-lot minimum); log and pop-up show the size really sent; start log lists every symbol's size, `LotsAdjusted` warning. `lots` limit raised from 1 to 100 (SOLUSD needs 20). Tests: 24 (2 new, 1 updated for the IC-only config) |
 | v1.6 | 04 Nov 2026 | XNGUSD stays in trade mode at its 0.5-lot minimum (owner, §7); its bigger size is weighed at the review |
+| v1.7 | 06 Nov 2026 | **Margin budget** (§2.5, after the IC Markets margin call, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): a new order only while margin in use + 4 × (waiting orders + the new one) ≤ 50 % of equity (`marginUsePercent`, `marginFactor` in `scout.json`); otherwise `skip` / `no margin` in `orders.csv`, tried again while the setup lasts. Code: `MarginBudget`, `AccountScout` (Trader.Core `AccountStatus`, `GetExpectedMarginAsync`, [Open Code Pieces](../open-code-pieces.md) v1.9). Tests: 27 (3 new). Open: sizes against the account size (XNGUSD, SOLUSD) at the trial review |

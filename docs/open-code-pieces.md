@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by the Audit Bot and TM |
-| Document version | v1.8 (03-Nov-2026) — history in §10 |
+| Document version | v1.9 (06-Nov-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -22,6 +22,7 @@ The functions every bot needs are written **once**; bots never copy them. Each b
 | Instance registry | One Primary per bot per account; status files; slots (§6) | `Hosting/InstanceRegistry` | Audit Bot, TM |
 | Connection | Stay connected: heartbeat, dead-line ping, reconnect with backoff, account auth, token refresh (§3); since when it has been down (`DownSinceUtc`); demo host or a replay broker on localhost (§3) | `OpenApi/ConnectionManager`, `CTraderSession.ConnectAsync` | all (down time: TM) |
 | Requests | Market orders, **stop and limit orders (with stop-loss / take-profit for their position), moving and cancelling them, setting / removing a position's stop-loss (fixed or trailing) and take-profit**, closing by `positionId`, reconcile, symbols, spots, live trendbars, **historical candles** | `OpenApi/CTraderSession` | Audit Bot (market, close, reconcile), TM (all) |
+| Account status | **Balance, equity, margin used and free, margin level** (`AccountStatus`, the broker's SUM / MAX / NET rule for hedged accounts), each position's open result (`GetUnrealizedPnLAsync`; the request is newer than the library and written by hand in `UnrealizedPnLMessages.cs`), and the margin a new order would hold (`GetExpectedMarginAsync`). Read-only ([issue-log.md #1](issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) | `OpenApi/AccountStatus`, `CTraderSession.GetAccountStatusAsync` | TM, Scout, ListAccounts |
 | Secrets and tokens | Reads `~/.config/trader/secrets.env`; refreshes tokens and saves them atomically under a lock | `Config/SecretsFile`, `TokenRefresher` | all |
 | Symbols and prices | Names → IDs and details (pip, lot, digits, schedule), currency conversion symbols, bid/ask quotes, trading hours | `MarketData/SymbolCatalog`, `PriceFeed`, `TradingSchedule`, `MarketHours` | Audit Bot, TM |
 | Candles | Daily / historical candles, average true range (ATR) | `MarketData/Candle` | TM |
@@ -123,3 +124,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.6 | 24 Oct 2026 | Ownership rule (§4): TM's exception now covers the labels in its take-over list ([TM v1.6](bots/tm.md#21-take-over-list-v16-owner-24-oct-2026)); default unchanged (unlabelled only). No code change here |
 | v1.7 | 03 Nov 2026 | `PlacePendingOrderAsync` takes two optional arguments, for [Scout](bots/scout.md): `trailingStopLoss` (the position's stop-loss trails once it fills) and `expiresUtc` (good till date: the server cancels the order then). Checked on IC Markets demo (scout.md §6 step 2). Existing calls unchanged |
 | v1.8 | 03 Nov 2026 | A request sent while the connection closes now fails with an `IOException` ("Connection closed while sending …") instead of the library's `ChannelClosedException`, so the bots' loops retry it after the reconnect. Before, TM and Scout stopped with exit code 3 on the 17:58Z network drop of 03-Nov-2026 and systemd restarted them 30 s later ([scout.md §7](bots/scout.md#7-decisions-and-open-items)) |
+| v1.9 | 06 Nov 2026 | **Account status** (§2, [issue-log.md #1](issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): `GetAccountStatusAsync` (balance, equity, margin used / free, margin level), `GetUnrealizedPnLAsync` (`ProtoOAGetPositionUnrealizedPnLReq` / `Res`, payload types 2187 / 2188, written by hand; `PayloadDecoder` knows the reply), `GetExpectedMarginAsync`. Checked live on both demos 06-Nov-2026 14:47Z (IC 92 %, Pepperstone 539 %). `ListAccounts` shows them, `--positions` by symbol. Core tests: 115 (4 new) |

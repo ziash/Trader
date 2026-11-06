@@ -372,6 +372,32 @@ public sealed class CTraderSession : IAsyncDisposable
     public Task<ProtoOAReconcileRes> ReconcileAsync(long ctidTraderAccountId) =>
         RequestAsync<ProtoOAReconcileRes>(new ProtoOAReconcileReq { CtidTraderAccountId = ctidTraderAccountId });
 
+    /// <summary>Every open position's unrealized result (gross, and net of commission and swap). Read-only.</summary>
+    public Task<ProtoOAGetPositionUnrealizedPnLRes> GetUnrealizedPnLAsync(long ctidTraderAccountId) =>
+        RequestAsync<ProtoOAGetPositionUnrealizedPnLRes>(new ProtoOAGetPositionUnrealizedPnLReq { CtidTraderAccountId = ctidTraderAccountId });
+
+    /// <summary>
+    /// Balance, equity, used and free margin, margin level (<see cref="AccountStatus"/>). Read-only: three requests, or two
+    /// when the caller passes the reconcile it just made.
+    /// </summary>
+    public async Task<AccountStatus> GetAccountStatusAsync(long ctidTraderAccountId, ProtoOAReconcileRes? reconcile = null)
+    {
+        var trader = await GetTraderAsync(ctidTraderAccountId);
+        reconcile ??= await ReconcileAsync(ctidTraderAccountId);
+        var pnl = reconcile.Position.Count > 0 ? await GetUnrealizedPnLAsync(ctidTraderAccountId) : new ProtoOAGetPositionUnrealizedPnLRes();
+        return AccountStatus.From(trader, reconcile, pnl, DateTime.UtcNow);
+    }
+
+    /// <summary>Margin that new positions of these volumes on the symbol would hold, buy and sell, in the account currency. Read-only.</summary>
+    public async Task<IReadOnlyList<ExpectedMargin>> GetExpectedMarginAsync(long ctidTraderAccountId, long symbolId, IEnumerable<long> volumes)
+    {
+        var req = new ProtoOAExpectedMarginReq { CtidTraderAccountId = ctidTraderAccountId, SymbolId = symbolId };
+        req.Volume.AddRange(volumes);
+        var res = await RequestAsync<ProtoOAExpectedMarginRes>(req);
+        var digits = res.HasMoneyDigits ? res.MoneyDigits : 2;
+        return res.Margin.Select(m => new ExpectedMargin(m.Volume, AccountStatus.Scale(m.BuyMargin, digits), AccountStatus.Scale(m.SellMargin, digits))).ToList();
+    }
+
     // The server answers an order request with several execution events under the request's clientMsgId:
     // ORDER_ACCEPTED, then ORDER_FILLED (with the deal) — or an order error / ORDER_REJECTED. On a close, the
     // position's stop-loss order is also cancelled under the same ID; only events for our own order count.

@@ -41,6 +41,8 @@ public static class PayloadDecoder
             if (value is Enum e)
                 table.TryAdd(Convert.ToUInt32(e), parser);
         }
+        // Messages newer than the library, written out by hand (UnrealizedPnLMessages.cs).
+        table.TryAdd(ProtoOAGetPositionUnrealizedPnLRes.Type, ProtoOAGetPositionUnrealizedPnLRes.Parser);
         return table;
     }
 }

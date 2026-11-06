@@ -56,6 +56,8 @@ internal sealed class AccountScout(
     private readonly ConcurrentQueue<ProtoOAExecutionEvent> _executions = new();
     private readonly Dictionary<string, string> _endReason = [];   // key → why its setup ended (from the last Cancelled event)
     private readonly HashSet<long> _cancelling = [];
+    private readonly HashSet<string> _marginSkipped = [];             // setups logged as waiting for margin (logged once each)
+    private DateTime _marginAlerted = DateTime.MinValue, _statusFailed = DateTime.MinValue;
     private readonly SemaphoreSlim _wake = new(0);
     private volatile CTraderSession? _session;
     private volatile IReadOnlyDictionary<long, SymbolInfo> _symbols = new Dictionary<long, SymbolInfo>();
@@ -271,6 +273,8 @@ internal sealed class AccountScout(
             await CancelAsync(session, key, order, reason);
         }
 
+        MarginBudget? budget = null;
+        var margins = new Dictionary<(long, long), ExpectedMargin>();
         foreach (var want in wants.Values)
         {
             if (state.Roles.ContainsKey(want.Key) || ourOrders.ContainsKey(want.Key) || ourPositions.ContainsKey(want.Key))
@@ -281,11 +285,92 @@ internal sealed class AccountScout(
             if (want.Chart.Chart.Mode == ScoutMode.Watch)
                 Alert(want, now);
             else
+            {
+                budget ??= await BudgetAsync(session, rec, ourOrders.Values, margins);
+                if (!await MarginFitsAsync(session, budget, want, margins, now))
+                    continue; // not remembered: tried again at the next sync, while the setup lasts
                 await PlaceAsync(session, want, now);
+            }
             changed = true;
         }
         if (changed && !dryRun)
             state.Save(now);
+    }
+
+    // ── Margin (scout.md §2.5, issue-log.md #1): no new order the account could not carry once filled, mirrored and hedged ──
+    private async Task<MarginBudget?> BudgetAsync(CTraderSession session, ProtoOAReconcileRes rec, IEnumerable<ProtoOAOrder> waiting,
+        Dictionary<(long, long), ExpectedMargin> margins)
+    {
+        if (DateTime.UtcNow - _statusFailed < TimeSpan.FromMinutes(5))
+            return null; // the broker did not answer a moment ago (e.g. a replay broker without it): no new orders meanwhile
+        try
+        {
+            var status = await session.GetAccountStatusAsync(account.AccountId, rec);
+            var held = 0.0;
+            foreach (var o in waiting)
+                held += (await MarginAsync(session, o.TradeData.SymbolId, o.TradeData.Volume, margins)).For(o.TradeData.TradeSide == ProtoOATradeSide.Buy ? 1 : -1);
+            return new MarginBudget(status, config, held);
+        }
+        catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
+        {
+            _statusFailed = DateTime.UtcNow;
+            _log.Event("ScoutNoAccountStatus").Warning("{Broker}: account status not available ({Message}); no new orders until it is", account.Broker, ex.Message);
+            return null;
+        }
+    }
+
+    private async Task<ExpectedMargin> MarginAsync(CTraderSession session, long symbolId, long volume, Dictionary<(long, long), ExpectedMargin> margins)
+    {
+        if (!margins.TryGetValue((symbolId, volume), out var m))
+            margins[(symbolId, volume)] = m = (await session.GetExpectedMarginAsync(account.AccountId, symbolId, [volume])).Single();
+        return m;
+    }
+
+    private async Task<bool> MarginFitsAsync(CTraderSession session, MarginBudget? budget, Want w, Dictionary<(long, long), ExpectedMargin> margins, DateTime now)
+    {
+        var volume = w.Sym.VolumeForLots(config.LotsFor(w.Sym.Name));
+        string why;
+        if (budget is null)
+            why = "account status not available";
+        else
+        {
+            double margin;
+            try
+            {
+                margin = (await MarginAsync(session, w.Sym.SymbolId, volume, margins)).For(w.Dir);
+            }
+            catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
+            {
+                margin = double.PositiveInfinity;
+                _log.Warning("{Broker} {Symbol}: expected margin not available ({Message})", account.Broker, w.Sym.Name, ex.Message);
+            }
+            if (budget.TryTake(margin))
+            {
+                _marginSkipped.Remove(w.Key);
+                return true;
+            }
+            why = double.IsPositiveInfinity(margin) ? "expected margin not available" : budget.Explain(margin);
+        }
+
+        if (_marginSkipped.Add(w.Key))
+        {
+            OrderRow(now, w, "skip", 0, StopLoss(w), null, null, "no margin", why, volume);
+            _log.Event("ScoutNoMargin").Warning("{Broker} {Symbol} {Tf}: {Side} Stop {Price} not placed: {Why}",
+                account.Broker, w.Sym.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(w.Level, w.Sym), why);
+        }
+        if (now - _marginAlerted >= TimeSpan.FromHours(1))
+        {
+            _marginAlerted = now;
+            notify.Warning("ScoutNoMargin", $"Scout {account.Broker}: new orders wait, margin is short",
+                $"{w.Sym.Name} {Side(w.Dir)} Stop {Num(w.Level, w.Sym)} not placed: {why}. Scout tries again while the setup lasts.", account.AccountId);
+        }
+        return false;
+    }
+
+    private static double? StopLoss(Want w)
+    {
+        var price = Math.Round(w.Level, w.Sym.Digits);
+        return w.Far is { } f && (f - price) * w.Dir < 0 ? Math.Round(f, w.Sym.Digits) : null;
     }
 
     private string? KeyOf(string? label, long symbolId)
@@ -312,7 +397,7 @@ internal sealed class AccountScout(
     {
         var s = w.Sym;
         var price = Math.Round(w.Level, s.Digits);
-        double? sl = w.Far is { } f && (f - price) * w.Dir < 0 ? Math.Round(f, s.Digits) : null;
+        var sl = StopLoss(w);
         var volume = s.VolumeForLots(config.LotsFor(s.Name));
         var expires = now + config.ExpiryCandles * w.Chart.Length;
         var leg = $"{w.Chart.Chart.Timeframe}-{w.PauseStart:yyyyMMddHHmm}-{(w.Reversal ? "R" : "M")}";

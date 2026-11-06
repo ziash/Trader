@@ -28,6 +28,14 @@ internal sealed class FakeBroker
     public double Spread { get; set; } = 0.00002;
     public double? Distance { get; set; } = 0.0010;
     public HashSet<string> Refuse { get; } = [];
+    public string RefuseCode { get; set; } = "REFUSED";
+
+    /// <summary>The account status the planner sees (margin rules, tm.md §5.1); null = not known.</summary>
+    public AccountStatus? Account { get; set; }
+    public bool RescueAllowed { get; set; }
+
+    /// <summary>Margin a position holds in the fake: $1 per 0.01 lot (1,000 units = 100,000 in Open API volume).</summary>
+    public static double MarginOf(long volume) => volume / 100_000.0;
 
     private static string Label(long mainId, string role) => $"TM-abcdef-{TmLabel.Leg(mainId, role)}";
 
@@ -35,7 +43,7 @@ internal sealed class FakeBroker
     public Pos OpenManual(int dir, long volume = 50_000_000, double? stopLoss = null, double? takeProfit = null, DateTime? openUtc = null, bool trailing = false,
         string label = "")
     {
-        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, label, openUtc ?? Now, trailing);
+        var p = new Pos(_nextId++, SymbolId, dir, volume, dir > 0 ? Ask : Bid, stopLoss, takeProfit, label, openUtc ?? Now, trailing, MarginOf(volume));
         Positions.Add(p);
         return p;
     }
@@ -113,7 +121,7 @@ internal sealed class FakeBroker
             if (o.Limit ? o.Dir * (market - o.Price) <= 0 : o.Dir * (market - o.Price) >= 0)
             {
                 Orders.Remove(o);
-                var p = new Pos(_nextId++, SymbolId, o.Dir, o.Volume, market, o.StopLoss, o.TakeProfit, o.Label, Now, o.Trailing);
+                var p = new Pos(_nextId++, SymbolId, o.Dir, o.Volume, market, o.StopLoss, o.TakeProfit, o.Label, Now, o.Trailing, MarginOf(o.Volume));
                 Positions.Add(p);
                 OrderFills[o.Id] = p.Id;
             }
@@ -144,10 +152,14 @@ internal sealed class FakeBroker
                 Distance = _ => Distance,
                 ClosePrice = id => ClosePrices.TryGetValue(id, out var p) ? p : null,
                 FilledPosition = id => OrderFills.TryGetValue(id, out var p) ? p : null,
+                Account = Account,
+                RescueAllowed = RescueAllowed,
             };
             var actions = Planner.Plan(Book, new Snapshot(Positions.ToList(), Orders.ToList()), env);
             all.AddRange(actions);
             Log.AddRange(actions);
+            if (actions.Any(a => a is Notify { Event: "MarginRescue" }))
+                RescueAllowed = false; // as AccountManager: the next rescue waits for a fresh account status
             var changed = false;
             foreach (var a in actions)
                 changed |= Apply(a);
@@ -163,7 +175,7 @@ internal sealed class FakeBroker
             return false;
         if (Refuse.Contains(a.GetType().Name))
         {
-            a.Failed?.Invoke("REFUSED");
+            a.Failed?.Invoke(RefuseCode);
             return true;
         }
         OrderFill? fill = null;
@@ -171,12 +183,12 @@ internal sealed class FakeBroker
         {
             case OpenMirror m:
                 var price = m.Dir > 0 ? Ask : Bid;
-                var mirror = new Pos(_nextId++, SymbolId, m.Dir, m.Volume, price, m.StopLoss, null, Label(m.Trade!.MainId, TmLabel.Mirror), Now);
+                var mirror = new Pos(_nextId++, SymbolId, m.Dir, m.Volume, price, m.StopLoss, null, Label(m.Trade!.MainId, TmLabel.Mirror), Now, Margin: MarginOf(m.Volume));
                 Positions.Add(mirror);
                 fill = new OrderFill(mirror.Id, mirror.Id, mirror.Id, price, m.Volume, Now, 0, mirror.Label, TimeSpan.Zero);
                 break;
             case PlaceHedge h when h.Price is null:
-                var hp = new Pos(_nextId++, SymbolId, h.Dir, h.Volume, h.Dir > 0 ? Ask : Bid, null, null, Label(h.Trade!.MainId, h.Role), Now);
+                var hp = new Pos(_nextId++, SymbolId, h.Dir, h.Volume, h.Dir > 0 ? Ask : Bid, null, null, Label(h.Trade!.MainId, h.Role), Now, Margin: MarginOf(h.Volume));
                 Positions.Add(hp);
                 fill = new OrderFill(hp.Id, hp.Id, hp.Id, hp.Entry, h.Volume, Now, 0, hp.Label, TimeSpan.Zero);
                 break;

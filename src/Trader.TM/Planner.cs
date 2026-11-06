@@ -1,6 +1,7 @@
 using System.Globalization;
 using Trader.Core.MarketData;
 using Trader.Core.Notifications;
+using Trader.Core.OpenApi;
 
 namespace Trader.TM;
 
@@ -24,6 +25,15 @@ internal sealed class PlanEnv
 
     /// <summary>The position a pending order opened, from the execution events; null if not seen (e.g. TM was down).</summary>
     public Func<long, long?> FilledPosition { get; init; } = _ => null;
+
+    /// <summary>Balance, equity and margin of the account (tm.md §5.1); null when not known (yet).</summary>
+    public AccountStatus? Account { get; init; }
+
+    /// <summary>The account status is fresh since the last margin rescue, so another may be planned.</summary>
+    public bool RescueAllowed { get; init; }
+
+    /// <summary>Margin is short: below the warning level no new mirrors are opened (tm.md §5.1).</summary>
+    public bool LowMargin => Account?.MarginLevel is { } level && level < Config.MarginWarnLevel;
 }
 
 /// <summary>
@@ -34,6 +44,11 @@ internal sealed class PlanEnv
 /// </summary>
 internal static class Planner
 {
+    /// <summary>The broker's refusal when the account has no free margin for an order.</summary>
+    internal const string NotEnoughMoney = "NOT_ENOUGH_MONEY";
+    private static readonly TimeSpan NoMoneyWait = TimeSpan.FromSeconds(60);    // a refused stop hedge is sent again after this
+    private static readonly TimeSpan NoMoneyClose = TimeSpan.FromMinutes(5);    // a refusal this recent: past H the leg is closed, not hedged
+
     public static List<TmAction> Plan(TradeBook book, Snapshot snap, PlanEnv env)
     {
         var actions = new List<TmAction>();
@@ -66,7 +81,8 @@ internal static class Planner
         foreach (var main in mains.Values.Where(m => book.Find(m.Id) is null))
             TakeOver(book, main, env, actions);
 
-        foreach (var trade in book.Trades.Where(t => !t.Pending).ToList())
+        var rescued = Rescue(book, mains, tmPos, tmOrd, mirrorPos, env, actions);
+        foreach (var trade in book.Trades.Where(t => !t.Pending && t != rescued).ToList())
             new TradePlan(trade, mains.GetValueOrDefault(trade.MainId), tmPos, tmOrd, mirrorPos, env, actions).Run();
 
         foreach (var done in book.Trades.Where(t => t.Done).ToList())
@@ -78,6 +94,44 @@ internal static class Planner
                     $"All legs and hedges closed; hedges result {Fmt(done.Main.Realized + (done.Mirror?.Realized ?? 0))} per unit"));
         }
         return actions;
+    }
+
+    /// <summary>
+    /// Margin rescue (tm.md §5.1): below the rescue level the broker is close to stopping the account out, closing
+    /// positions in its own order. TM closes one whole trade first — the one whose positions hold the most margin, which
+    /// frees the most — and plans the next only once a fresh account status shows the level still too low.
+    /// </summary>
+    private static TradeState? Rescue(TradeBook book, Dictionary<long, Pos> mains, Dictionary<(long, string), Pos> tmPos,
+        Dictionary<(long, string), Ord> tmOrd, Dictionary<long, Pos> mirrorPos, PlanEnv env, List<TmAction> actions)
+    {
+        if (!env.RescueAllowed || env.Account is not { MarginLevel: { } level } account || level >= env.Config.MarginRescueLevel)
+            return null;
+
+        List<(string Role, Pos Pos)> Positions(TradeState t) =>
+            new (string Role, Pos? Pos)[]
+            {
+                ("MAIN", mains.GetValueOrDefault(t.MainId)),
+                (TmLabel.Mirror, tmPos.GetValueOrDefault((t.MainId, TmLabel.Mirror)) ?? (t.MainOrderId != 0 ? mirrorPos.GetValueOrDefault(t.MainOrderId) : null)),
+                (TmLabel.HedgeMain, tmPos.GetValueOrDefault((t.MainId, TmLabel.HedgeMain))),
+                (TmLabel.HedgeMirror, tmPos.GetValueOrDefault((t.MainId, TmLabel.HedgeMirror))),
+            }.Where(x => x.Pos is not null).Select(x => (x.Role, x.Pos!)).ToList();
+
+        var pick = book.Trades.Where(t => !t.Pending && !t.Done)
+            .Select(t => (Trade: t, Positions: Positions(t)))
+            .Where(x => x.Positions.Count > 0)
+            .MaxBy(x => x.Positions.Sum(p => p.Pos.Margin));
+        if (pick.Trade is not { } trade)
+            return null;
+
+        foreach (var (role, p) in pick.Positions)
+            actions.Add(new ClosePosition(trade, role, p.Id, p.Volume));
+        foreach (var role in new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror })
+            if (tmOrd.GetValueOrDefault((trade.MainId, role)) is { } o)
+                actions.Add(new CancelOrder(trade, role, o.Id));
+        actions.Add(new Notify(trade, "", NotificationLevel.Critical, "MarginRescue", $"{trade.Symbol} trade {trade.Name} closed: margin level {level:0} %",
+            $"Below {env.Config.MarginRescueLevel:0} % TM closes the trade holding the most margin ({AccountStatus.Money(pick.Positions.Sum(p => p.Pos.Margin))}), "
+            + $"one at a time, before the broker stops the account out. Account: {account.Describe()}"));
+        return trade;
     }
 
     /// <summary>
@@ -160,10 +214,16 @@ internal static class Planner
                 if (!Same(mirOrd.Price, order.Price, s) || mirOrd.Volume != order.Volume || !Same(mirOrd.StopLoss, t.H, s) || !Same(mirOrd.TakeProfit, order.TakeProfit, s))
                     actions.Add(new AmendMirrorOrder(t, mirOrd.Id, order, t.H, order.TakeProfit));
             }
-            else if (mirPos is null && !t.MirrorOrderSent)
+            else if (mirPos is null && !t.MirrorOrderSent && !t.NoMirror)
             {
                 t.MirrorOrderSent = true;
-                actions.Add(new PlaceMirrorOrder(t, order, t.H, order.TakeProfit));
+                if (env.LowMargin)
+                {
+                    t.NoMirror = true;                    // never later either: the mirror would double the exposure of an account short of margin
+                    actions.Add(LowMarginNoMirror(t, env));
+                }
+                else
+                    actions.Add(new PlaceMirrorOrder(t, order, t.H, order.TakeProfit));
             }
             return; // a mirror that filled before the owner's order (it was just moved) waits, protected by its stop-loss at H
         }
@@ -216,6 +276,10 @@ internal static class Planner
         actions.Add(new Notify(t, TmLabel.Mirror, NotificationLevel.Warning, "MirrorOrderOrphan", $"{s.Name}: mirror order {o.Id} cancelled",
             $"Your order {orderId} is gone and TM has no record of it"));
     }
+
+    private static Notify LowMarginNoMirror(TradeState t, PlanEnv env) =>
+        new(t, TmLabel.Mirror, NotificationLevel.Warning, "MirrorSkipped", $"{t.Symbol} {t.Name}: no mirror, margin is short",
+            $"Margin level {env.Account!.MarginLevel:0} % is below {env.Config.MarginWarnLevel:0} %: hedges only. Account: {env.Account.Describe()}");
 
     private static bool Same(double? a, double? b, SymbolInfo s) =>
         a is null ? b is null : b is not null && Math.Abs(a.Value - b.Value) < s.PipSize * 0.05;
@@ -308,6 +372,7 @@ internal static class Planner
                 R = p is null ? 1 : Math.Max(Math.Abs(h.Value - p.Entry), s.PipSize),
                 Protected = p?.StopLoss is { } sl && dir * (sl - p.Entry) >= 0,
                 StopCleared = true,
+                Backstop = p?.StopLoss is { } bs && dir * (p.Entry - bs) > Math.Abs(h.Value - p.Entry) ? bs : null, // loss side beyond H: TM's backstop
                 HedgePositionId = hedge?.Id,
                 HedgeFill = hedge?.Entry ?? 0,
                 Armed = hedge?.StopLoss is { } hsl && -dir * (hsl - hedge.Entry) > 0,
@@ -354,6 +419,11 @@ internal static class Planner
             {
                 if (mirPos is not null)
                     t.Mirror = new LegState { PositionId = mirPos.Id, Entry = mirPos.Entry, Volume = mirPos.Volume, R = Math.Abs(t.H - mirPos.Entry) };
+                else if (!t.MirrorRequested && mainPos is not null && env.LowMargin)
+                {
+                    t.NoMirror = true;
+                    actions.Add(LowMarginNoMirror(t, env));
+                }
                 else if (!t.MirrorRequested && mainPos is not null)
                 {
                     t.MirrorRequested = true;
@@ -381,8 +451,8 @@ internal static class Planner
         /// </summary>
         private void TrailingSwitch()
         {
-            if (mainPos?.StopLoss is null || mainPos.Trailing == t.Trailing)
-                return;
+            if (mainPos?.StopLoss is null || mainPos.Trailing == t.Trailing || Same(mainPos.StopLoss, t.Main.Backstop))
+                return; // TM's backstop never trails; it says nothing about the owner's switch
             t.Trailing = mainPos.Trailing;
             actions.Add(new Notify(t, "MAIN", NotificationLevel.Info, t.Trailing ? "TrailingOn" : "TrailingOff",
                 $"{t.Symbol}: trailing stop {(t.Trailing ? "on" : "off")}",
@@ -395,7 +465,9 @@ internal static class Planner
             var hedgeOpen = new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }.Any(r => tmPos.ContainsKey((t.MainId, r)));
             double? newH = null;
             string how = "";
-            if (mainPos?.StopLoss is { } sl && t.Main.StopCleared && !t.Main.Protected)
+            // TM's own backstop is not the owner moving H: the one TM remembers, or where it would be (a reply TM missed).
+            if (mainPos?.StopLoss is { } sl && t.Main.StopCleared && !t.Main.Protected && !Same(sl, t.Main.Backstop)
+                && !Same(sl, Math.Round(t.Main.Entry - t.Dir * env.Config.CloseR * t.Main.R, _s.Digits)))
             {
                 newH = sl;
                 how = "new stop-loss on the main";
@@ -556,27 +628,57 @@ internal static class Planner
                 else if (!Same(hOrd.Price, t.H))
                     actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, t.H));
             }
-            else if (ValidStop(hd, t.H))
-                actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, t.H) { Done = _ => leg.Raised = false });
-            else if (leg.EverHedged)
-                actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, Math.Round(hedgeEntry + hd * leg.R, _s.Digits)) { Done = _ => leg.Raised = true });
             else
             {
-                actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, null));
-                actions.Add(new Notify(t, hedgeRole, NotificationLevel.Warning, "HedgeAtMarket", $"{t.Symbol} {name} hedged at market",
-                    $"Price was already beyond the hedge level {P(t.H, _s)}"));
+                // No hedge at all. After the broker refused one for lack of money, a stop hedge waits a minute (the
+                // backstop below protects meanwhile) instead of being sent again every second (issue-log.md #1).
+                var noMoney = leg.NoMoneyUtc is { } refused && env.Now - refused < NoMoneyWait;
+                var failed = (Action<string>)(code => { if (code == NotEnoughMoney) leg.NoMoneyUtc = env.Now; });
+                if (ValidStop(hd, t.H))
+                {
+                    if (!noMoney)
+                        actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, t.H) { Done = _ => (leg.Raised, leg.NoMoneyUtc) = (false, null), Failed = failed });
+                }
+                else if (leg.EverHedged)
+                {
+                    if (!noMoney)
+                        actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, Math.Round(hedgeEntry + hd * leg.R, _s.Digits))
+                            { Done = _ => (leg.Raised, leg.NoMoneyUtc) = (true, null), Failed = failed });
+                }
+                else if (leg.NoMoneyUtc is { } nm && env.Now - nm < NoMoneyClose)
+                {
+                    // Price is past H, the leg has no hedge and the broker has no money for one: closing the leg freezes the
+                    // loss the same way, and frees margin instead of needing it (tm.md §5.1).
+                    actions.Add(new ClosePosition(t, role, pos.Id, pos.Volume));
+                    actions.Add(new Notify(t, role, NotificationLevel.Critical, "HedgeNoMoney", $"{t.Symbol} {name} closed at -{lossR:0.0}R: no margin for its hedge",
+                        $"Price is past the hedge level {P(t.H, _s)} and the broker refused the hedge (not enough money), so TM closed the leg instead"
+                        + (env.Account is { } a ? $". Account: {a.Describe()}" : "")));
+                    return;
+                }
+                else
+                {
+                    actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, null) { Done = _ => leg.NoMoneyUtc = null, Failed = failed });
+                    actions.Add(new Notify(t, hedgeRole, NotificationLevel.Warning, "HedgeAtMarket", $"{t.Symbol} {name} hedged at market",
+                        $"Price was already beyond the hedge level {P(t.H, _s)}"));
+                }
             }
 
-            // The leg's own stop-loss goes once it is hedged (tm.md §3); TM keeps the mirror's take-profit equal to the main's.
-            var hedged = hOrd is not null || hPos is not null;
-            if (pos.StopLoss is not null && (leg.StopCleared || hedged))
+            // Stop-loss of the leg (tm.md §3, §5.1). Before any hedge: the owner's own. Once hedged, TM replaces it: while the
+            // hedge is filled the leg needs none (the loss is frozen); otherwise — a hedge order waiting at H, or none placed
+            // — a backstop at the loss limit, so the leg always has a server-side stop. TM keeps the mirror's take-profit
+            // equal to the main's.
+            if (hPos is not null)
                 Protect(pos, role, null, tp, () => leg.StopCleared = true);
-            else
+            else if (leg.StopCleared || hOrd is not null)
             {
-                if (hedged)
-                    leg.StopCleared = true;
-                Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing);
+                var backstop = Math.Round(leg.Entry - t.Dir * env.Config.CloseR * leg.R, _s.Digits);
+                if (ValidStopLoss(t.Dir, backstop))
+                    Protect(pos, role, backstop, tp, () => (leg.StopCleared, leg.Backstop) = (true, backstop));
+                else
+                    Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing); // price already past it: the loss limit above closes the leg
             }
+            else
+                Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing);
         }
 
         /// <summary>Plans a stop-loss / take-profit change if the position differs; false if nothing to do or already planned.</summary>
@@ -600,6 +702,10 @@ internal static class Planner
 
         private bool Same(double? a, double? b) =>
             a is null ? b is null : b is not null && Math.Abs(a.Value - b.Value) < _s.PipSize * 0.05;
+
+        /// <summary>A long position's stop-loss must sit below the bid, a short one's above the ask.</summary>
+        private bool ValidStopLoss(int dir, double price) =>
+            dir > 0 ? price < _q.Bid - _s.PipSize * 0.5 : price > _q.Ask + _s.PipSize * 0.5;
 
         /// <summary>A buy-stop must sit above the ask, a sell-stop below the bid.</summary>
         private bool ValidStop(int dir, double price) =>

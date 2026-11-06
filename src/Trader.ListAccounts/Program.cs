@@ -1,5 +1,6 @@
 // Phase 1, step 1: connect to the cTrader Open API (demo), authenticate the app,
-// list the accounts the access token can reach, and show basic details of each.
+// list the accounts the access token can reach, and show basic details of each: balance, equity and margin
+// (AccountStatus, issue-log.md #1).
 // Read-only: places no orders and does not refresh tokens.
 //
 // Exit codes: 0 = OK, 1 = secrets/config problem, 2 = API or network problem.
@@ -10,19 +11,20 @@ using Trader.Core.Logging;
 using Trader.Core.OpenApi;
 
 var verbose = args.Contains("--verbose") || args.Contains("-v");
+var showPositions = args.Contains("--positions");
 
 Log.Logger = BotLogging.Create(identity: null, verbose);
 
 try
 {
-    return await RunAsync();
+    return await RunAsync(showPositions);
 }
 finally
 {
     await Log.CloseAndFlushAsync();
 }
 
-static async Task<int> RunAsync()
+static async Task<int> RunAsync(bool showPositions)
 {
     TraderSecrets secrets;
     try
@@ -61,7 +63,7 @@ static async Task<int> RunAsync()
             if (acc.IsLive)
             {
                 // The demo connection cannot serve live accounts, and live is out of scope before Phase 5.
-                row.AddRange(["-", "-", "-", "-", NotTouched]);
+                row.AddRange(["-", "-", "-", "-", "-", "-", "-", "-", "-", NotTouched]);
                 rows.Add([.. row]);
                 continue;
             }
@@ -75,10 +77,19 @@ static async Task<int> RunAsync()
                 var currency = assets.FirstOrDefault(a => a.AssetId == trader.DepositAssetId)?.Name ?? $"asset {trader.DepositAssetId}";
                 var digits = trader.HasMoneyDigits ? (int)trader.MoneyDigits : 2;
                 var balance = trader.Balance / Math.Pow(10, digits);
+                var reconcile = await session.ReconcileAsync(ctid);
+                var status = await session.GetAccountStatusAsync(ctid, reconcile);
+                if (showPositions)
+                    await PrintPositionsAsync(session, ctid, reconcile, acc.TraderLogin);
 
                 row.AddRange([
                     trader.AccountType.ToString(),
                     $"{balance.ToString($"N{digits}")} {currency}",
+                    status.Equity.ToString($"N{digits}"),
+                    status.UsedMargin.ToString($"N{digits}"),
+                    status.FreeMargin.ToString($"N{digits}"),
+                    status.MarginLevel is { } level ? $"{level:0} %" : "-",
+                    $"{status.Positions} / {status.Orders}",
                     $"1:{trader.LeverageInCents / 100}",
                     trader.BrokerName,
                     "OK",
@@ -86,13 +97,13 @@ static async Task<int> RunAsync()
             }
             catch (CTraderApiException ex)
             {
-                row.AddRange(["-", "-", "-", "-", ex.ErrorCode]);
+                row.AddRange(["-", "-", "-", "-", "-", "-", "-", "-", "-", ex.ErrorCode]);
                 Log.Warning("Account {Ctid}: {Error}", ctid, ex.Message);
             }
             rows.Add([.. row]);
         }
 
-        PrintTable(["ctidTraderAccountId", "Login", "Env", "Type", "Balance", "Leverage", "Broker name", "Status"], rows);
+        PrintTable(["ctidTraderAccountId", "Login", "Env", "Type", "Balance", "Equity", "Margin used", "Free margin", "Margin level", "Positions / orders", "Leverage", "Broker name", "Status"], rows);
         return rows.All(r => r[^1] is "OK" or NotTouched) ? 0 : 2;
     }
     catch (CTraderApiException ex)
@@ -108,6 +119,30 @@ static async Task<int> RunAsync()
         Log.Error("Network problem: {Message}. Check: openssl s_client -connect demo.ctraderapi.com:5035 -brief", ex.Message);
         return 2;
     }
+}
+
+// --positions: per symbol, how many positions, the volume on each side, the margin they hold and their open result.
+static async Task PrintPositionsAsync(CTraderSession session, long ctid, ProtoOAReconcileRes reconcile, long login)
+{
+    if (reconcile.Position.Count == 0)
+        return;
+    var pnl = (await session.GetUnrealizedPnLAsync(ctid)).Let(r => r.Positions.ToDictionary(p => p.PositionId, p => p.Net / Math.Pow(10, r.MoneyDigits)));
+    var names = (await session.GetSymbolsAsync(ctid)).ToDictionary(s => s.SymbolId, s => s.SymbolName);
+    var rows = reconcile.Position.GroupBy(p => p.TradeData.SymbolId)
+        .Select(g => new
+        {
+            Name = names.GetValueOrDefault(g.Key, g.Key.ToString()),
+            Count = g.Count(),
+            Buy = g.Where(p => p.TradeData.TradeSide == ProtoOATradeSide.Buy).Sum(p => p.TradeData.Volume),
+            Sell = g.Where(p => p.TradeData.TradeSide == ProtoOATradeSide.Sell).Sum(p => p.TradeData.Volume),
+            Margin = g.Sum(p => (long)p.UsedMargin / Math.Pow(10, p.HasMoneyDigits ? p.MoneyDigits : 2)),
+            Open = g.Sum(p => pnl.GetValueOrDefault(p.PositionId)),
+            NoStop = g.Count(p => !(p.HasStopLoss && p.StopLoss > 0)),
+        })
+        .OrderBy(r => r.Open).ToList();
+    Console.WriteLine($"\nAccount {login}: open positions by symbol (volume in Open API units)");
+    PrintTable(["Symbol", "Positions", "Buy volume", "Sell volume", "Margin", "Open result", "Without stop-loss"],
+        rows.Select(r => new[] { r.Name, r.Count.ToString(), r.Buy.ToString("N0"), r.Sell.ToString("N0"), r.Margin.ToString("N2"), r.Open.ToString("N2"), r.NoStop.ToString() }).ToList());
 }
 
 static void PrintTable(string[] header, List<string[]> rows)
@@ -126,4 +161,9 @@ static void PrintTable(string[] header, List<string[]> rows)
 partial class Program
 {
     private const string NotTouched = "not touched (live)";
+}
+
+static class Extensions
+{
+    public static TOut Let<TIn, TOut>(this TIn value, Func<TIn, TOut> f) => f(value);
 }

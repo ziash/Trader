@@ -3,9 +3,10 @@ using Trader.Core.Hosting;
 
 namespace Trader.TM;
 
-/// <summary>An open position, as TM needs it. <see cref="Dir"/>: +1 buy (long), -1 sell (short); <see cref="Trailing"/>: its stop-loss trails.</summary>
+/// <summary>An open position, as TM needs it. <see cref="Dir"/>: +1 buy (long), -1 sell (short); <see cref="Trailing"/>: its stop-loss trails;
+/// <see cref="Margin"/>: the margin it holds, in the account currency.</summary>
 internal sealed record Pos(long Id, long SymbolId, int Dir, long Volume, double Entry, double? StopLoss, double? TakeProfit, string Label, DateTime OpenUtc,
-    bool Trailing = false);
+    bool Trailing = false, double Margin = 0);
 
 /// <summary>
 /// A pending order: stop (TM's hedges; the owner's breakout entries) or limit (<see cref="Limit"/>), at <see cref="Price"/>,
@@ -28,7 +29,7 @@ internal sealed record Snapshot(IReadOnlyList<Pos> Positions, IReadOnlyList<Ord>
         res.Position.Select(p => new Pos(p.PositionId, p.TradeData.SymbolId, Dir(p.TradeData.TradeSide), p.TradeData.Volume, p.Price,
                 p.HasStopLoss && p.StopLoss > 0 ? p.StopLoss : null, p.HasTakeProfit && p.TakeProfit > 0 ? p.TakeProfit : null,
                 p.TradeData.Label ?? "", DateTimeOffset.FromUnixTimeMilliseconds(p.TradeData.OpenTimestamp).UtcDateTime,
-                p.HasStopLoss && p.StopLoss > 0 && p.TrailingStopLoss))
+                p.HasStopLoss && p.StopLoss > 0 && p.TrailingStopLoss, (long)p.UsedMargin / Math.Pow(10, p.HasMoneyDigits ? p.MoneyDigits : 2)))
             .ToList(),
         res.Order.Where(o => o.OrderType is ProtoOAOrderType.Stop or ProtoOAOrderType.Limit && !o.ClosingOrder)
             .Select(o => new Ord(o.OrderId, o.TradeData.SymbolId, Dir(o.TradeData.TradeSide), o.TradeData.Volume,

@@ -15,6 +15,7 @@ Trading bots for cTrader (C# / .NET 10, Ubuntu). **Each bot is a project of its 
 | **Open Code Pieces** | The reusable code all bots are built from (`src/Trader.Core`) | In use by the Audit Bot, TM and Scout | [docs/open-code-pieces.md](docs/open-code-pieces.md) |
 
 - **Shared by all projects** — brokers and accounts, machine, safety rules, folders, file format, glossary: [docs/shared.md](docs/shared.md)
+- **Issue log** — what went wrong with the bots, why, and what was changed: [docs/issue-log.md](docs/issue-log.md)
 - **New bot** — a document from [docs/bots/_template.md](docs/bots/_template.md) and a row here ([how](docs/bots/README.md#adding-a-bot))
 - **History before 20-Oct-2026** — the old single plan, archived: [docs/archive/plan-v1.22.md](docs/archive/plan-v1.22.md)
 

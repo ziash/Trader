@@ -16,7 +16,9 @@ public sealed record ScoutConfig(
     int ExpiryCandles = 16,         // server expiry of an unfilled order, in candles of its timeframe (Scout spec §4.2)
     int HistoryDays = 30,           // candles read at start to rebuild the detectors' state
     DetectorSettings? Setup = null,
-    IReadOnlyDictionary<string, double>? LotsBySymbol = null) // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
+    IReadOnlyDictionary<string, double>? LotsBySymbol = null, // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
+    double MarginUsePercent = 50,   // Scout places an order only while the margin in use, with its own orders filled, stays within this % of equity (scout.md §2.5)
+    double MarginFactor = 4)        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -79,6 +81,8 @@ public sealed record ScoutConfig(
             if (!Accounts.Any(a => a.Charts.Any(c => c.Symbol == symbol)))
                 throw new ScoutConfigException($"{FileName}: \"lotsBySymbol\" {symbol} is not on any chart");
         }
+        if (MarginUsePercent is <= 0 or > 100 || MarginFactor < 1)
+            throw new ScoutConfigException($"{FileName}: \"marginUsePercent\" above 0 and at most 100, \"marginFactor\" at least 1");
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

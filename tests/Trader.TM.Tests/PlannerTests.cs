@@ -20,7 +20,7 @@ public sealed class PlannerTests
     }
 
     [Fact]
-    public void Take_over_mirrors_hedges_both_and_removes_the_stops_once_hedged()
+    public void Take_over_mirrors_hedges_both_and_replaces_the_stops_by_backstops_once_hedged()
     {
         var (b, main) = ShortWithStop();
 
@@ -31,8 +31,8 @@ public sealed class PlannerTests
             var o = b.Order(role)!;
             Assert.Equal((1, Half, 1.16100), (o.Dir, o.Volume, o.Price)); // buy-stops at H
         });
-        Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);   // removed after its hedge was confirmed
-        Assert.Null(mirror.StopLoss);
+        Assert.Equal(1.16300, b.Positions.Single(p => p.Id == main.Id).StopLoss!.Value, 9); // after its hedge was confirmed: the
+        Assert.Equal(1.16300, mirror.StopLoss!.Value, 9);                                     // backstop at the 3R loss limit
         Assert.Contains("TradeTakenOver", Events(b.Log));
         var t = Assert.Single(b.Book.Trades);
         Assert.Equal(0.00100, t.Main.R, 9);
@@ -120,7 +120,7 @@ public sealed class PlannerTests
     }
 
     [Fact]
-    public void A_gap_past_2R_warns_and_past_3R_closes_the_leg_and_its_hedge()
+    public void A_gap_past_2R_warns_and_past_3R_the_backstops_close_the_legs_and_TM_their_hedges()
     {
         var (b, main) = ShortWithStop();
         b.MoveTo(1.16250);                                     // gap: hedges fill at the ask 1.16252, ~2.5R lost
@@ -128,11 +128,26 @@ public sealed class PlannerTests
         Assert.Equal(2, b.Positions.Count(p => p.Label.EndsWith("HMAIN") || p.Label.EndsWith("HMIR")));
 
         var b2 = ShortWithStop().B;
-        b2.MoveTo(1.16400);                                    // ~4R in one jump
-        Assert.Contains("LossLimit", Events(b2.Log));
+        b2.MoveTo(1.16400);                                    // ~4R in one jump: the broker closes both legs at their backstops
+        Assert.Contains("LegClosed", Events(b2.Log));
         Assert.Empty(b2.Positions);                            // main, mirror and both hedges closed
         Assert.Empty(b2.Book.Trades);
-        Assert.Equal(NotificationLevel.Critical, b2.Log.OfType<Notify>().First(n => n.Event == "LossLimit").Level);
+    }
+
+    [Fact]
+    public void Two_hedge_cycles_and_a_gap_reach_the_3R_loss_limit_before_the_backstop()
+    {
+        var (b, _) = ShortWithStop();
+        for (var i = 0; i < 2; i++)
+        {
+            b.MoveTo(1.16098);                                 // hedges fill at H
+            b.MoveTo(1.16050);                                 // hedge stops: −½R each cycle
+        }
+        Assert.Equal(-0.00100, b.Book.Trades[0].Main.Realized, 9);
+        b.MoveTo(1.16200);                                     // leg −2R, earlier hedges −1R
+        Assert.Contains("LossLimit", Events(b.Log));
+        Assert.Empty(b.Positions);
+        Assert.Equal(NotificationLevel.Critical, b.Log.OfType<Notify>().First(n => n.Event == "LossLimit").Level);
     }
 
     [Fact]
@@ -187,7 +202,7 @@ public sealed class PlannerTests
         var main = b.Positions.Single(p => p.Label.Length == 0);
         Assert.Equal((main.Id, b.Find(TmLabel.Mirror)!.Id), (t.MainId, t.Mirror!.PositionId));
         Assert.All(new[] { TmLabel.HedgeMain, TmLabel.HedgeMirror }, role => Assert.Equal((1, 1.16050), (b.Order(role)!.Dir, b.Order(role)!.Price)));
-        Assert.All(new[] { main, b.Find(TmLabel.Mirror)! }, p => Assert.Equal((null, 1.15500), (p.StopLoss, p.TakeProfit))); // SL gone once hedged
+        Assert.All(new[] { main, b.Find(TmLabel.Mirror)! }, p => Assert.Equal((1.16250, 1.15500), (Math.Round(p.StopLoss!.Value, 5), p.TakeProfit))); // backstop once hedged
     }
 
     [Fact]
@@ -257,8 +272,9 @@ public sealed class PlannerTests
         var main = b.OpenManual(-1, Half, stopLoss: 1.16100, trailing: true);
         b.Run();
         Assert.True(b.Book.Trades[0].Trailing);
-        Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);   // the hedge protects until 1R
+        Assert.Equal(1.16300, b.Positions.Single(p => p.Id == main.Id).StopLoss!.Value, 9); // the hedge protects until 1R, the backstop behind it
         Assert.False(b.Positions.Single(p => p.Id == main.Id).Trailing);
+        Assert.True(b.Book.Trades[0].Trailing);                           // TM's backstop does not switch the owner's trailing off
 
         b.MoveTo(1.15890);                                                // 1R in profit
         foreach (var leg in new[] { b.Positions.Single(p => p.Id == main.Id), b.Find(TmLabel.Mirror)! })
@@ -286,13 +302,13 @@ public sealed class PlannerTests
     }
 
     [Fact]
-    public void A_new_stop_loss_on_the_main_moves_both_hedges_and_is_removed_again()
+    public void A_new_stop_loss_on_the_main_moves_both_hedges_and_is_replaced_by_the_new_backstop()
     {
         var (b, main) = ShortWithStop();
         b.SetStopLoss(main.Id, 1.16080);
         b.Run();
         Assert.All(b.Orders, o => Assert.Equal(1.16080, o.Price, 9));
-        Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);
+        Assert.Equal(1.16240, b.Positions.Single(p => p.Id == main.Id).StopLoss!.Value, 9); // 3 × the new 1R of 8 pips
         Assert.Equal(0.00080, b.Book.Trades[0].Main.R, 9);
         Assert.Contains("HedgeMoved", Events(b.Log));
     }
@@ -309,7 +325,7 @@ public sealed class PlannerTests
         b.Run();
         Assert.All(b.Orders, o => Assert.Equal(1.16150, o.Price, 9));
         Assert.Contains("HedgeMoveIgnored", Events(b.Log));
-        Assert.Null(b.Positions.Single(p => p.Id == main.Id).StopLoss);
+        Assert.Equal(1.16450, b.Positions.Single(p => p.Id == main.Id).StopLoss!.Value, 9); // back to the backstop (H 1.16150, 1R 15 pips)
     }
 
     [Fact]
