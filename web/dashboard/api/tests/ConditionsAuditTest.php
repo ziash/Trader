@@ -66,6 +66,8 @@ final class ConditionsAuditTest extends TestCase
         self::assertSame(['usd', 5.11, 'brokerA'], [$btc['unit'], $btc['brokers']['brokerA']['spread_median'], $btc['better']['spread_median']]);
         self::assertSame([649, 326, 55], [$d['totals']['brokerA']['connection_drops'], $d['totals']['brokerA']['spread_alerts'], $d['totals']['brokerB']['spread_alerts']]);
         self::assertNull($d['broker_choice']);
+        file_put_contents("{$this->kit->root}/data/status.json", json_encode(['broker_choice' => ['broker' => 'brokerA', 'name' => 'IC Markets', 'decided' => '2026-11-06']]));
+        self::assertSame('IC Markets (chosen 2026-11-06)', $this->get('/api/audit', [])->data()['broker_choice']);
     }
 
     public function testAProbeWindowAndADailyReport(): void

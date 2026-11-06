@@ -14,7 +14,11 @@ public sealed record StatusFile(
     IReadOnlyList<EventLine> Events,
     UploadInfo Upload,
     SyncInfo? Sync,
-    IReadOnlyList<object> Controls);
+    IReadOnlyList<object> Controls,
+    BrokerChoice? BrokerChoice = null);
+
+/// <summary>The broker the owner chose from the Audit Bot's final summary (audit-bot.md §9), from config/dashboard.json.</summary>
+public sealed record BrokerChoice(string Broker, string Name, string Decided);
 
 public sealed record AccountInfo(string Id, string Broker, long Ctid, string Name, bool Scout, bool Tm);
 
@@ -132,7 +136,28 @@ public sealed class StatusReport(string tradebotHome, ISystemd systemd)
             events.OrderByDescending(e => e.TimeUtc, StringComparer.Ordinal).Take(MaxEvents).ToList(),
             upload with { NextUtc = upload.NextUtc ?? UtcOrNull(nextUpload) },
             null,
-            []);
+            [],
+            ReadBrokerChoice());
+    }
+
+    /// <summary>"brokerChoice" in ~/tradebot/config/dashboard.json; null until the owner has chosen (or the file is unreadable).</summary>
+    public BrokerChoice? ReadBrokerChoice()
+    {
+        var file = Path.Combine(tradebotHome, "config", "dashboard.json");
+        try
+        {
+            if (!File.Exists(file))
+                return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (!doc.RootElement.TryGetProperty("brokerChoice", out var c) || c.ValueKind != JsonValueKind.Object)
+                return null;
+            string? S(string name) => c.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            return S("broker") is { Length: > 0 } broker && S("name") is { Length: > 0 } name ? new BrokerChoice(broker, name, S("decided") ?? "") : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>"IC Markets demo", from the Audit Bot's broker settings (audit.&lt;broker&gt;.json "brokerName").</summary>

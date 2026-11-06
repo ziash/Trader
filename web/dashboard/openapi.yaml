@@ -189,6 +189,46 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/controls:
+    get:
+      summary: Scout's controls for one account — the catalogue's options, each symbol as configured and as set, each setup decision, and what Scout made of them (dashboard.md §3.4)
+      x-least-role: viewer
+      parameters:
+        - { name: account, in: query, required: true, schema: { type: string, example: brokerA-49123893 } }
+      responses:
+        '200':
+          description: From the uploaded scout-options.json, the control file and Scout's acknowledgement
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlsView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Sets one control, or puts it back as configured (value null); checked against the catalogue here and again by Scout
+      x-least-role: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account, scope, target, key]
+              properties:
+                account: { type: string, example: brokerA-49123893 }
+                scope: { type: string, enum: [symbol, setup] }
+                target: { type: string, example: XNGUSD, description: 'a symbol, or a setup key symbol-timeframe-yyyyMMddHHmm' }
+                key: { type: string, example: enabled }
+                value: { description: 'true/false for a switch, one of the values for a choice, null = as configured' }
+      responses:
+        '200':
+          description: The account's controls after the change (the change shows as "saved" until Scout acknowledges it)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ControlsView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/users:
     get:
       summary: Users page — people, requests, machines, settings and the newest 100 rows of the access log
@@ -304,6 +344,10 @@ components:
         available: { type: boolean }
         reason: { type: string }
         generated_utc: { type: string, description: when the laptop made this file (the data's age) }
+        broker_choice:
+          description: the broker the owner chose from the Audit Bot's final summary (config/dashboard.json); absent until chosen
+          type: object
+          properties: { broker: { type: string }, name: { type: string }, decided: { type: string } }
         accounts:
           type: array
           description: the demo accounts the dashboard shows (in scout.json or tm.json); `id` is the account parameter of the other calls
@@ -707,6 +751,65 @@ components:
               better: { type: object, additionalProperties: { type: string }, description: 'per figure: the better broker, or "equal"' }
         totals: { type: object, additionalProperties: { type: object, additionalProperties: { type: [number, 'null'] } }, description: "each broker's ALL row" }
         broker_choice: { type: [string, 'null'], description: once recorded in the Audit Bot's document }
+    ControlState:
+      type: object
+      properties:
+        state: { type: string, enum: [saved, applied, refused] }
+        utc: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        cancelled: { type: array, items: { type: integer }, description: orders Scout cancelled for it }
+    ControlOption:
+      type: object
+      description: One entry of the laptop's catalogue (config/scout-controls.json)
+      properties:
+        key: { type: string }
+        scope: { type: string, enum: [scout, account, symbol, setup] }
+        type: { type: string, enum: [switch, choice, multi, number] }
+        values: { type: array, items: { type: string } }
+        default: {}
+        label: { type: string }
+        help: { type: string }
+        confirm: { type: [string, 'null'] }
+        applies: { type: string }
+    ControlsView:
+      type: object
+      required: [account, available, can_change, options, version, symbols, setups]
+      properties:
+        account: { type: string }
+        available: { type: boolean, description: false until the laptop uploads the catalogue }
+        can_change: { type: boolean, description: owner and administrators; viewers only look }
+        catalogue_version: { type: [integer, 'null'] }
+        options: { type: array, items: { $ref: '#/components/schemas/ControlOption' } }
+        knows: { type: [array, 'null'], items: { type: string }, description: 'options the running Scout applies ("symbol.enabled" …); others show "needs a newer Scout"' }
+        version: { type: integer }
+        updated_utc: { type: [string, 'null'] }
+        updated_by: { type: [string, 'null'] }
+        ack:
+          oneOf:
+            - type: object
+              properties: { version: { type: integer }, applied_utc: { type: [string, 'null'] }, error: { type: [string, 'null'] } }
+            - type: 'null'
+        symbols:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string }
+              charts: { type: integer }
+              configured:
+                type: object
+                properties: { enabled: { type: boolean }, timeframe: { type: [string, 'null'] }, mode: { type: string } }
+              set: { type: object, additionalProperties: {}, description: what the owner changed; absent = as configured }
+              state: { type: object, additionalProperties: { $ref: '#/components/schemas/ControlState' } }
+        setups:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              decision: { type: string }
+              utc: { type: string }
+              by: { type: string }
+              state: { $ref: '#/components/schemas/ControlState' }
     Me:
       type: object
       required: [kind, id, role]

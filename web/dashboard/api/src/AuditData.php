@@ -100,9 +100,21 @@ final class AuditData
             'brokers' => $brokers,
             'symbols' => $symbols,
             'totals' => $totals,
-            // Recorded in the Audit Bot's document (audit-bot.md §9) once the owner chooses; the page shows it, it never makes it.
-            'broker_choice' => null,
+            // Recorded in the Audit Bot's document (audit-bot.md §9) and config/dashboard.json; the page shows it, it never makes it.
+            'broker_choice' => $this->brokerChoice(),
         ];
+    }
+
+    /** "IC Markets (chosen 2026-11-06)" from the uploaded status.json, or null while not chosen. */
+    private function brokerChoice(): ?string
+    {
+        $file = "{$this->dataDir}/status.json";
+        $s = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        $c = is_array($s) ? ($s['broker_choice'] ?? null) : null;
+        if (!is_array($c) || !is_string($c['name'] ?? null) || $c['name'] === '') {
+            return null;
+        }
+        return $c['name'] . (is_string($c['decided'] ?? null) && $c['decided'] !== '' ? " (chosen {$c['decided']})" : '');
     }
 
     /** The reports on the server: summaries first (newest first), then the daily files (newest first). */

@@ -40,6 +40,7 @@ public sealed class Outbox(string tradebotHome, string outboxDir, IReadOnlyColle
         new($@"^reports/(daily-compare-{Day}|summary-{Day}_{Day})\.csv$"),
         new(@"^status\.json$"),
         new(@"^snapshot-[A-Za-z0-9]{1,32}-\d{1,12}\.json$"),
+        new(@"^scout-options\.json$"),
     ];
 
     /// <summary>Text that must never be sent even if it is not in the secrets files (Google client secrets, private keys).</summary>

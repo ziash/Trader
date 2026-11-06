@@ -27,3 +27,6 @@ export type ConditionsRow = S["ConditionsRow"];
 export type MarginPoint = S["MarginPoint"];
 export type AuditView = S["AuditView"];
 export type AuditFigures = S["AuditFigures"];
+export type ControlsView = S["ControlsView"];
+export type ControlOption = S["ControlOption"];
+export type ControlState = S["ControlState"];

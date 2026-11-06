@@ -124,6 +124,8 @@ public sealed class ExportTests : IDisposable
     [InlineData("config/scout.json", false)]
     [InlineData("dashboard/outbox/status.json", false)]
     [InlineData("snapshot-brokerA-49123893.json", true)]
+    [InlineData("scout-options.json", true)]
+    [InlineData("scout-brokerA-49123893.json", false)]
     [InlineData("snapshot-../49123893.json", false)]
     [InlineData("logs/brokerA/49123893/Dashboard/2026-11-06/account.csv", true)]
     [InlineData("logs/brokerA/49123893/Dashboard/2026-11-06/deals.csv", true)]

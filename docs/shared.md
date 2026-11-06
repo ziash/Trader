@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.11 (06-Nov-2026) — history in §10 |
+| Document version | v1.12 (06-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -117,7 +117,7 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 ## 8. Open items
 
 - Client secret was shared in a chat on 16-Oct-2026: regenerate it in the Open API portal (if offered) before any live account is granted.
-- Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside the Audit Bot's results when choosing the live broker.
+- Live broker regulation: the IC Markets cTrader account is with **Raw Trading Ltd** (IC Markets Global, Seychelles FSA), a lighter regulator than Pepperstone's. Weigh this alongside the Audit Bot's results when choosing the live broker. **Chosen 06-Nov-2026: IC Markets** (owner, [Audit Bot §9](bots/audit-bot.md#9-open-items)), with this weighed in; to be looked at again before a live account is opened.
 
 ## 9. Glossary
 
@@ -212,3 +212,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.9 | 05 Nov 2026 | Glossary: PHP now for the dashboard's API; React / Next.js added (dashboard stack, [dashboard.md](dashboard.md) v1.4) |
 | v1.10 | 06 Nov 2026 | Dashboard live with the 30-min upload and the Scout page ([dashboard.md](dashboard.md) v1.10): §1 status, §5 `~/tradebot/dashboard/outbox/`; glossary: outbox |
 | v1.11 | 06 Nov 2026 | New [issue log](issue-log.md) (#1: IC Markets demo margin call); §4 protection rule: a hedge order alone is not enough (backstop), and a margin rule for bots that add exposure ([TM](bots/tm.md) v1.9, [Scout](bots/scout.md) v1.7, [Open Code Pieces](open-code-pieces.md) v1.9); glossary: equity, margin, margin level (merged), backstop |
+| v1.12 | 06 Nov 2026 | §8: live broker chosen — IC Markets (owner, Audit Bot v1.7), the regulation note weighed in |

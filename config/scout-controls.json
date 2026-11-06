@@ -1,0 +1,28 @@
+{
+  // The options the dashboard may set for Scout (dashboard.md §3.4, scout.md §2.6). Live copy: ~/tradebot/config/scout-controls.json
+  // Edited on the laptop only: nothing on the web can add an option or a value. Raise "version" on every change.
+  "version": 1,
+  "options": [
+    {
+      "key": "enabled", "scope": "symbol", "type": "switch", "default": true,
+      "label": "Trade this symbol",
+      "help": "Off: Scout places no new orders on it and cancels its pending ones; filled positions stay with TM. Setups are still logged.",
+      "confirm": "Scout will cancel this symbol's pending orders. Positions already open stay with TM.",
+      "applies": "now"
+    },
+    {
+      "key": "timeframe", "scope": "symbol", "type": "choice", "values": ["H1", "H4", "D1"], "default": "fromConfig",
+      "label": "Timeframe",
+      "help": "The chart Scout looks for setups on. Its higher timeframe follows: H4 for H1, D1 for H4, W1 for D1.",
+      "confirm": "Scout will look on the new chart after loading its history. Pending orders from the old chart stay until filled or expired.",
+      "applies": "nextCandle"
+    },
+    {
+      "key": "decision", "scope": "setup", "type": "choice", "values": ["keep", "skip"], "default": "keep",
+      "label": "Keep or skip",
+      "help": "Skip: Scout cancels this setup's pending orders and places none for it. Keep again: its order is placed again if the setup is still valid.",
+      "confirm": null,
+      "applies": "now"
+    }
+  ]
+}

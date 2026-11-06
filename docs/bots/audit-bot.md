@@ -5,7 +5,7 @@ Measures execution quality — spreads, slippage, fill speed, reliability — at
 | Item | Value |
 |---|---|
 | Status | **Built and finished; audit run over — stopped 04-Nov-2026 18:11:52Z** (owner: the audit is complete). The run lasted 18-Oct → 04-Nov-2026 (§7); `trader-auditbot` is stopped and disabled at boot (§6) |
-| Document version | v1.6 (06-Nov-2026) — history in §10 |
+| Document version | v1.7 (06-Nov-2026) — history in §10 |
 | Code | [`src/Trader.AuditBot`](../../src/Trader.AuditBot) (bot), [`src/Trader.AuditReport`](../../src/Trader.AuditReport) (daily report), on the [Open Code Pieces](../open-code-pieces.md) |
 | Tests | [`tests/Trader.AuditBot.Tests`](../../tests/Trader.AuditBot.Tests), [`tests/Trader.AuditReport.Tests`](../../tests/Trader.AuditReport.Tests) |
 | Accounts | IC Markets demo 49123893 (`brokerA`), Pepperstone demo 49124666 (`brokerB`) — demo only ([shared](../shared.md#2-brokers-and-accounts)) |
@@ -271,7 +271,7 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 
 ## 9. Open items
 
-- **Choose the broker** from the final summary and record it here. Weigh in the regulation note in [shared §8](../shared.md#8-open-items). The summary was built on 06-Nov-2026 (`reports/summary-2026-10-18_2026-11-04.csv`: 218 rows, 912 probe orders per broker, 9 bot runs each) and is on the dashboard's Audit page ([dashboard.md §2.7](../dashboard.md)), side by side with the better figure marked; the page shows the choice once it is recorded here.
+- ~~**Choose the broker**~~ — **chosen: IC Markets** (owner, 06-Nov-2026), from the final summary: tighter typical spreads (median better on 12 of 18 symbols), better average slippage (12 of 18), faster orders (median 482 ms vs 535 ms, faster on 16 of 18) and 1:500 leverage; against it: more spread spikes (95th percentile better at Pepperstone on 11 of 18; 326 spread alerts vs 55), higher forex commission all-in (EURUSD $7.29 vs $6.20 a lot) and the lighter regulator of the cTrader account ([shared §8](../shared.md#8-open-items)). Shown on the dashboard's Audit page (`brokerChoice` in `config/dashboard.json`). Weigh in the regulation note in [shared §8](../shared.md#8-open-items). The summary was built on 06-Nov-2026 (`reports/summary-2026-10-18_2026-11-04.csv`: 218 rows, 912 probe orders per broker, 9 bot runs each) and is on the dashboard's Audit page ([dashboard.md §2.7](../dashboard.md)), side by side with the better figure marked; the page shows the choice once it is recorded here.
 - Monitoring while the bot runs: a status script with a systemd timer and desktop alerts (Claude only on alerts) — deferred by the owner on 18-Oct-2026. The bot's `SpreadWide` / `SlippageHigh` warnings (§2.4) are what such a script would look for; the shared notifications could now carry them as pop-ups.
 - **Review the alert limits of the v1.1 symbols** (§2.4) after the first few days of their data; they are estimates.
 - With 18 symbols a probe window takes about 1.5–2 minutes per account (one probe at a time, §2.2), so in `NewsRelease+5s` only the first symbols are probed within seconds of the release.
@@ -293,3 +293,4 @@ During development: `dotnet run --project src/Trader.AuditBot -- --help` (`--tes
 | v1.4 | 03 Nov 2026 | **Crash and automatic restart 17:36:50Z**: `System.Diagnostics.Process` could not be loaded — the .NET runtime (now 10.0.14) had been updated on disk under the 4-day-old process, and new bot instances (Scout's first runs) made the instance registry load that file for the first time. Exit code 3; systemd restarted it 30 s later as AuditBot-992f56 (≈ 30 s without data). Lesson: restart the bots after a .NET update. Not redeployed (its build has no fix to take) |
 | v1.5 | 04 Nov 2026 | **Audit run over** (owner: the audit is complete): `trader-auditbot` stopped 04-Nov-2026 18:11:52Z (AuditBot-992f56, clean stop); it stays disabled at boot. Daily report timer unchanged. No code change |
 | v1.6 | 06 Nov 2026 | Final summary built (`--from 2026-10-18 --to 2026-11-04`, owner's go-ahead) and shown on the dashboard's Audit page; the broker choice is still open (§9) |
+| v1.7 | 06 Nov 2026 | **Broker chosen: IC Markets** (owner), with the figures for and against (§9); shown on the dashboard's Audit page |

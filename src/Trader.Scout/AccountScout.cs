@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using Google.Protobuf;
 using Serilog;
 using Trader.Core.Csv;
@@ -65,6 +66,16 @@ internal sealed class AccountScout(
     private bool _dirty = true;
     private DateTime _lastSync = DateTime.MinValue;
 
+    // Controls from the dashboard (scout.md §2.6): the file is read every 30 s; a changed file is acknowledged after the next sync.
+    private static readonly TimeSpan ControlCheck = TimeSpan.FromSeconds(30);
+    private Controls _controls = Controls.None;
+    private DateTime _nextControlCheck = DateTime.MinValue;
+    private (DateTime File, DateTime Catalogue)? _controlStamps;
+    private bool _ackDue;
+    private readonly HashSet<string> _heldLogged = [];
+    private string ControlPath => Path.Combine(TradebotPaths.Root, "control", $"scout-{account.Broker}-{account.AccountId}.json");
+    private string AckPath => Path.ChangeExtension(ControlPath, ".ack.json");
+
     public long AccountId => account.AccountId;
 
     /// <summary>After every (re)connect, once the symbols are resolved.</summary>
@@ -110,6 +121,7 @@ internal sealed class AccountScout(
     private async Task RunOnceAsync(CTraderSession session)
     {
         var symbols = _symbols.Values.ToDictionary(s => s.Name);
+        await CheckControlsAsync(session, symbols);
         if (!_loaded)
         {
             await LoadHistoryAsync(session, symbols);
@@ -142,6 +154,94 @@ internal sealed class AccountScout(
             _dirty = false;
             _lastSync = now;
             await SyncAsync(session, symbols);
+            if (_ackDue)
+            {
+                _ackDue = false;
+                WriteAck(DateTime.UtcNow, null);
+            }
+        }
+    }
+
+    // ── Controls from the dashboard (scout.md §2.6) ─────────────────────────────────────────────────────────────────
+    private async Task CheckControlsAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    {
+        var now = DateTime.UtcNow;
+        if (now < _nextControlCheck)
+            return;
+        _nextControlCheck = now + ControlCheck;
+        var catalogue = Path.Combine(TradebotPaths.Config, ControlCatalogue.FileName);
+        var stamps = (Stamp(ControlPath), Stamp(catalogue));
+        if (stamps == _controlStamps)
+            return;
+        _controlStamps = stamps;
+
+        Controls next;
+        long version = 0;
+        try
+        {
+            var file = ControlFile.Load(ControlPath);
+            version = file?.Version ?? 0;
+            next = Controls.Evaluate(file, ControlCatalogue.Load(catalogue), account, now);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            _log.Event("ControlFileBad").Warning("{Broker}: control file not read ({Message}); the last good one stays in force", account.Broker, ex.Message);
+            notify.Warning("ControlFileBad", $"Scout {account.Broker}: dashboard controls not read", $"{ex.Message}. The last good controls stay in force.", account.AccountId);
+            WriteAck(now, ex.Message, version);
+            return;
+        }
+        if (next == Controls.None && _controls == Controls.None)
+            return; // no file, and there never was one: nothing to do or acknowledge
+
+        _controls = next;
+        foreach (var e in next.Entries)
+        {
+            if (e.Applied)
+                _log.Event("ControlApplied").Information("{Broker}: dashboard control {Scope} {Target} {Key} = {Value} applied", account.Broker, e.Scope, e.Target, e.Key, e.Value);
+            else
+                _log.Event("ControlRefused").Warning("{Broker}: dashboard control {Scope} {Target} {Key} = {Value} refused: {Reason}", account.Broker, e.Scope, e.Target, e.Key, e.Value, e.Reason);
+        }
+        _heldLogged.Clear();
+        await ApplyTimeframesAsync(session, symbols);
+        _dirty = true;
+        _ackDue = true;
+    }
+
+    private static DateTime Stamp(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+
+    /// <summary>Puts each symbol on the timeframe the controls ask for (or back on the configured one), loading the new chart's history.</summary>
+    private async Task ApplyTimeframesAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    {
+        for (var i = 0; i < _charts.Count; i++)
+        {
+            var old = _charts[i];
+            var configured = account.Charts.Where(c => c.Symbol == old.Chart.Symbol).ToList();
+            if (configured.Count != 1)
+                continue;
+            var tf = _controls.TimeframeFor(old.Chart.Symbol, configured[0].Timeframe);
+            if (tf == old.Chart.Timeframe)
+                continue;
+            var chart = new ChartTracker(configured[0] with { Timeframe = tf }, config.SetupSettings);
+            _charts[i] = chart;
+            _nextFetch.Remove(old);
+            _log.Event("ScoutTimeframe").Information("{Broker} {Symbol}: now on {Tf} (was {Old}); pending orders from {Old} stay until filled or expired",
+                account.Broker, old.Chart.Symbol, tf, old.Chart.Timeframe, old.Chart.Timeframe);
+            if (_loaded && symbols.TryGetValue(chart.Chart.Symbol, out var sym))
+                await LoadChartAsync(session, sym, chart);
+        }
+    }
+
+    private void WriteAck(DateTime now, string? error, long? version = null)
+    {
+        try
+        {
+            new ControlAck(version ?? _controls.Version, CsvFormat.Time(now), identity.InstanceId, Controls.Known,
+                _controls.Entries.Select(e => new AckEntry(e.Scope, e.Target, e.Key, e.Value, e.Applied ? "applied" : "refused", e.Reason, e.Cancelled.ToList())).ToList(),
+                error).Write(AckPath);
+        }
+        catch (IOException ex)
+        {
+            _log.Warning("{Broker}: acknowledgement not written: {Message}", account.Broker, ex.Message);
         }
     }
 
@@ -160,23 +260,25 @@ internal sealed class AccountScout(
     /// <summary>Rebuilds the detectors from past candles once per process start; their events are not logged or acted on.</summary>
     private async Task LoadHistoryAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
     {
-        var now = DateTime.UtcNow;
         foreach (var chart in _charts)
-        {
-            if (!symbols.TryGetValue(chart.Chart.Symbol, out var sym))
-                continue;
-            var days = TimeSpan.FromDays(config.HistoryDays);
-            var main = await HistoryAsync(session, sym, chart.Chart.Timeframe, now - Max(days, 200 * chart.Length), now);
-            var higher = chart.HigherTimeframe is { } h ? await HistoryAsync(session, sym, h, now - Max(days, 100 * Timeframes.Length(h)), now) : [];
-            var skipped = chart.Feed(main, higher, now).Count;
-            var d = chart.Main;
-            _log.Event("ScoutHistory").Information(
-                "{Broker} {Symbol} {Tf}: {Candles} candles ({Events} past events); trend {Trend}, {Higher} trend {HigherTrend}; pending {Main}{Rev}",
-                account.Broker, sym.Name, chart.Chart.Timeframe, d.Count, skipped, TrendName(d.Trend), chart.HigherTimeframe ?? "-",
-                TrendName(chart.Higher?.Trend ?? 0), d.MainLevel is { } m ? $"{Side(d.Trend)} Stop {Num(m, sym)}" : "none",
-                d.ReversalLevel is { } r ? $", reversal {Side(-d.Trend)} Stop {Num(r, sym)}" : "");
-            _nextFetch[chart] = NextFetch(chart, DateTime.UtcNow);
-        }
+            if (symbols.TryGetValue(chart.Chart.Symbol, out var sym))
+                await LoadChartAsync(session, sym, chart);
+    }
+
+    private async Task LoadChartAsync(CTraderSession session, SymbolInfo sym, ChartTracker chart)
+    {
+        var now = DateTime.UtcNow;
+        var days = TimeSpan.FromDays(config.HistoryDays);
+        var main = await HistoryAsync(session, sym, chart.Chart.Timeframe, now - Max(days, 200 * chart.Length), now);
+        var higher = chart.HigherTimeframe is { } h ? await HistoryAsync(session, sym, h, now - Max(days, 100 * Timeframes.Length(h)), now) : [];
+        var skipped = chart.Feed(main, higher, now).Count;
+        var d = chart.Main;
+        _log.Event("ScoutHistory").Information(
+            "{Broker} {Symbol} {Tf}: {Candles} candles ({Events} past events); trend {Trend}, {Higher} trend {HigherTrend}; pending {Main}{Rev}",
+            account.Broker, sym.Name, chart.Chart.Timeframe, d.Count, skipped, TrendName(d.Trend), chart.HigherTimeframe ?? "-",
+            TrendName(chart.Higher?.Trend ?? 0), d.MainLevel is { } m ? $"{Side(d.Trend)} Stop {Num(m, sym)}" : "none",
+            d.ReversalLevel is { } r ? $", reversal {Side(-d.Trend)} Stop {Num(r, sym)}" : "");
+        _nextFetch[chart] = NextFetch(chart, DateTime.UtcNow);
     }
 
     private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
@@ -263,20 +365,44 @@ internal sealed class AccountScout(
             }
         }
 
-        // One cancels the other (Scout spec §4.4 I4), and setups that ended: cancel our unfilled orders.
+        // One cancels the other (Scout spec §4.4 I4), the dashboard's controls (§2.6), and setups that ended: cancel our
+        // unfilled orders. Orders from a chart Scout no longer reads (timeframe changed) stay until filled or expired.
         foreach (var (key, order) in ourOrders)
         {
             var siblingFilled = ourPositions.ContainsKey(ScoutState.Sibling(key)) || state.Roles.GetValueOrDefault(ScoutState.Sibling(key))?.PositionId is not null;
-            if (!siblingFilled && wants.ContainsKey(key))
+            var parts = key.Split('|');
+            var chartActive = _charts.Any(c => c.Chart.Symbol == parts[0] && c.Chart.Timeframe == parts[1]);
+            if (_controls.CancelReason(key, siblingFilled, chartActive, wants.ContainsKey(key), _endReason.GetValueOrDefault(key)) is not { } reason)
                 continue;
-            var reason = siblingFilled ? "the other order of the pair filled" : _endReason.GetValueOrDefault(key, "setup ended");
-            await CancelAsync(session, key, order, reason);
+            var held = !siblingFilled && _controls.HoldBack(key) is not null;
+            if (await CancelAsync(session, key, order, reason) && held)
+            {
+                if (state.Roles.TryGetValue(key, out var role))
+                    role.Result = $"held: {reason}"; // placed again if the owner lets it go (scout.md §2.6)
+                ControlEntryFor(key)?.Cancelled.Add(order.OrderId);
+                changed = true;
+            }
         }
 
         MarginBudget? budget = null;
         var margins = new Dictionary<(long, long), ExpectedMargin>();
         foreach (var want in wants.Values)
         {
+            if (_controls.HoldBack(want.Key) is { } held)
+            {
+                if (!ourOrders.ContainsKey(want.Key) && !ourPositions.ContainsKey(want.Key) && !state.Roles.ContainsKey(want.Key) && _heldLogged.Add(want.Key))
+                {
+                    OrderRow(now, want, "skip", 0, StopLoss(want), null, null, "held back", held);
+                    _log.Event("ScoutHeldBack").Information("{Broker} {Symbol} {Tf}: {Side} Stop {Price} not placed: {Why}",
+                        account.Broker, want.Sym.Name, want.Chart.Chart.Timeframe, Side(want.Dir), Num(want.Level, want.Sym), held);
+                }
+                continue;
+            }
+            if (state.Roles.TryGetValue(want.Key, out var heldRole) && heldRole.Result.StartsWith("held", StringComparison.Ordinal) && heldRole.PositionId is null)
+            {
+                state.Roles.Remove(want.Key); // the owner let it go again: placed once more if the setup is still valid
+                changed = true;
+            }
             if (state.Roles.ContainsKey(want.Key) || ourOrders.ContainsKey(want.Key) || ourPositions.ContainsKey(want.Key))
                 continue;
             var sibling = ScoutState.Sibling(want.Key);
@@ -435,16 +561,17 @@ internal sealed class AccountScout(
         }
     }
 
-    private async Task CancelAsync(CTraderSession session, string key, ProtoOAOrder order, string reason)
+    /// <returns>True when the broker cancelled it.</returns>
+    private async Task<bool> CancelAsync(CTraderSession session, string key, ProtoOAOrder order, string reason)
     {
         if (!_symbols.TryGetValue(order.TradeData.SymbolId, out var s) || _cancelling.Contains(order.OrderId))
-            return;
+            return false;
         var parts = key.Split('|');
         var now = DateTime.UtcNow;
         if (dryRun)
         {
             _log.Information("{Broker} {Symbol}: would cancel order {OrderId} ({Reason})", account.Broker, s.Name, order.OrderId, reason);
-            return;
+            return false;
         }
         _cancelling.Add(order.OrderId);
         string result;
@@ -465,6 +592,16 @@ internal sealed class AccountScout(
             CsvFormat.Time(now), s.Name, parts[1], SetupTime(parts[2]), parts[3], "cancel", SideOf(order.TradeData.TradeSide), Lots(s, order.TradeData.Volume),
             Num(order.StopPrice, s), order.HasStopLoss ? Num(order.StopLoss, s) : "", "", order.OrderId.ToString(CultureInfo.InvariantCulture), "", "", "", "", "", result, reason, "",
         ]);
+        return result == "ok";
+    }
+
+    /// <summary>The control entry that made Scout cancel this setup role's order: the symbol switched off, else the setup skipped.</summary>
+    private ControlEntry? ControlEntryFor(string roleKey)
+    {
+        var symbol = roleKey.Split('|')[0];
+        return _controls.Disabled.Contains(symbol)
+            ? _controls.Entries.FirstOrDefault(e => e is { Scope: "symbol", Key: "enabled", Applied: true } && e.Target == symbol)
+            : _controls.Entries.FirstOrDefault(e => e is { Scope: "setup", Applied: true } && e.Target == Controls.SetupOf(roleKey));
     }
 
     // ── Execution events: fills, expiries and closes of what Scout started (for the review, Scout spec §4.6) ────────

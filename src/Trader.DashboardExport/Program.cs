@@ -76,6 +76,9 @@ if (command == "collect")
         result.Copied, result.Allowed, days, string.Join(", ", accounts.Select(a => a.Id)), outboxDir);
     if (result.Refused.Count > 0)
         return await Refuse($"{result.Refused.Count} file(s) contain a secret value, e.g. {result.Refused[0].RelativePath}");
+    // The options catalogue with each account's configured charts (§3.4): what the site may offer as controls.
+    if (ScoutOptions.Build(configDir) is { } options && !outbox.Write("scout-options.json", options.ToJsonString(new JsonSerializerOptions { WriteIndented = true })))
+        return await Refuse("scout-options.json would contain a secret value");
     return 0;
 }
 

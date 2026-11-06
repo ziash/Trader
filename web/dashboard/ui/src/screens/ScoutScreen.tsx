@@ -1,12 +1,14 @@
 "use client";
 
 // Scout (dashboard.md §2.1, Main.dc.html): the last hour at a glance, the day's setups grouped by candle with their order
-// pictures, the selected setup's detail and story, and the orders of the day. View only: Keep / Skip arrive in step 6.
+// pictures, the selected setup's detail and story, and the orders of the day; each setup's Keep / Skip switch (§3.4, step 6).
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHead } from "@/components/AppShell";
 import { DataBlock, NotYet } from "@/components/DataBlock";
 import { StatePill, Chip, type Tone } from "@/components/Chips";
 import { Lock } from "@/components/Icons";
+import { Switch } from "@/components/Controls";
+import { ControlStateChip, useControls } from "@/lib/controls";
 import { usePrefs } from "@/lib/prefs";
 import { useAccount, useStatus } from "@/lib/status";
 import { useData, type Data } from "@/lib/useData";
@@ -39,6 +41,7 @@ function ScoutBody() {
   const path = account ? `/api/scout?account=${encodeURIComponent(account.id)}${day ? `&day=${day}` : ""}` : null;
   const data = useData<ScoutDay>(path, { isEmpty: (d) => d.setups.length === 0 && d.orders.length === 0 });
   const d = data.data;
+  const ctl = useControls(account?.id ?? null);
   const sel = d?.setups.find((s) => s.key === selected) ?? d?.setups[0] ?? null;
   const now = new Date();
 
@@ -57,14 +60,14 @@ function ScoutBody() {
   return (
     <>
       <PageHead title="Scout" note={<>{d ? dayLabel(parseUtc(`${d.day} 00:00:00`), "utc") : "…"} · {account?.name ?? "…"}</>}>
-        <span className="pill outline" title="Keep / Skip switches arrive with the control sync (build step 6)"><Lock size={12} />View only for now</span>
+        {!ctl.data.data?.can_change && <span className="pill outline" title="Only the owner and administrators can keep or skip setups"><Lock size={12} />View only</span>}
       </PageHead>
       <LastHour d={d} now={now} zone={zone} scoutState={status.data?.available ? status.data.units?.find((u) => u.name === "Scout")?.state : undefined} />
       <div className="scout-cols">
         <div className="scout-main">
           <DataBlock<ScoutDay> title="Setups" data={data}
             empty={<><strong>No setups on this day</strong><span className="upd">New setups appear here after each candle closes and the next upload (:02 and :32).</span></>}>
-            {(x) => <Groups setups={x.setups} now={now} zone={zone} selected={sel?.key ?? null} onSelect={setSelected} />}
+            {(x) => <Groups setups={x.setups} now={now} zone={zone} selected={sel?.key ?? null} onSelect={setSelected} ctl={ctl} />}
           </DataBlock>
           <Orders data={data} day={day} setDay={setDay} zone={zone} onSelect={(key) => d?.setups.some((s) => s.key === key) && setSelected(key)} />
         </div>
@@ -97,7 +100,9 @@ function LastHour({ d, now, zone, scoutState }: { d: ScoutDay | null; now: Date;
 
 // --- Setups ---------------------------------------------------------------------------------
 
-function Groups({ setups, now, zone, selected, onSelect }: { setups: ScoutSetup[]; now: Date; zone: TimeZoneChoice; selected: string | null; onSelect: (k: string) => void }) {
+type Ctl = ReturnType<typeof useControls>;
+
+function Groups({ setups, now, zone, selected, onSelect, ctl }: { setups: ScoutSetup[]; now: Date; zone: TimeZoneChoice; selected: string | null; onSelect: (k: string) => void; ctl: Ctl }) {
   const groups = useMemo(() => {
     const m = new Map<string, ScoutSetup[]>();
     for (const s of setups) m.set(s.candle_close_utc, [...(m.get(s.candle_close_utc) ?? []), s]);
@@ -120,7 +125,7 @@ function Groups({ setups, now, zone, selected, onSelect }: { setups: ScoutSetup[
               <span className="rule" aria-hidden="true" />
             </div>
             <div className={`grp-cards${last ? " hot" : ""}`}>
-              {list.map((s) => <SetupCard key={s.key} s={s} zone={zone} selected={s.key === selected} onSelect={() => onSelect(s.key)} />)}
+              {list.map((s) => <SetupCard key={s.key} s={s} zone={zone} selected={s.key === selected} onSelect={() => onSelect(s.key)} ctl={ctl} />)}
             </div>
           </section>
         );
@@ -183,7 +188,7 @@ function Picture({ file, symbol, big }: { file?: string | null; symbol: string; 
   return <img className={`pic${big ? " big" : ""}`} src={chartUrl(file)} alt={`Order picture for ${symbol}`} loading="lazy" width={720} height={400} />;
 }
 
-function SetupCard({ s, zone, selected, onSelect }: { s: ScoutSetup; zone: TimeZoneChoice; selected: boolean; onSelect: () => void }) {
+function SetupCard({ s, zone, selected, onSelect, ctl }: { s: ScoutSetup; zone: TimeZoneChoice; selected: boolean; onSelect: () => void; ctl: Ctl }) {
   const st = orderState(s.order, zone);
   const gone = s.order?.state === "cancelled" || s.order?.state === "expired" || (!s.order && s.event === "Cancelled");
   return (
@@ -213,8 +218,28 @@ function SetupCard({ s, zone, selected, onSelect }: { s: ScoutSetup; zone: TimeZ
       <div className="setup-state">
         <Chip tone={st.tone}>{st.text}</Chip>
         {s.reason && !s.order && <span className="upd">{s.reason}</span>}
+        <KeepSkip s={s} ctl={ctl} zone={zone} />
       </div>
     </article>
+  );
+}
+
+/** Keep (green, the default) or skip (grey) a setup (dashboard.md §2.1, §3.4): Scout cancels a skipped setup's pending orders. */
+function KeepSkip({ s, ctl, zone }: { s: ScoutSetup; ctl: Ctl; zone: TimeZoneChoice }) {
+  const v = ctl.data.data;
+  if (!v?.available || !ctl.option("setup", "decision")) return null;
+  const entry = (v.setups as Record<string, { decision?: string; state?: import("@/api/types").ControlState }>)[s.key];
+  const keep = (entry?.decision ?? "keep") !== "skip";
+  const filled = s.order?.state === "filled" || s.order?.state === "closed";
+  const ended = s.order?.state === "cancelled" || s.order?.state === "expired" || (!s.order && s.event === "Cancelled");
+  if (ended && keep) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+      <span className="upd">{keep ? "Keep" : "Skip"}</span>
+      <Switch on={keep} label={`Keep ${s.symbol} setup`} disabled={!v.can_change || ctl.busy !== null || !ctl.knows("setup", "decision") || (filled && keep)}
+        onChange={(on) => void ctl.change({ scope: "setup", target: s.key, key: "decision", value: on ? "keep" : "skip" })} />
+      {filled && !keep ? <Chip tone="amber">Too late — filled; TM manages it</Chip> : <ControlStateChip state={entry?.state} zone={zone} />}
+    </div>
   );
 }
 
@@ -272,7 +297,7 @@ function Detail({ s, zone }: { s: ScoutSetup; zone: TimeZoneChoice }) {
             ))}
           </ol>
         </div>
-        <p className="upd" style={{ margin: 0 }}>TM’s actions on this trade come with the Trades page (build step 5).</p>
+        <p className="upd" style={{ margin: 0 }}>Once filled, TM’s mirror, hedges and stops are on the <a href="/trades">Trades page</a>.</p>
       </div>
     </aside>
   );

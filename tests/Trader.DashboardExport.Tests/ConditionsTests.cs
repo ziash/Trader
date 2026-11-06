@@ -106,6 +106,23 @@ public sealed class ConditionsTests : IDisposable
     }
 
     [Fact]
+    public void The_site_gets_the_catalogue_and_the_configured_charts_never_more()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "config"));
+        Assert.Null(ScoutOptions.Build(Path.Combine(_dir, "config")));            // no catalogue: no controls on the site
+        File.Copy(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../config/scout-controls.json")), Path.Combine(_dir, "config/scout-controls.json"));
+        File.WriteAllText(Path.Combine(_dir, "config/scout.json"), """
+            { "accounts": [ { "broker": "brokerA", "accountId": 49123893, "charts": [ { "symbol": "EURUSD", "timeframe": "H1", "mode": "trade" } ] } ],
+              "lots": 0.1 }
+            """);
+        var o = ScoutOptions.Build(Path.Combine(_dir, "config"))!;
+        Assert.Equal(3, o["catalogue"]!["options"]!.AsArray().Count);
+        var chart = o["accounts"]!["brokerA-49123893"]![0]!;
+        Assert.Equal(("EURUSD", "H1", "trade"), (chart["symbol"]!.GetValue<string>(), chart["timeframe"]!.GetValue<string>(), chart["mode"]!.GetValue<string>()));
+        Assert.DoesNotContain("lots", o.ToJsonString());                         // only what the controls need
+    }
+
+    [Fact]
     public void The_rows_are_the_symbols_scout_and_tm_work_on()
     {
         Directory.CreateDirectory(Path.Combine(_dir, "config"));

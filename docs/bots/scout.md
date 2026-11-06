@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: **IC Markets only, 18 symbols** (§7) |
-| Document version | v1.7 (06-Nov-2026) — history in §8 |
+| Document version | v1.8 (06-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | IC Markets demo 49123893 (`brokerA`) only from 04-Nov-2026 (Pepperstone demo 49124666, `brokerB`, until then) — demo only ([shared §4](../shared.md#4-safety-rules-for-every-bot)) |
@@ -59,6 +59,22 @@ After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../issue-log.
 - No account status (the broker did not answer): no new orders, and Scout asks again after 5 minutes.
 
 On IC Markets at 14:47Z on 06-Nov-2026 (equity $2,491.85, margin in use $2,707.70), the budget was −$1,461: Scout would have placed nothing.
+
+### 2.6 Controls from the dashboard (v1.8, owner 06-Nov-2026)
+
+The owner can steer Scout from the dashboard ([dashboard.md §3.4](../dashboard.md#34-controls-an-extensible-set-of-options-owner-0405-nov-2026)). The site writes a small control file; the laptop fetches it every minute into `~/tradebot/control/scout-<broker>-<ctid>.json`. Scout reads it every 30 s and before each order check, and applies only what the **catalogue** `~/tradebot/config/scout-controls.json` allows (laptop only; reference copy `config/scout-controls.json`).
+
+| Option (catalogue key) | Scope | Values | Scout |
+|---|---|---|---|
+| `enabled` | symbol | on / off | **Off:** no new orders on the symbol; its pending orders are cancelled (`cancel`, reason *switched off on the dashboard*); positions stay with TM; setups are still logged. **On again:** orders again at the next check (within a minute) for setups that are still valid |
+| `timeframe` | symbol | `H1`, `H4`, `D1` | Swaps the symbol's chart for the new timeframe (its higher timeframe as §2.2: H4 for H1, D1 for H4, W1 for D1), loads its history first, and looks for setups there from then on. **Pending orders from the old chart stay** until filled or expired (owner, 06-Nov-2026); one cancels the other still holds for them. Back to the configured timeframe = the same swap |
+| `decision` | setup | `keep`, `skip` | **Skip:** that setup's pending orders are cancelled (reason *skipped on the dashboard*) and none placed for it while skipped. Already filled: nothing, TM manages it. **Keep again:** its order is placed again at the next check if the setup is still valid — the one exception to "at most one order per setup role" (§2.3), because the owner asked for it |
+
+- **Setup key** = `<symbol>-<timeframe>-<pause start yyyyMMddHHmm>`, the setup part of Scout's order label; one key covers the main and the reversal stop. Entries older than 7 days are ignored.
+- **Every entry is checked again:** an option not in the catalogue or unknown to this Scout, a value the catalogue does not allow, a symbol not in `scout.json` (or with more than one chart, for `timeframe`), a malformed setup key, or a file for another account is **refused — that entry only**; the rest apply. A file Scout cannot read is refused whole: Scout keeps the last good one and warns (pop-up `ControlFileBad`). No file = everything as configured.
+- **Acknowledgement:** after applying a changed file Scout writes `~/tradebot/control/scout-<broker>-<ctid>.ack.json`: the file version, when, each entry *applied* (with the orders it cancelled) or *refused* (why), and the options this Scout knows. Events `ControlApplied`, `ControlRefused` in `events.csv`.
+- A restart applies the current file again (it describes the wanted state, so applying it twice changes nothing).
+- Controls never move, close or resize anything: they only hold Scout back or change which chart it reads. Order size, mode and the symbol list stay in `scout.json`.
 
 ## 3. Logs and outputs
 
@@ -145,3 +161,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.5 | 04 Nov 2026 | **Order size per symbol** (owner, §7): `lotsBySymbol` in `scout.json` (≈ $15 per 1H ATR on every symbol; forex 0.1 lot; XNGUSD at its 0.5-lot minimum); log and pop-up show the size really sent; start log lists every symbol's size, `LotsAdjusted` warning. `lots` limit raised from 1 to 100 (SOLUSD needs 20). Tests: 24 (2 new, 1 updated for the IC-only config) |
 | v1.6 | 04 Nov 2026 | XNGUSD stays in trade mode at its 0.5-lot minimum (owner, §7); its bigger size is weighed at the review |
 | v1.7 | 06 Nov 2026 | **Margin budget** (§2.5, after the IC Markets margin call, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): a new order only while margin in use + 4 × (waiting orders + the new one) ≤ 50 % of equity (`marginUsePercent`, `marginFactor` in `scout.json`); otherwise `skip` / `no margin` in `orders.csv`, tried again while the setup lasts. Code: `MarginBudget`, `AccountScout` (Trader.Core `AccountStatus`, `GetExpectedMarginAsync`, [Open Code Pieces](../open-code-pieces.md) v1.9). Tests: 27 (3 new). Open: sizes against the account size (XNGUSD, SOLUSD) at the trial review |
+| v1.8 | 06 Nov 2026 | **Controls from the dashboard** (§2.6, owner; dashboard build step 6): symbol on/off, timeframe per symbol (old chart's pending orders stay, owner), keep/skip per setup; the catalogue and control file, entry-by-entry checks, the acknowledgement file |

@@ -1,0 +1,5 @@
+{
+  // Dashboard settings the laptop uploads with status.json (docs/dashboard.md). Live copy: ~/tradebot/config/dashboard.json
+  // The broker the owner chose from the Audit Bot's final summary (audit-bot.md §9); shown on the Audit page.
+  "brokerChoice": { "broker": "brokerA", "name": "IC Markets", "decided": "2026-11-06" }
+}

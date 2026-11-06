@@ -1,0 +1,16 @@
+# Dashboard control sync (dashboard.md §3.4): fetches the controls the site wrote into ~/tradebot/control/ (Scout reads
+# them, scout.md §2.6) and sends Scout's acknowledgements back. Started by trader-dashboard-sync.timer every minute;
+# installed by scripts/deploy-dashboard-export.sh. Never starts, stops or restarts a bot (dashboard.md §6).
+#
+#   systemctl --user start trader-dashboard-sync          sync now
+#   journalctl --user -u trader-dashboard-sync -n 20      the last syncs' output
+
+[Unit]
+Description=Trader dashboard control sync (controls down, acknowledgements up)
+
+[Service]
+Type=oneshot
+ExecStart=%h/tradebot/bin/DashboardExport/dashboard-sync.sh
+WorkingDirectory=%h/tradebot
+TimeoutStartSec=60
+Nice=10

@@ -528,6 +528,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scout's controls for one account — the catalogue's options, each symbol as configured and as set, each setup decision, and what Scout made of them (dashboard.md §3.4) */
+        get: {
+            parameters: {
+                query: {
+                    account: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description From the uploaded scout-options.json, the control file and Scout's acknowledgement */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ControlsView"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /** Sets one control, or puts it back as configured (value null); checked against the catalogue here and again by Scout */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @example brokerA-49123893 */
+                        account: string;
+                        /** @enum {string} */
+                        scope: "symbol" | "setup";
+                        /**
+                         * @description a symbol, or a setup key symbol-timeframe-yyyyMMddHHmm
+                         * @example XNGUSD
+                         */
+                        target: string;
+                        /** @example enabled */
+                        key: string;
+                        /** @description true/false for a switch, one of the values for a choice, null = as configured */
+                        value?: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description The account's controls after the change (the change shows as "saved" until Scout acknowledges it) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ControlsView"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -779,6 +861,12 @@ export interface components {
             reason?: string;
             /** @description when the laptop made this file (the data's age) */
             generated_utc?: string;
+            /** @description the broker the owner chose from the Audit Bot's final summary (config/dashboard.json); absent until chosen */
+            broker_choice?: {
+                broker?: string;
+                name?: string;
+                decided?: string;
+            };
             /** @description the demo accounts the dashboard shows (in scout.json or tm.json); `id` is the account parameter of the other calls */
             accounts?: {
                 /** @example brokerA-49123893 */
@@ -1212,6 +1300,71 @@ export interface components {
             };
             /** @description once recorded in the Audit Bot's document */
             broker_choice?: string | null;
+        };
+        ControlState: {
+            /** @enum {string} */
+            state?: "saved" | "applied" | "refused";
+            utc?: string | null;
+            reason?: string | null;
+            /** @description orders Scout cancelled for it */
+            cancelled?: number[];
+        };
+        /** @description One entry of the laptop's catalogue (config/scout-controls.json) */
+        ControlOption: {
+            key?: string;
+            /** @enum {string} */
+            scope?: "scout" | "account" | "symbol" | "setup";
+            /** @enum {string} */
+            type?: "switch" | "choice" | "multi" | "number";
+            values?: string[];
+            default?: unknown;
+            label?: string;
+            help?: string;
+            confirm?: string | null;
+            applies?: string;
+        };
+        ControlsView: {
+            account: string;
+            /** @description false until the laptop uploads the catalogue */
+            available: boolean;
+            /** @description owner and administrators; viewers only look */
+            can_change: boolean;
+            catalogue_version?: number | null;
+            options: components["schemas"]["ControlOption"][];
+            /** @description options the running Scout applies ("symbol.enabled" …); others show "needs a newer Scout" */
+            knows?: string[] | null;
+            version: number;
+            updated_utc?: string | null;
+            updated_by?: string | null;
+            ack?: {
+                version?: number;
+                applied_utc?: string | null;
+                error?: string | null;
+            } | null;
+            symbols: {
+                symbol?: string;
+                charts?: number;
+                configured?: {
+                    enabled?: boolean;
+                    timeframe?: string | null;
+                    mode?: string;
+                };
+                /** @description what the owner changed; absent = as configured */
+                set?: {
+                    [key: string]: unknown;
+                };
+                state?: {
+                    [key: string]: components["schemas"]["ControlState"];
+                };
+            }[];
+            setups: {
+                [key: string]: {
+                    decision?: string;
+                    utc?: string;
+                    by?: string;
+                    state?: components["schemas"]["ControlState"];
+                };
+            };
         };
         Me: {
             /** @enum {string} */

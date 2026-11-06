@@ -41,6 +41,8 @@ final class App
         'GET /api/trades/chart' => ['viewer', 'tradeChart'],
         'GET /api/conditions' => ['viewer', 'conditions'],
         'GET /api/audit' => ['viewer', 'audit'],
+        'GET /api/controls' => ['viewer', 'controls'],
+        'POST /api/controls' => ['admin', 'controlsSet'],
         'GET /api/users' => ['owner', 'usersOverview'],
         'POST /api/users/approve' => ['owner', 'usersApprove'],
         'POST /api/users/refuse' => ['owner', 'usersRefuse'],
@@ -57,6 +59,7 @@ final class App
         private readonly MachineAuth $machines,
         private readonly AccessLog $log,
         private readonly string $dataDir,
+        private readonly Clock $clock = new Clock(),
     ) {
     }
 
@@ -75,6 +78,7 @@ final class App
             new MachineAuth($users, new SecretFiles("$root/state/tokens"), new JsonStore("$root/state/ratelimit.json"), $log, $clock),
             $log,
             "$root/data",
+            $clock,
         );
     }
 
@@ -205,6 +209,9 @@ final class App
     {
         $file = "{$this->dataDir}/status.json";
         $status = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+        if (is_array($status)) {
+            $status['controls'] = $this->controlsData()->history(); // kept on the server, where the site writes them (§3.4)
+        }
         return Response::json(200, is_array($status)
             ? ['available' => true] + $status
             : ['available' => false, 'reason' => 'No data uploaded yet']);
@@ -240,6 +247,27 @@ final class App
     private function conditions(Request $request): Response
     {
         return Response::json(200, (new TradesData($this->dataDir))->conditions($request->query['account'] ?? ''));
+    }
+
+    private function controlsData(): ControlsData
+    {
+        return new ControlsData($this->dataDir, dirname($this->dataDir) . '/controls', $this->clock);
+    }
+
+    private function controls(Request $request, Principal $who): Response
+    {
+        return Response::json(200, $this->controlsData()->view($request->query['account'] ?? '', $who->atLeast('admin')));
+    }
+
+    /** One control changed (dashboard.md §3.4): checked against the catalogue, written for the laptop to fetch, logged. */
+    private function controlsSet(Request $request, Principal $who): Response
+    {
+        $body = $request->json();
+        $value = $body['value'] ?? null;
+        $view = $this->controlsData()->set($request->jsonString('account', 64), $request->jsonString('scope', 16), $request->jsonString('target', 64),
+            $request->jsonString('key', 32), $value, $who->id, $who->role);
+        $this->log->write('control', $who->id, $who->role, $request, json_encode(array_intersect_key($body, array_flip(['account', 'scope', 'target', 'key', 'value']))));
+        return Response::json(200, $view);
     }
 
     private function audit(Request $request): Response

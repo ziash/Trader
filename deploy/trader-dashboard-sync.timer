@@ -1,0 +1,15 @@
+# Runs trader-dashboard-sync.service every minute (dashboard.md §3.4, decision 12: a skip must reach Scout before its
+# stop order fills).
+#
+#   systemctl --user list-timers trader-dashboard-sync    when it runs next
+#   systemctl --user disable --now trader-dashboard-sync.timer    stop taking controls from the web
+
+[Unit]
+Description=Dashboard control sync every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
