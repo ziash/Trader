@@ -398,6 +398,61 @@ public sealed class CTraderSession : IAsyncDisposable
         return res.Margin.Select(m => new ExpectedMargin(m.Volume, AccountStatus.Scale(m.BuyMargin, digits), AccountStatus.Scale(m.SellMargin, digits))).ToList();
     }
 
+    /// <summary>The broker serves deal and order history at most one week per request.</summary>
+    public static readonly TimeSpan HistoryWindow = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Every deal (fill) executed from <paramref name="fromUtc"/> to <paramref name="toUtc"/>, oldest first, each once. Read-only.
+    /// Asked one week at a time; a range the server cuts short ("has more") is asked again in halves.
+    /// </summary>
+    public Task<IReadOnlyList<ProtoOADeal>> GetDealsAsync(long ctidTraderAccountId, DateTime fromUtc, DateTime toUtc) =>
+        HistoryAsync<ProtoOADeal>(fromUtc, toUtc, d => d.DealId, d => d.ExecutionTimestamp, async (from, to) =>
+        {
+            var res = await RequestAsync<ProtoOADealListRes>(new ProtoOADealListReq
+            {
+                CtidTraderAccountId = ctidTraderAccountId,
+                FromTimestamp = from,
+                ToTimestamp = to,
+            });
+            return ((IEnumerable<ProtoOADeal>)res.Deal, res.HasMore);
+        });
+
+    /// <summary>Every order last changed from <paramref name="fromUtc"/> to <paramref name="toUtc"/> (filled, cancelled, still pending …), with its label. Read-only.</summary>
+    public Task<IReadOnlyList<ProtoOAOrder>> GetOrdersAsync(long ctidTraderAccountId, DateTime fromUtc, DateTime toUtc) =>
+        HistoryAsync<ProtoOAOrder>(fromUtc, toUtc, o => o.OrderId, o => o.UtcLastUpdateTimestamp, async (from, to) =>
+        {
+            var res = await RequestAsync<ProtoOAOrderListRes>(new ProtoOAOrderListReq
+            {
+                CtidTraderAccountId = ctidTraderAccountId,
+                FromTimestamp = from,
+                ToTimestamp = to,
+            });
+            return ((IEnumerable<ProtoOAOrder>)res.Order, res.HasMore);
+        });
+
+    private static async Task<IReadOnlyList<T>> HistoryAsync<T>(DateTime fromUtc, DateTime toUtc, Func<T, long> id, Func<T, long> time,
+        Func<long, long, Task<(IEnumerable<T> Items, bool HasMore)>> ask)
+    {
+        var found = new Dictionary<long, T>();
+        async Task Range(long from, long to)
+        {
+            var (items, more) = await ask(from, to);
+            foreach (var item in items)
+                found.TryAdd(id(item), item);
+            if (more && to - from > 60_000)
+            {
+                var mid = from + (to - from) / 2;
+                await Range(from, mid);
+                await Range(mid, to);
+            }
+        }
+        var end = new DateTimeOffset(toUtc).ToUnixTimeMilliseconds();
+        var week = (long)HistoryWindow.TotalMilliseconds;
+        for (var from = new DateTimeOffset(fromUtc).ToUnixTimeMilliseconds(); from < end; from += week)
+            await Range(from, Math.Min(end, from + week));
+        return found.Values.OrderBy(time).ThenBy(id).ToList();
+    }
+
     // The server answers an order request with several execution events under the request's clientMsgId:
     // ORDER_ACCEPTED, then ORDER_FILLED (with the deal) — or an order error / ORDER_REJECTED. On a close, the
     // position's stop-loss order is also cancelled under the same ID; only events for our own order count.

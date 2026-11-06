@@ -37,6 +37,9 @@ fi
 export_() { "${exporter[@]}" "$@" --outbox "$outbox"; }
 
 find "$outbox" -name '*.tmp' -type f -delete   # left by an interrupted run
+# The account snapshot (§3.2): read-only questions to cTrader. If it fails the upload goes on with the files there are,
+# and the pages show the snapshot's own (older) time.
+export_ snapshot || echo "Snapshot not taken (exit $?); uploading the other files."
 export_ collect                               # exit 3 = a file held a secret: nothing is sent
 
 # Second guard: every file in the outbox must be on the allowlist (the same list as Outbox.Allowlist).
@@ -45,7 +48,8 @@ acct='logs/[A-Za-z0-9]{1,32}/[0-9]{1,12}'
 inst='[A-Za-z0-9]{1,32}'
 allow="^($acct/Scout-$inst/$day/((orders|setups|events)\.csv|charts/[A-Za-z0-9._-]{1,120}\.svg)"
 allow+="|$acct/TM-$inst/$day/(actions|events)\.csv"
-allow+="|reports/(daily-compare-$day|summary-${day}_$day)\.csv|status\.json)$"
+allow+="|$acct/Dashboard/$day/((account|deals)\.csv|charts/trade-[PO][0-9]{1,20}\.svg)"
+allow+="|reports/(daily-compare-$day|summary-${day}_$day)\.csv|status\.json|snapshot-[A-Za-z0-9]{1,32}-[0-9]{1,12}\.json)$"
 odd=$(cd "$outbox" && find . -mindepth 1 \( -type f -o -type l \) -printf '%P\n' | grep -Ev "$allow" || true)
 odd+=$(cd "$outbox" && find . -mindepth 1 -type l -printf '%P\n')
 if [ -n "$odd" ]; then

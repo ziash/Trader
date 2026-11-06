@@ -36,6 +36,9 @@ final class App
         'GET /api/status' => ['viewer', 'status'],
         'GET /api/scout' => ['viewer', 'scout'],
         'GET /api/scout/chart' => ['viewer', 'scoutChart'],
+        'GET /api/accounts' => ['viewer', 'accounts'],
+        'GET /api/trades' => ['viewer', 'trades'],
+        'GET /api/trades/chart' => ['viewer', 'tradeChart'],
         'GET /api/users' => ['owner', 'usersOverview'],
         'POST /api/users/approve' => ['owner', 'usersApprove'],
         'POST /api/users/refuse' => ['owner', 'usersRefuse'],
@@ -219,6 +222,27 @@ final class App
             'Content-Type' => 'image/svg+xml',
             'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; sandbox",
             'Cache-Control' => 'private, max-age=86400',
+        ], (string) file_get_contents($path));
+    }
+
+    private function accounts(Request $request): Response
+    {
+        return Response::json(200, (new TradesData($this->dataDir))->accounts($request->query['account'] ?? '', gmdate('Y-m-d')));
+    }
+
+    private function trades(Request $request): Response
+    {
+        return Response::json(200, (new TradesData($this->dataDir))->trades($request->query['account'] ?? '', $request->query['day'] ?? null));
+    }
+
+    /** A trade picture (dashboard.md §2.3). The laptop draws it; it is shown as an image only, so no script in it can run. */
+    private function tradeChart(Request $request): Response
+    {
+        $path = (new TradesData($this->dataDir))->chartPath($request->query['file'] ?? '');
+        return new Response(200, [
+            'Content-Type' => 'image/svg+xml',
+            'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            'Cache-Control' => 'private, max-age=300',
         ], (string) file_get_contents($path));
     }
 

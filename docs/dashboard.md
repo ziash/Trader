@@ -4,13 +4,13 @@
 
 | Item | Value |
 |---|---|
-| Status | **Live with Scout's data** (06-Nov-2026): build steps 0–4 done — Google sign-in for the owner (account pinned) and viewers, Claude's machine account, Users and Status pages, the 30-min data upload and the **Scout page (view only)**. Next: step 5, the account snapshot and the Trades, Accounts, Conditions and Audit pages (§8) |
-| Document version | v1.10 (06-Nov-2026) — history in §11 |
+| Status | **Live with Scout's and TM's data** (06-Nov-2026): build steps 0–4 and 5a done — Google sign-in for the owner (account pinned) and viewers, Claude's machine account, Users and Status pages, the 30-min data upload, the **Scout page (view only)**, the read-only **account snapshot** and the **Accounts** and **Trades** pages with trade pictures. Next: step 5b, the Trading conditions and Audit pages (§8) |
+| Document version | v1.11 (06-Nov-2026) — history in §11 |
 | Address | `https://trader.uzlabz.com` — people sign in with Google (owner `zia.zeeshan@gmail.com`; others watch once approved), machines with M2M sign-in (`claude`, administrator); API under `/api/` (§5) |
 | Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) and no Node.js — so nothing of ours can run there all the time; the site is plain files (the screens) plus a small PHP API (§4.1) |
 | Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result, [`design/`](design/HANDOFF.md) (tokens, screen sources, handoff notes), is the reference for the pages |
 | Code | `web/dashboard/ui/` (the screens: Next.js + React + TypeScript, exported as plain files), `web/dashboard/api/` (the PHP API), `web/dashboard/openapi.yaml` (the API contract both follow, §4.1), `src/Trader.DashboardExport` (the laptop program that collects the data), `scripts/dashboard-push.sh` (30-min upload; installed with the export by `scripts/deploy-dashboard-export.sh`, units `deploy/trader-dashboard.*`), `scripts/dashboard-sync.sh` (1-min control sync), `scripts/deploy-dashboard.sh` (puts the site on Hostinger), `scripts/dashboard-m2m.sh` (machine accounts, §5.3); in Scout: reading the control file ([Scout](bots/scout.md), §3.4); the options catalogue `config/scout-controls.json` (§3.4) |
-| Tests | `tests/Trader.DashboardExport.Tests` (what gets collected and what never does); Scout's tests for the control file; Vitest for the screens, PHPUnit for the API, and a test that every API call refuses anyone not signed in or without the role |
+| Tests | `tests/Trader.DashboardExport.Tests` (what gets collected and what never does; the snapshot, deals and trade pictures, and that the export's code holds no order call); Scout's tests for the control file; Vitest for the screens, PHPUnit for the API, and a test that every API call refuses anyone not signed in or without the role |
 | Accounts | Reads IC Markets demo 49123893 (`brokerA`) and Pepperstone demo 49124666 (`brokerB`) ([shared §4](shared.md#4-safety-rules-for-every-bot)) |
 | Credentials | Laptop: `~/.config/trader/hostinger_ed25519` (upload key), `hostinger_known_hosts`, `dashboard.env`, `dashboard-m2m.env` (Claude's M2M secret) — all 600, outside the repo. Server: `~/trader-dashboard/config.php` (Google sign-in client ID and secret, the owner's address) and `users.json` (people and machines; machine secrets as hashes only), mode 600 — never in Git |
 | Services | `trader-dashboard.timer` (data upload, every 30 min), `trader-dashboard-sync.timer` (controls, every minute) — systemd user units |
@@ -51,9 +51,15 @@ A page **Settings** lists the options that are not per symbol (per account or fo
 
 ### 2.3 TM trades
 
-- **Open trades now** (from the account snapshot, §3.2): each position with who opened it — *Scout*, *TM* or *manual* (no label) — side, lots, entry, stop-loss, profit so far.
-- **One block per trade** (`trade` column of `actions.csv`: `O<orderId>` before the entry fills, `P<positionId>` after): every action TM took in time order — role (MAIN, MIR, HMAIN, HMIR), action, side, lots, prices, latency, result. A Scout trade links to its Scout order and picture through the order ID ([Scout §3](bots/scout.md#3-logs-and-outputs)).
-- Both demos, a day picker, and refused actions (`result` not `ok`) marked red.
+A **trade** is a main position and everything TM added to it: the mirror and every hedge, named `P<mainPositionId>` as in TM's logs. The broker's order labels tie each position to its trade ([TM §7](bots/tm.md#7-labels-logs-and-notifications-q17): `TM-…-P<main>-MIR|HMAIN|HMIR`, `TM-…-O<orderId>-MIR` for the mirror of a pending order). A position that belongs to no TM trade (e.g. an Audit Bot probe) is a trade of its own.
+
+- **Open trades now** (from the account snapshot, §3.2): each position with its owner — *Scout*, *TM*, *manual* (no label) or another bot (the label's first part, e.g. *AuditBot*) — role, side, lots, entry, stop-loss, open result, margin.
+- **One block per trade** with activity on the chosen day (step 5a, owner 06-Nov-2026):
+  - **Result of the whole trade**: the net (profit + swap + commission) of every closed leg — main, mirror and all hedges — and the open result of the legs still open. The Scout page counts the main only.
+  - **Timeline:** the broker's fills (each leg's open and close, price, lots, result) merged in time order with every action TM took (`actions.csv`: role, action, prices, latency, result). Refused actions (`result` not `ok`) red.
+  - **Trade picture** (§3.3): the candles from shortly before the order to the close (or now), with the entry level, the stop-loss and the hedge level H as they changed over time, and a marker at every fill and close (▲ buy, ▼ sell, ✕ close, tagged MAIN / MIR / HMAIN / HMIR). It is drawn so you can open the same chart in cTrader and see what went right or wrong. Tap for full size.
+  - A Scout trade links to its Scout order and order picture through the order ID ([Scout §3](bots/scout.md#3-logs-and-outputs)).
+- Both demos, a day picker (a trade appears on each day it had a fill or a TM action), filter by symbol and by owner; trades of other bots (Audit Bot probes, hundreds a day) are hidden unless that owner is chosen.
 
 ### 2.4 Accounts
 
@@ -61,10 +67,10 @@ Per demo account:
 
 | Shows | From |
 |---|---|
-| Balance, equity (balance + open profit/loss), margin used, free margin, margin level % | snapshot (§3.2), every 30 min |
-| Open positions and pending orders: count, by owner (Scout / TM / manual) | snapshot |
-| Today's closed profit (net of commission and swap), by owner | closed deals (§3.2) |
-| Profit per day (bar chart) and balance / equity over time (line chart) | `deals.csv`, `account.csv` (§3.3) |
+| Balance, equity (balance + open profit/loss), margin used, free margin, margin level % — the level red below 100 % (TM's margin rescue, IC's margin call) and amber below 300 % (TM opens no mirrors) ([TM §5.1](bots/tm.md#51-margin-and-the-backstop-v19-06-nov-2026)) | snapshot (§3.2), every 30 min |
+| Open positions and pending orders: count, by owner (Scout / TM / manual / other bot) | snapshot |
+| Today's closed profit (net of commission and swap), by owner | `deals.csv` (§3.3) |
+| Profit per day (bar chart) and balance / equity over time (line chart, each with a table view) | `deals.csv` (balance after each close, as the broker reports it — so the line goes back as far as the deals do), `account.csv` (equity: only from the first snapshot on, as past open results are not kept anywhere) |
 
 ### 2.5 Trading conditions (owner, 04-Nov-2026)
 
@@ -110,7 +116,7 @@ Hostinger cannot reach into the laptop, so the laptop does all the moving: it **
 
 - **Timer:** `trader-dashboard.timer` at **:02 and :32** each hour (the :02 run catches Scout's orders on each new 1H candle). If the laptop was asleep it runs once on waking. Like the bots, it runs only while you are logged in ([shared §3](shared.md#3-machine-and-services)).
 - **Steps** (`scripts/dashboard-push.sh`, run from `~/tradebot/bin/DashboardExport/`):
-  1. `Trader.DashboardExport collect` copies every allowlisted file of the **last 14 days** (and all reports) into the **outbox** `~/tradebot/dashboard/outbox/` — a staging folder in the server's layout. A file is copied only when its size or time changed and keeps its time, so rsync sends only what changed. Each copy is checked for secrets **before** it lands (§6); a file that holds one is not staged, the upload is refused and nothing is sent. Accounts: those in `scout.json` and `tm.json`. (Step 5 adds the snapshot, §3.2.)
+  1. `Trader.DashboardExport collect` copies every allowlisted file of the **last 14 days** (and all reports) into the **outbox** `~/tradebot/dashboard/outbox/` — a staging folder in the server's layout. A file is copied only when its size or time changed and keeps its time, so rsync sends only what changed. Each copy is checked for secrets **before** it lands (§6); a file that holds one is not staged, the upload is refused and nothing is sent. Accounts: those in `scout.json` and `tm.json`. Before this, `Trader.DashboardExport snapshot` asks cTrader for the account snapshot and writes its files (§3.2, §3.3; step 5a). If that fails, the upload goes on with the files it has and the pages show the snapshot's own (older) time.
   2. The script checks the outbox once more against the same allowlist (no other file, no links), then sends it with rsync to `~/trader-dashboard/data/` (folders 700, files 600).
   3. `Trader.DashboardExport status` writes `status.json` (§2.6: each bot's and timer's state from `systemctl --user`, the running build, today's warnings and errors from `events.csv`, this upload's time, seconds and file count, the accounts) and the script sends it last — its time is the data's age on every page.
 - **How:** **rsync over SSH** — rsync copies only files that changed (so a run sends a few KB); SSH is the encrypted connection, here with a key file instead of a password, to the server identity pinned in `hostinger_known_hosts` (checked against hPanel on 04-Nov-2026). Files land in a folder outside the web folders (§4).
@@ -120,29 +126,31 @@ Hostinger cannot reach into the laptop, so the laptop does all the moving: it **
 |---|---|
 | `~/tradebot/logs/<broker>/<ctid>/Scout-*/<date>/` | `orders.csv`, `setups.csv`, `events.csv`, `charts/*.svg` |
 | `~/tradebot/logs/<broker>/<ctid>/TM-*/<date>/` | `actions.csv`, `events.csv` |
-| `~/tradebot/logs/<broker>/<ctid>/Dashboard/<date>/` | `account.csv`, `deals.csv`, `conditions.csv` (§3.3) |
+| `~/tradebot/logs/<broker>/<ctid>/Dashboard/<date>/` | `account.csv`, `deals.csv`, `conditions.csv`, `charts/trade-P<positionId>.svg` (§3.3) |
 | `~/tradebot/reports/` | `daily-compare-*.csv`, `summary-*.csv` |
-| `~/tradebot/dashboard/` | `status.json`, `snapshot-<broker>-<ctid>.json` (latest values), `scout-options.json` (the options catalogue with each symbol's configured values, §3.4) |
+| written straight into the outbox | `status.json`, `snapshot-<broker>-<ctid>.json` (latest values, §3.2), `scout-options.json` (the options catalogue with each symbol's configured values, §3.4) |
 | `~/tradebot/control/` | `scout-<broker>-<ctid>.ack.json` (§3.4) |
 
 Never sent: `~/.config/trader/` (secrets, keys), `~/tradebot/config/` (what the site needs from it, the exporter copies into `scout-options.json`), `~/tradebot/run/`, `~/tradebot/bin/`, the Audit Bot's raw logs, Rewind's logs, anything else. Nothing on the laptop is changed or deleted by the upload; the server keeps what it has received.
 
 ### 3.2 The account snapshot (read-only)
 
-`Trader.DashboardExport` connects to the cTrader demo server with the shared code (own connection, the same tokens; token refresh as every bot, [Open Code Pieces §3](open-code-pieces.md#3-connection-and-tokens)) and **only asks questions**:
+`Trader.DashboardExport snapshot` connects to the cTrader demo server with the shared code (own connection, the same tokens) and **only asks questions**. It reads the tokens from `secrets.env` at each run and never refreshes them: TM, which runs all the time, keeps them fresh ([Open Code Pieces §3](open-code-pieces.md#3-connection-and-tokens)); a rejected token only makes the snapshot old. Step 5a asks the first five rows below; the rest come with the Trading conditions page (5b):
 
 | Asks | Open API request |
 |---|---|
 | Balance, leverage, currency | `ProtoOATraderReq` |
 | Open positions and pending orders, with labels and margin | `ProtoOAReconcileReq` |
 | Open profit / loss | `ProtoOAGetPositionUnrealizedPnLReq` |
-| Closed deals since the last run (profit, commission, swap) | `ProtoOADealListReq`; who opened it from the order's label (`Scout-…`, `TM-…`, none = manual) |
-| Symbol details: lot size, min / step / max, commission, swap, pip position | `ProtoOASymbolByIdReq` |
+| Closed deals since the last run (profit, commission, swap, balance after) | `ProtoOADealListReq`, one week per request (the broker's limit) |
+| Each position's owner, trade and role, the main's entry level and stop-loss | `ProtoOAOrderListReq`: every order carries its position's label (checked live 06-Nov-2026: closing orders too); `Scout-…` = Scout, `TM-…` = TM, none = manual, any other = that bot |
+| Candles for the trade pictures (§3.3) | `ProtoOAGetTrendbarsReq` |
+| Symbol details: digits, lot size, min / step / max, commission, swap, pip position | `ProtoOASymbolByIdReq` |
 | Leverage tiers | `ProtoOAGetDynamicLeverageByIDReq` |
 | Margin for 1 lot, buy and sell | `ProtoOAExpectedMarginReq` |
 | Current price and spread (USD conversion as the Audit Bot) | a short price subscription, then unsubscribe |
 
-Symbols: those in `~/tradebot/config/scout.json` and `tm.json` for each account. It never sends an order message (place, amend, cancel, close) — it does not use the shared code's order functions at all, and a test fails if it does. It needs no Primary role ([Open Code Pieces §6](open-code-pieces.md#6-instance-registry-one-primary-per-bot-per-account)) because it trades nothing. The run takes seconds, then the program exits. If cTrader cannot be reached, the files are still uploaded and the snapshot is marked old.
+It writes `snapshot-<broker>-<ctid>.json` into the outbox: the time, the account status (balance, equity, margin used and free, margin level, leverage), every open position (owner, trade, role, symbol, side, lots, entry, stop-loss, take-profit, open result, margin, opened at) and every pending order (owner, trade, role, symbol, type, side, lots, level, stop-loss, placed at). Symbols for the trading conditions (5b): those in `~/tradebot/config/scout.json` and `tm.json` for each account. It never sends an order message (place, amend, cancel, close) — it does not use the shared code's order functions at all, and a test fails if it does. It needs no Primary role ([Open Code Pieces §6](open-code-pieces.md#6-instance-registry-one-primary-per-bot-per-account)) because it trades nothing. The run takes seconds, then the program exits. If cTrader cannot be reached, the files are still uploaded and the snapshot is marked old.
 
 ### 3.3 New log files
 
@@ -151,7 +159,8 @@ The snapshot is also kept as history, in the shared CSV format ([shared §5](sha
 | File | One row per |
 |---|---|
 | `account.csv` | run: `time_utc`, `balance_usd`, `equity_usd`, `margin_used_usd`, `free_margin_usd`, `margin_level_pct`, `leverage`, `positions`, `pending_orders` |
-| `deals.csv` | closed deal (each once, by deal ID): `time_utc`, `deal_id`, `position_id`, `symbol`, `side`, `lots`, `price`, `gross_usd`, `commission_usd`, `swap_usd`, `net_usd`, `owner` (Scout / TM / manual), `label` |
+| `deals.csv` | deal — every fill, opening and closing, each once by deal ID, in the folder of its own day: `time_utc`, `deal_id`, `order_id`, `position_id`, `symbol`, `side`, `lots`, `price`, `kind` (`open` / `close`), `entry_price` (close only), `gross_usd`, `swap_usd`, `commission_usd`, `net_usd` (gross + swap + commission), `balance_usd` (after a close), `owner` (Scout / TM / manual / other bot's name), `trade` (`P<mainPositionId>`), `role` (MAIN, MIR, HMAIN, HMIR), `label`. The first run fetches the last 14 days (the upload's window); later runs from the newest deal already written |
+| `charts/trade-P<positionId>.svg` | trade (§2.3): drawn when the trade has a new fill or TM action, and again at every run while it is open; in the folder of the trade's first day. Candles: 1H, or 4H when the trade spans more than 4 days, from 12 candles before the main's order to 6 after the close (or now). Lines: the main's entry level (from its order), its stop-loss and the hedge level H as steps over time (from the order and `actions.csv`: `SetProtection`, `PlaceHedge`, `MoveOrder`). Markers: every fill from `deals.csv` with its role. Title: symbol, trade, owner, the whole trade's result. Same style as Scout's order pictures (SVG, ≈ 20 KB) |
 | `conditions.csv` | symbol, at the first run of the day and whenever a value other than price or spread changes: the columns of §2.5 |
 
 ### 3.4 Controls: an extensible set of options (owner, 04–05-Nov-2026)
@@ -316,7 +325,8 @@ People and machines with their sign-in method, role, last seen and address; acce
 scripts/deploy-dashboard.sh                                   # build the screens; put them and the API on Hostinger
 web/dashboard/dev/serve.sh --build                            # local preview with sample data: http://localhost:8090/dev/signin?as=owner (or as=viewer)
 scripts/deploy-dashboard-export.sh                            # build the export into ~/tradebot/bin/DashboardExport, install and start the 30-min upload timer
-scripts/dashboard-push.sh --dry-run                           # stage and check, list what would be sent; sends nothing
+scripts/dashboard-push.sh --dry-run                           # snapshot, stage and check, list what would be sent; sends nothing
+dotnet ~/tradebot/bin/DashboardExport/Trader.DashboardExport.dll snapshot   # the read-only account snapshot alone (step 5a)
 systemctl --user enable --now trader-dashboard.timer          # start the 30-min uploads (the deploy does this)
 systemctl --user enable --now trader-dashboard-sync.timer     # start the 1-min control sync
 systemctl --user list-timers 'trader-dashboard*'              # when are the next ones?
@@ -341,7 +351,8 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 | 2 | Design in Claude Design from the brief (owner); the result saved with the brief | Desktop design ready for the owner's review 05-Nov-2026: [`design/HANDOFF.md`](design/HANDOFF.md). Phone layouts deferred (owner) |
 | 3 | Google sign-in client (owner, §5.2); site skeleton with both sign-ins, roles, Users page, access requests, the API's sign-in; Claude's machine account; the API contract (`openapi.yaml`); the Next.js app from Claude Design's components; Status page; `deploy-dashboard.sh` | Started 05-Nov-2026: Google project `trader-dashboard-513816` and web client made (owner), `config.php` on the server; privacy page and a temporary home page live (§5.2). **3a done:** the PHP API (`web/dashboard/api/`: Google sign-in, sessions, roles, access requests, M2M tokens, Users calls, access log; `cli/machines.php`) and `openapi.yaml`; 43 PHPUnit tests (`composer install`, then `vendor/bin/phpunit` in `web/dashboard/api/`). **3b done:** the Next.js app (`web/dashboard/ui/`): tokens, shell, data blocks, Sign in, Status, Users, the other screens as "not built yet" pages; 12 Vitest tests; local preview `web/dashboard/dev/serve.sh`. **3c done:** `scripts/deploy-dashboard.sh` (tests, build, secret check, versioned API folder, live checks), `scripts/dashboard-m2m.sh`, `scripts/dashboard-api.sh`; deployed; machine account `claude` (administrator) made and tested; the owner's first Google sign-in 05-Nov-2026 18:22 UTC. **Done 05-Nov-2026** |
 | 4 | Data upload: allowlist, secrets check, `status.json`, `dashboard-push.sh`, timer — no cTrader connection yet. Dry run, then the first real upload. Scout page (view only) | **Done 06-Nov-2026.** `src/Trader.DashboardExport` (outbox with the allowlist and the secrets check, `status.json` from systemctl and `events.csv`; 15 tests), `scripts/dashboard-push.sh` (second allowlist check, rsync, `--dry-run`), `deploy/trader-dashboard.*` (:02 and :32) and `scripts/deploy-dashboard-export.sh`. API: `GET /api/scout` (setups and orders of an account and day, each order merged from its rows across days and Scout instances) and `GET /api/scout/chart` (order pictures only, shown as images; 6 more PHPUnit tests). Screens: the account selector in the top bar and the Scout page — last hour, setups by candle with their pictures, detail with the setup's timeline, orders of the day with day picker, symbol filter and totals (4 more Vitest tests). Dry run checked 206 files; then deployed and the first upload sent |
-| 5 | Account snapshot (§3.2, §3.3) — read-only cTrader questions; Accounts, Trading conditions with the "what if" box, TM trades, Audit pages | — |
+| 5a | Account snapshot (§3.2, §3.3) — read-only cTrader questions: account status, positions and orders, deals and order labels; `account.csv`, `deals.csv`, the trade pictures; Accounts and TM trades pages (owner, 06-Nov-2026) | **Built 06-Nov-2026.** Core: `GetDealsAsync`, `GetOrdersAsync` ([Open Code Pieces](open-code-pieces.md) v1.10). Export: `snapshot` command (`SnapshotRunner`, `Trades.cs`, `TradeHistory.cs`, `TradeChart.cs`), run by `dashboard-push.sh` before staging; allowlists in both places extended; 13 more tests (36). First run, read-only, both demos: 14 days back-filled (1,195 and 832 deals), 76 trade pictures, ≈ 40 s; later runs ≈ 5 s. API: `GET /api/accounts`, `GET /api/trades`, `GET /api/trades/chart` (5 more PHPUnit tests, 54). Screens: Accounts (money now with the margin level, open by owner, closed today by owner, balance / equity line, profit per day, each chart with a table view) and Trades (open now; per trade: whole result, picture, fills and TM's actions with refusals counted; day picker, symbol and owner filters); 3 more Vitest tests (19) |
+| 5b | Trading conditions with the "what if" box (`conditions.csv`, symbol details, leverage tiers, margin per lot, prices); Audit page | — |
 | 6 | Controls: the options catalogue with today's three options (symbol on/off, setup keep/skip, symbol timeframe); controls drawn from it on the site; `dashboard-sync.sh` and its timer; Scout reads the control file and acknowledges each entry ([Scout](bots/scout.md) document first; tested with `--dry-run`, then deployed and restarted with your OK) | — |
 | 7 | A few days' use; fixes; this document brought up to date | — |
 
@@ -366,6 +377,9 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 | 15 | **Others may watch** (owner, 05-Nov-2026): any Google account can ask; the owner approves it as viewer (read only) | Share the dashboard without sharing control; nobody sees anything before approval |
 | 16 | **M2M sign-in for machines**, first `claude` as administrator (owner, 05-Nov-2026): client ID + secret → 1-hour token → JSON API; the secret made on the laptop, only its hash on the server; machines cannot manage users | Claude can read and steer without a Google account; a leaked token expires within the hour and the secret can be revoked |
 | 17 | **Next.js + React screens (static export) with a small PHP API**, one contract between them (owner, 05-Nov-2026; §4.1) | One API for screens and machines; either half can be replaced later behind the same contract; Claude Design's React work carries over; runs on the current plan, which has no Node.js |
+| 18 | **A trade's result covers all its legs** (owner, 06-Nov-2026): main, mirror and every hedge | The main alone misleads: on 06-Nov the SOLUSD main lost $131.52 but the whole trade $45.20, the hedges having made up most of it |
+| 19 | **Trade pictures** drawn on the laptop from the broker's candles and fills and TM's actions (owner, 06-Nov-2026) | To open the same chart in cTrader and see what went right or wrong; the site cannot reach cTrader |
+| 20 | **14 days back-filled** on the first run; the balance line from the broker's balance after each close (owner, 06-Nov-2026) | The history is there from the start; equity cannot be rebuilt, so its line starts with the first snapshot |
 
 ## 10. Open items
 
@@ -374,7 +388,6 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 - **Distance in pips** on the Scout page: the logs give the level and stop-loss but not each symbol's pip size, so the page shows the distance in price (e.g. 0.122) for now; step 5's trading conditions bring the pip sizes, then pips are added.
 - The Scout page reads all of an account's Scout files on each call (≈ 6 ms for three days of logs, 06-Nov-2026); if it gets slow, limit it to recent days or keep a merged copy on the server.
 - The Scout badge in the sidebar (setups in the last hour) and TM's actions in the setup detail come with step 5's data.
-- Owner of a closed deal: to be confirmed in step 5 that the order history gives each deal's label (else Scout's `closed` rows and TM's logs are matched by position ID).
 - Uploads and control syncs stop while the laptop sleeps or nobody is logged in (linger off, [shared §3](shared.md#3-machine-and-services)); the page shows the data's age and *saved, not yet applied*. Moves with the bots when they go to a VPS.
 - **Timeframe change and pending orders** (proposed, §3.4): orders found on the old chart stay until filled or expired. Alternative: cancel them at the switch. Owner to confirm in step 6.
 - **Timeframes Scout supports:** its spec defines the setup for 1H, 4H and 1D (`scout.json`: H1, H4, D1); each timeframe's higher timeframe and the detector's settings per timeframe to be checked in Scout's spec before the timeframe option goes live.
@@ -397,3 +410,4 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 | v1.8 | 05 Nov 2026 | Build step 3b: the screens in Next.js 16 + React 19 + TypeScript, static export (`web/dashboard/ui/`), from the design pack: tokens (exact copy, checked by a test), sidebar and top bar (data age, UTC / local, view-only badge, user menu with theme and sign-out), the data-block states, Sign in (Google button, M2M note, requested / refused / expired / error), Status (bots and timers, warnings, uploads, control history) and Users (requests, people, machines, sign-in log); fonts served from the site. API types generated from `openapi.yaml`, which now also describes the Status data (made by the laptop in step 4). Local preview with a stand-in for Google (`web/dashboard/dev/`, never deployed). The account selector waits for step 4's data |
 | v1.9 | 05 Nov 2026 | Build step 3c, step 3 done: `deploy-dashboard.sh`, `dashboard-m2m.sh`, `dashboard-api.sh`; deployed to trader.uzlabz.com and checked live (redirects, 404, headers, the code folder out of reach, the real client address in the log); machine account `claude` made (secret on the laptop only); the owner's first Google sign-in pins the account. Refused machine calls are logged too (§5.3). Status: live, sign-in only |
 | v1.10 | 06 Nov 2026 | Build step 4 done: the 30-min upload — `Trader.DashboardExport` stages the allowlisted files of the last 14 days in an outbox, checked for secrets file by file, and writes `status.json` (bots, timers, builds, today's warnings, accounts); `dashboard-push.sh` checks the outbox against the allowlist again and sends it by rsync; timer at :02 and :32 (§3.1). The Scout page, view only, with the account selector (§2.1); API calls for Scout's day and the order pictures. Open items: upload-key restriction, distance in pips |
+| v1.11 | 06 Nov 2026 | Build step 5 split into 5a and 5b (§8); **5a built** (owner): the read-only account snapshot (`Trader.DashboardExport snapshot`, §3.2) with deal and order history; `deals.csv` (every fill, with owner, trade and role from the order labels), `account.csv`, `snapshot-<broker>-<ctid>.json`; **trade pictures** — candles with the entry, the stop-loss and the hedge level H over time and every fill, so the trade can be compared with the same chart in cTrader (§2.3, §3.3, decision 19); a trade's result covers all its legs (decision 18); 14 days back-filled, balance line from the broker's balance after each close (decision 20). Accounts and Trades pages; the margin level coloured by TM's 100 % / 300 % rules. The snapshot reads the tokens, it never refreshes them (TM does) |

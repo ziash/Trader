@@ -116,6 +116,49 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/accounts:
+    get:
+      summary: An account's money, open positions by owner, today's result by owner, profit per day and the balance / equity lines (Accounts page, dashboard.md §2.4)
+      x-least-role: viewer
+      parameters:
+        - { name: account, in: query, required: true, schema: { type: string, example: brokerA-49123893 }, description: an id from Status.accounts }
+      responses:
+        '200':
+          description: From the uploaded snapshot, deals.csv and account.csv (dashboard.md §3.2, §3.3)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountView' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/trades:
+    get:
+      summary: The trades with a fill or a TM action on one UTC day, each with its whole result and timeline, and what is open now (TM trades page, dashboard.md §2.3)
+      x-least-role: viewer
+      parameters:
+        - { name: account, in: query, required: true, schema: { type: string, example: brokerA-49123893 }, description: an id from Status.accounts }
+        - { name: day, in: query, schema: { type: string, example: '2026-11-05' }, description: 'UTC day; default: the latest day with a fill or TM action' }
+      responses:
+        '200':
+          description: Trades newest activity first
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TradesDay' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/trades/chart:
+    get:
+      summary: A trade picture (dashboard.md §2.3, §3.3); the path from Trade.chart
+      x-least-role: viewer
+      parameters:
+        - { name: file, in: query, required: true, schema: { type: string, example: brokerA/49123893/Dashboard/2026-11-05/charts/trade-P692692856.svg } }
+      responses:
+        '200':
+          description: 'The SVG picture (900 × 440). Cache-Control: private, max-age=300 (an open trade is drawn again at every upload)'
+          content:
+            image/svg+xml: {}
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/users:
     get:
       summary: Users page — people, requests, machines, settings and the newest 100 rows of the access log
@@ -379,6 +422,163 @@ components:
             filled: { type: integer }
             closed: { type: integer }
             net_usd: { type: number }
+    AccountStatus:
+      type: object
+      required: [balance, equity, margin_used, free_margin, margin_level_pct, leverage, positions, pending_orders]
+      properties:
+        balance: { type: number }
+        equity: { type: number, description: balance + the open positions' net result }
+        margin_used: { type: number }
+        free_margin: { type: number }
+        margin_level_pct: { type: [number, 'null'], description: equity ÷ margin used × 100; null without positions }
+        leverage: { type: string, example: '1:500' }
+        positions: { type: integer }
+        pending_orders: { type: integer }
+    OpenPosition:
+      type: object
+      required: [position_id, owner, trade, role, symbol, side, lots, entry, open_result_usd, margin_usd, opened_utc]
+      properties:
+        position_id: { type: integer }
+        owner: { type: string, description: 'Scout, TM, manual, or another bot by its label (e.g. AuditBot)' }
+        trade: { type: string, example: P692692856 }
+        role: { type: string, enum: [MAIN, MIR, HMAIN, HMIR] }
+        symbol: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        lots: { type: number }
+        entry: { type: number }
+        stop_loss: { type: [number, 'null'] }
+        take_profit: { type: [number, 'null'] }
+        open_result_usd: { type: number }
+        margin_usd: { type: number }
+        opened_utc: { type: string }
+        label: { type: string }
+    OpenOrder:
+      type: object
+      required: [order_id, owner, trade, role, symbol, type, side, lots, placed_utc]
+      properties:
+        order_id: { type: integer }
+        owner: { type: string }
+        trade: { type: string }
+        role: { type: string }
+        symbol: { type: string }
+        type: { type: string, example: stop }
+        side: { type: string, enum: [buy, sell] }
+        lots: { type: number }
+        level: { type: [number, 'null'] }
+        stop_loss: { type: [number, 'null'] }
+        placed_utc: { type: string }
+        label: { type: string }
+    AccountView:
+      type: object
+      required: [account, available, levels, open_by_owner, today, per_day, balance, equity]
+      properties:
+        account: { type: string }
+        available: { type: boolean, description: false until the first snapshot is uploaded }
+        snapshot_utc: { type: [string, 'null'] }
+        status: { oneOf: [{ $ref: '#/components/schemas/AccountStatus' }, { type: 'null' }] }
+        levels:
+          type: object
+          description: TM's margin rules (tm.md §5.1)
+          properties:
+            rescue_pct: { type: number, example: 100 }
+            warn_pct: { type: number, example: 300 }
+        open_by_owner:
+          type: array
+          items:
+            type: object
+            properties:
+              owner: { type: string }
+              positions: { type: integer }
+              orders: { type: integer }
+              open_result_usd: { type: number }
+        today:
+          type: object
+          properties:
+            day: { type: string }
+            net_usd: { type: number }
+            by_owner:
+              type: array
+              items:
+                type: object
+                properties: { owner: { type: string }, net_usd: { type: number }, closes: { type: integer } }
+        per_day:
+          type: array
+          items:
+            type: object
+            properties: { day: { type: string }, net_usd: { type: number }, closes: { type: integer } }
+        balance:
+          type: array
+          description: balance after each close, as the broker reported it, oldest first
+          items:
+            type: object
+            properties: { time_utc: { type: string }, balance_usd: { type: number } }
+        equity:
+          type: array
+          description: one point per snapshot (every 30 min), oldest first
+          items:
+            type: object
+            properties:
+              time_utc: { type: string }
+              balance_usd: { type: [number, 'null'] }
+              equity_usd: { type: [number, 'null'] }
+              margin_level_pct: { type: [number, 'null'] }
+    TradeEvent:
+      type: object
+      description: 'A fill from deals.csv (source fill) or an action from TM''s actions.csv (source tm). The same TM action of the same leg with the same result, again within 10 minutes, is counted on one event (count, until_utc)'
+      required: [time_utc, source, role, what, ok, count]
+      properties:
+        time_utc: { type: string }
+        until_utc: { type: string }
+        source: { type: string, enum: [fill, tm] }
+        role: { type: string }
+        what: { type: string, example: Buy filled }
+        price: { type: [string, 'null'] }
+        lots: { type: [number, 'null'] }
+        net_usd: { type: [number, 'null'], description: closes only }
+        position_id: { type: string }
+        latency_ms: { type: [number, 'null'] }
+        ok: { type: boolean }
+        result: { type: [string, 'null'], description: the broker's refusal, e.g. NOT_ENOUGH_MONEY }
+        detail: { type: [string, 'null'] }
+        count: { type: integer }
+    Trade:
+      type: object
+      description: A main and everything TM added to it (dashboard.md §2.3)
+      required: [trade, owner, symbol, open, result_usd, closed_result_usd, open_result_usd, legs, timeline, refused]
+      properties:
+        trade: { type: string, example: P692692856, description: 'P<mainPositionId>; O<orderId> for a main that never filled' }
+        owner: { type: string }
+        symbol: { type: string }
+        open: { type: boolean }
+        result_usd: { type: number, description: every leg's closed net plus the open legs' result }
+        closed_result_usd: { type: number }
+        open_result_usd: { type: number }
+        start_utc: { type: [string, 'null'] }
+        last_utc: { type: [string, 'null'] }
+        legs: { type: integer, description: positions in the trade }
+        refused: { type: integer, description: TM actions the broker refused }
+        timeline: { type: array, items: { $ref: '#/components/schemas/TradeEvent' } }
+        chart: { type: [string, 'null'], description: 'the trade picture, for GET /api/trades/chart?file=' }
+        scout_order:
+          oneOf:
+            - type: object
+              properties:
+                order_id: { type: string }
+                day: { type: string }
+                chart: { type: [string, 'null'] }
+            - type: 'null'
+    TradesDay:
+      type: object
+      required: [account, day, days, shown_owners, open_positions, open_orders, trades]
+      properties:
+        account: { type: string }
+        day: { type: string }
+        days: { type: array, items: { type: string } }
+        snapshot_utc: { type: [string, 'null'] }
+        shown_owners: { type: array, items: { type: string }, description: owners listed by default; other bots' trades only when chosen }
+        open_positions: { type: array, items: { $ref: '#/components/schemas/OpenPosition' } }
+        open_orders: { type: array, items: { $ref: '#/components/schemas/OpenOrder' } }
+        trades: { type: array, items: { $ref: '#/components/schemas/Trade' } }
     Me:
       type: object
       required: [kind, id, role]

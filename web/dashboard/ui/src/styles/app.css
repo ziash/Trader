@@ -194,3 +194,29 @@ h1 { margin: 0; font-size: var(--fs-h1); font-weight: var(--fw-semibold); }
   .pic { width: 100%; }
   .thumbbtn { width: 100%; }
 }
+
+/* Accounts (Accounts.dc.html) and TM trades (Trades.dc.html) */
+.money { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; }
+.money > div { padding: 14px 18px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+.money > div:last-child { border-right: 0; }
+.money dt { font-size: var(--fs-small); color: var(--text-3); }
+.money dd { margin: 0; font-size: var(--fs-figure); font-weight: var(--fw-semibold); line-height: 1.15; }
+.level-bar { position: relative; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+.level-bar span { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.chart-box { padding: 12px 16px 16px; }
+.chart-box svg { display: block; width: 100%; height: auto; }
+.chart-legend { display: flex; gap: 16px; font-size: var(--fs-small); color: var(--text-2); padding: 0 16px; }
+.chart-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.trade { display: flex; flex-direction: column; }
+.trade-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; }
+.trade-head .res { margin-left: auto; font-size: 18px; font-weight: var(--fw-semibold); }
+.trade-body { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 16px 16px; align-items: flex-start; }
+.trade-body .frame { flex: 1 1 460px; max-width: 640px; }
+.trade-body .tpic { display: block; width: 100%; height: auto; aspect-ratio: 900 / 440; border-radius: 6px; background: #fff; }
+.trade-events { flex: 1 1 360px; min-width: 0; max-height: 420px; overflow-y: auto; }
+.trade-events .tbl td { white-space: normal; padding: 6px 10px; vertical-align: top; }
+.trade-events .tbl th { padding: 6px 10px; }
+.trade-events tr.bad td { color: var(--red); }
+.trade-events tr.fill td { background: var(--surface-2); }
+.role { font-family: var(--font-mono); font-size: var(--fs-micro); font-weight: var(--fw-bold); padding: 1px 6px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

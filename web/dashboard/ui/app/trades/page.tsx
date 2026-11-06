@@ -1,5 +1,5 @@
-import { Later } from "@/screens/Later";
+import { TradesScreen } from "@/screens/TradesScreen";
 
 export default function Page() {
-  return <Later title="Trades" step={5} what="TM’s trades and actions" />;
+  return <TradesScreen />;
 }

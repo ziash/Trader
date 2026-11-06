@@ -80,6 +80,19 @@ final class ScoutData
         ];
     }
 
+    /** Every Scout order of the account by order ID, merged from all its rows (for the Trades page's link to Scout). */
+    public function ordersById(string $broker, string $ctid): array
+    {
+        $rows = [];
+        foreach ($this->dayFolders($broker, $ctid) as [$dir, $d]) {
+            foreach (self::readCsv("$dir/orders.csv") as $r) {
+                $rows[] = $r + ['_day' => $d];
+            }
+        }
+        usort($rows, fn ($a, $b) => strcmp($a['time_utc'] ?? '', $b['time_utc'] ?? ''));
+        return self::mergeOrders($rows);
+    }
+
     /** The full path of an order picture, or a 404; never anything outside the logs folder. */
     public function chartPath(string $file): string
     {

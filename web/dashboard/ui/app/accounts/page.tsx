@@ -1,5 +1,5 @@
-import { Later } from "@/screens/Later";
+import { AccountsScreen } from "@/screens/AccountsScreen";
 
 export default function Page() {
-  return <Later title="Accounts" step={5} what="Balances, equity and profit" />;
+  return <AccountsScreen />;
 }

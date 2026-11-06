@@ -35,8 +35,11 @@ public sealed class Outbox(string tradebotHome, string outboxDir, IReadOnlyColle
         new($@"^logs/{Account}/Scout-{Instance}/{Day}/(orders|setups|events)\.csv$"),
         new($@"^logs/{Account}/Scout-{Instance}/{Day}/charts/[A-Za-z0-9._-]{{1,120}}\.svg$"),
         new($@"^logs/{Account}/TM-{Instance}/{Day}/(actions|events)\.csv$"),
+        new($@"^logs/{Account}/Dashboard/{Day}/(account|deals)\.csv$"),
+        new($@"^logs/{Account}/Dashboard/{Day}/charts/trade-[PO]\d{{1,20}}\.svg$"),
         new($@"^reports/(daily-compare-{Day}|summary-{Day}_{Day})\.csv$"),
         new(@"^status\.json$"),
+        new(@"^snapshot-[A-Za-z0-9]{1,32}-\d{1,12}\.json$"),
     ];
 
     /// <summary>Text that must never be sent even if it is not in the secrets files (Google client secrets, private keys).</summary>
@@ -59,7 +62,7 @@ public sealed class Outbox(string tradebotHome, string outboxDir, IReadOnlyColle
             foreach (var instance in Directory.EnumerateDirectories(accountDir))
             {
                 var name = Path.GetFileName(instance);
-                if (!name.StartsWith("Scout-", StringComparison.Ordinal) && !name.StartsWith("TM-", StringComparison.Ordinal))
+                if (!name.StartsWith("Scout-", StringComparison.Ordinal) && !name.StartsWith("TM-", StringComparison.Ordinal) && name != "Dashboard")
                     continue;
                 foreach (var dayDir in Directory.EnumerateDirectories(instance))
                 {
@@ -93,7 +96,7 @@ public sealed class Outbox(string tradebotHome, string outboxDir, IReadOnlyColle
         return new StageResult(allowed, copied, refused);
     }
 
-    /// <summary>Writes a file the exporter made itself (status.json) into the outbox, through the same secrets check.</summary>
+    /// <summary>Writes a file the exporter made itself (status.json, the snapshots) into the outbox, through the same secrets check.</summary>
     public bool Write(string relativePath, string content)
     {
         if (!IsAllowed(relativePath))

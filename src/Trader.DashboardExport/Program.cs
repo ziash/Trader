@@ -1,6 +1,7 @@
-// Dashboard export (dashboard.md §3.1, build step 4): stages the allowlisted files for the 30-min upload into
-// ~/tradebot/dashboard/outbox and writes status.json there; scripts/dashboard-push.sh then sends that folder.
-// Read-only on the bots' files and never connects to cTrader (the account snapshot is step 5). Never prints secrets.
+// Dashboard export (dashboard.md §3.1–§3.3, build steps 4 and 5a): takes the read-only account snapshot, stages the
+// allowlisted files for the 30-min upload into ~/tradebot/dashboard/outbox and writes status.json there;
+// scripts/dashboard-push.sh then sends that folder. Read-only on the bots' files; to cTrader it only asks questions and
+// never sends an order message (a test checks this program's code). Never prints secrets.
 
 using System.Globalization;
 using System.Text.Json;
@@ -11,11 +12,15 @@ using Trader.Core.Notifications;
 using Trader.DashboardExport;
 
 const string Usage = """
-    Usage: Trader.DashboardExport collect [--days N]
+    Usage: Trader.DashboardExport snapshot
+           Trader.DashboardExport collect [--days N]
            Trader.DashboardExport status [--upload-utc "yyyy-MM-dd HH:mm:ss" --upload-seconds S --upload-files N]
            Trader.DashboardExport refuse "<reason>"
            (all: [--home <dir>] [--outbox <dir>])
 
+      snapshot  ask cTrader (read-only) for each account's status, positions, orders, deals and candles; write the
+                snapshot into the outbox and account.csv, deals.csv and the trade pictures under logs/…/Dashboard/;
+                exit 2 if cTrader could not be reached or an account failed
       collect   copy the allowlisted files of the last N days (default 14) into the outbox, checked for secrets;
                 exit 3 and a Critical notification if any file holds a secret (that file is not staged)
       status    write status.json into the outbox (bots and timers from systemctl, today's warnings and errors)
@@ -26,7 +31,7 @@ const string Usage = """
 string? Option(string name) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 
 var command = args.FirstOrDefault();
-if (command is null or "--help" or "-h" || command is not ("collect" or "status" or "refuse"))
+if (command is null or "--help" or "-h" || command is not ("snapshot" or "collect" or "status" or "refuse"))
 {
     Console.WriteLine(Usage);
     return command is null or "--help" or "-h" ? 0 : 2;
@@ -59,6 +64,9 @@ catch (SecretsException e)
 }
 var accounts = DashAccounts.Load(configDir);
 var outbox = new Outbox(home, outboxDir, secrets);
+
+if (command == "snapshot")
+    return await new SnapshotRunner(home, outbox, log).RunAsync(accounts, DateTime.UtcNow);
 
 if (command == "collect")
 {

@@ -319,6 +319,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An account's money, open positions by owner, today's result by owner, profit per day and the balance / equity lines (Accounts page, dashboard.md §2.4) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description an id from Status.accounts */
+                    account: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description From the uploaded snapshot, deals.csv and account.csv (dashboard.md §3.2, §3.3) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountView"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trades with a fill or a TM action on one UTC day, each with its whole result and timeline, and what is open now (TM trades page, dashboard.md §2.3) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description an id from Status.accounts */
+                    account: string;
+                    /** @description UTC day; default: the latest day with a fill or TM action */
+                    day?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Trades newest activity first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TradesDay"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trades/chart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A trade picture (dashboard.md §2.3, §3.3); the path from Trade.chart */
+        get: {
+            parameters: {
+                query: {
+                    file: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The SVG picture (900 × 440). Cache-Control: private, max-age=300 (an open trade is drawn again at every upload) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/svg+xml": unknown;
+                    };
+                };
+                400: components["responses"]["Error"];
+                401: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -724,6 +849,162 @@ export interface components {
                 closed: number;
                 net_usd: number;
             };
+        };
+        AccountStatus: {
+            balance: number;
+            /** @description balance + the open positions' net result */
+            equity: number;
+            margin_used: number;
+            free_margin: number;
+            /** @description equity ÷ margin used × 100; null without positions */
+            margin_level_pct: number | null;
+            /** @example 1:500 */
+            leverage: string;
+            positions: number;
+            pending_orders: number;
+        };
+        OpenPosition: {
+            position_id: number;
+            /** @description Scout, TM, manual, or another bot by its label (e.g. AuditBot) */
+            owner: string;
+            /** @example P692692856 */
+            trade: string;
+            /** @enum {string} */
+            role: "MAIN" | "MIR" | "HMAIN" | "HMIR";
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            lots: number;
+            entry: number;
+            stop_loss?: number | null;
+            take_profit?: number | null;
+            open_result_usd: number;
+            margin_usd: number;
+            opened_utc: string;
+            label?: string;
+        };
+        OpenOrder: {
+            order_id: number;
+            owner: string;
+            trade: string;
+            role: string;
+            symbol: string;
+            /** @example stop */
+            type: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            lots: number;
+            level?: number | null;
+            stop_loss?: number | null;
+            placed_utc: string;
+            label?: string;
+        };
+        AccountView: {
+            account: string;
+            /** @description false until the first snapshot is uploaded */
+            available: boolean;
+            snapshot_utc?: string | null;
+            status?: components["schemas"]["AccountStatus"] | null;
+            /** @description TM's margin rules (tm.md §5.1) */
+            levels: {
+                /** @example 100 */
+                rescue_pct?: number;
+                /** @example 300 */
+                warn_pct?: number;
+            };
+            open_by_owner: {
+                owner?: string;
+                positions?: number;
+                orders?: number;
+                open_result_usd?: number;
+            }[];
+            today: {
+                day?: string;
+                net_usd?: number;
+                by_owner?: {
+                    owner?: string;
+                    net_usd?: number;
+                    closes?: number;
+                }[];
+            };
+            per_day: {
+                day?: string;
+                net_usd?: number;
+                closes?: number;
+            }[];
+            /** @description balance after each close, as the broker reported it, oldest first */
+            balance: {
+                time_utc?: string;
+                balance_usd?: number;
+            }[];
+            /** @description one point per snapshot (every 30 min), oldest first */
+            equity: {
+                time_utc?: string;
+                balance_usd?: number | null;
+                equity_usd?: number | null;
+                margin_level_pct?: number | null;
+            }[];
+        };
+        /** @description A fill from deals.csv (source fill) or an action from TM's actions.csv (source tm). The same TM action of the same leg with the same result, again within 10 minutes, is counted on one event (count, until_utc) */
+        TradeEvent: {
+            time_utc: string;
+            until_utc?: string;
+            /** @enum {string} */
+            source: "fill" | "tm";
+            role: string;
+            /** @example Buy filled */
+            what: string;
+            price?: string | null;
+            lots?: number | null;
+            /** @description closes only */
+            net_usd?: number | null;
+            position_id?: string;
+            latency_ms?: number | null;
+            ok: boolean;
+            /** @description the broker's refusal */
+            result?: string | null;
+            detail?: string | null;
+            count: number;
+        };
+        /** @description A main and everything TM added to it (dashboard.md §2.3) */
+        Trade: {
+            /**
+             * @description P<mainPositionId>; O<orderId> for a main that never filled
+             * @example P692692856
+             */
+            trade: string;
+            owner: string;
+            symbol: string;
+            open: boolean;
+            /** @description every leg's closed net plus the open legs' result */
+            result_usd: number;
+            closed_result_usd: number;
+            open_result_usd: number;
+            start_utc?: string | null;
+            last_utc?: string | null;
+            /** @description positions in the trade */
+            legs: number;
+            /** @description TM actions the broker refused */
+            refused: number;
+            timeline: components["schemas"]["TradeEvent"][];
+            /** @description the trade picture, for GET /api/trades/chart?file= */
+            chart?: string | null;
+            scout_order?: {
+                order_id?: string;
+                day?: string;
+                chart?: string | null;
+            } | null;
+        };
+        TradesDay: {
+            account: string;
+            day: string;
+            days: string[];
+            snapshot_utc?: string | null;
+            /** @description owners listed by default; other bots' trades only when chosen */
+            shown_owners: string[];
+            open_positions: components["schemas"]["OpenPosition"][];
+            open_orders: components["schemas"]["OpenOrder"][];
+            trades: components["schemas"]["Trade"][];
         };
         Me: {
             /** @enum {string} */
