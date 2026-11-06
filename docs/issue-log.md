@@ -4,13 +4,13 @@
 
 | Item | Value |
 |---|---|
-| Document version | v1.0 (06-Nov-2026) — history at the end |
+| Document version | v1.1 (06-Nov-2026) — history at the end |
 | Where the facts come from | `~/tradebot/logs/<broker>/<account>/` (`orders.csv`, `actions.csv`, `events.csv`), `~/tradebot/run/tm/`, and the broker itself (`dotnet run --project src/Trader.ListAccounts -- --positions`, read-only) |
 | Adding an issue | A new `## #n` section from the template at the end, a row in the table below, and a history row; link it from the bot documents it changed |
 
 | # | Date | Account | Summary | State |
 |---|---|---|---|---|
-| [1](#1-ic-markets-demo-in-a-margin-call-06-nov-2026) | 06-Nov-2026 | IC Markets demo | Too much exposure for the account: margin ran out, hedges were refused, five trades were left without protection, margin call at 92 % | Fixed in code (TM v1.9, Scout v1.7); waiting for the owner's OK to restart the bots |
+| [1](#1-ic-markets-demo-in-a-margin-call-06-nov-2026) | 06-Nov-2026 | IC Markets demo | Too much exposure for the account: margin ran out, hedges were refused, five trades were left without protection, margin call at 92 % | Fixed (TM v1.9, Scout v1.7), running since 16:14 UTC 06-Nov: TM's margin rescue lifted the level to 122 % |
 
 ## #1 IC Markets demo in a margin call (06-Nov-2026)
 
@@ -93,6 +93,22 @@ Tests: 254 in all, up from 237. New: TM `MarginTests` (9: the ETHUSD case, waiti
 
 At 92 % the margin rescue starts at once. TM closes the trade holding the most margin (one of the three SOLUSD trades, which hold most of it), reads the account again and closes the next one if the level is still below 100 %. It also sets backstop stop-losses on every leg that has no filled hedge. A leg that is past its hedge level without a hedge gets one market hedge attempt, and is closed if that is refused. Scout places no new orders until the budget allows it. These closes realise part of today's open loss of about −$1,319.
 
+### What the bots did after the restart (06-Nov-2026, UTC)
+
+| When | What |
+|---|---|
+| 16:12:07 | The owner deploys and restarts both bots. Scout starts on 34ae014. TM restarts on the **old build** (2b56e33, 03-Nov): its `~/tradebot/bin/TM` was still a plain folder from before versioned folders, and a running process used it, so `deploy-tm.sh` built `TM-34ae014` but left the link alone and printed the one-time switch command ([shared §3](shared.md#3-machine-and-services)). The old TM goes on as before |
+| 16:13 | IC Markets read-only: balance $3,426.47, equity $2,289.48, margin $2,638.86 used, free −$349.38, **level 87 %**, 43 positions / 15 orders |
+| 16:14:24 | The owner runs the one-time switch (stop TM, rename the plain folder to `TM-2b56e33`, link `TM` → `TM-34ae014`, start TM). From now on a plain restart picks up a TM deploy, as for Scout |
+| 16:14:28 | TM logs its first `AccountStatus`: equity $2,270.68, free −$368.18, level 86 %, plus a `MarginLow` pop-up |
+| 16:14:28–30 | **Margin rescue:** TM closes the SOLUSD trade P692692856, which holds the most margin ($1,536.62): main, mirror and both filled hedges. The hedges had locked most of its loss, so the close cost $32.12 (balance $3,426.47 → $3,394.35) |
+| 16:14:30–31 | **Backstops:** stop-losses at the 3R loss limit on 7 legs that had none and no filled hedge: XNGUSD (main, mirror) 2.897, BTCUSD (main, mirror) 77,849.83, ETHUSD (main, mirror) 2,281.99, XAUUSD (main) 3,952.37 |
+| 16:14:56 | IC Markets read-only: balance $3,394.35, equity $2,278.93, margin $1,868.02 used, free **+$410.91**, **level 122 %**, 39 positions / 15 orders. Above 100 %, so TM closes nothing more. No refused-action loop since the switch |
+
+Every position still without a stop-loss (18 of 39) is a leg with a filled hedge, or one of those hedges, on XNGUSD, SOLUSD, EURUSD, US500, EURJPY, DE40 and GBPUSD. That is the design: the filled hedge freezes the loss in place of the stop-loss. At 122 % TM opens no mirrors (below 300 %), and Scout places no orders while the margin in use is above half the equity. Pepperstone stayed at 539 % throughout.
+
+Lesson for deploys: read the output of the deploy script before restarting. A "Not switched yet" line means the restart will run the old build.
+
 ### Still open
 
 - **Sizes against the account** (owner's decision): `lotsBySymbol` sets the value of a 1H move, not a share of the account. XNGUSD (0.5-lot minimum) and SOLUSD (20 lots, high margin) are the outliers. Scout's trial review (≈ 10-Nov) should decide: drop them, size them from the account, or cap the risk per trade.
@@ -105,6 +121,7 @@ At 92 % the margin rescue starts at once. TM closes the trade holding the most m
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 06 Nov 2026 | First issue: #1, IC Markets demo margin call; the account status calls and the bots' margin rules (TM v1.9, Scout v1.7, Open Code Pieces v1.9, shared v1.11) |
+| v1.1 | 06 Nov 2026 | #1: what the bots did after the restart (TM's one-time folder switch, margin rescue of one SOLUSD trade, 7 backstops, IC from 86 % to 122 %); state updated |
 
 ## Template
 
