@@ -5,24 +5,32 @@ using Trader.Core.MarketData;
 
 namespace Trader.Scout;
 
-/// <summary>What one order picture shows (scout.md §3.1). <see cref="WithHigher"/>: "with", "against" or "unknown".</summary>
+/// <summary>
+/// What one order picture shows (scout.md §3.1). <see cref="WithHigher"/>: "with", "against" or "unknown".
+/// <see cref="Others"/>: Scout's other setups on the chart with what had become of them when this order was placed.
+/// </summary>
 public sealed record OrderPicture(
     string Symbol, string Timeframe, int Digits, double PipSize, string Broker, long AccountId, long OrderId,
     int Dir, bool Reversal, double Level, double? StopLoss, DateTime PlacedUtc, DateTime ExpiresUtc, DateTime PauseStartUtc,
-    string? HigherTimeframe, string WithHigher);
+    string? HigherTimeframe, string WithHigher, IReadOnlyList<PastSetup>? Others = null);
 
 /// <summary>
 /// Draws one Scout order as it stood when it was placed (scout.md §3.1): the last 60 closed candles, the pause, the
-/// stop level, the stop-loss and the room up to the expiry (the right edge). Only candles that had closed by then are used, so a
-/// picture drawn later from the same candles is the same picture. SVG: small (≈ 15 KB), sharp at any size, opens
+/// stop level, the stop-loss and the room up to the expiry (the right edge), and Scout's other setups whose pause is
+/// in view, each tagged with what had become of it. Only candles that had closed by then are used, so a picture drawn
+/// later from the same candles is the same picture. SVG: small (≈ 15 KB), sharp at any size, opens
 /// in any browser; numbers are always written with '.' whatever the machine's language.
 /// </summary>
 public static class OrderChart
 {
     public const int CandlesShown = 60;
 
+    /// <summary>At most this many other setups on one picture, the most recent ones, so it stays readable.</summary>
+    public const int MaxOthers = 6;
+
     private const double W = 720, H = 400, Left = 8, Right = 84, Top = 50, Bottom = 22;
     private const string Up = "#26a69a", Down = "#ef5350", Entry = "#1e66f5", Stop = "#e11d48", Pause = "#f59e0b", Grid = "#e5e7eb", Muted = "#6b7280";
+    private const string Warn = "#b45309", Loss = "#dc2626", Profit = "#16a34a";
 
     /// <summary>"GBPJPY-H1-202611031500-M-1035054512.svg": chart, pause start, main/reversal, order ID.</summary>
     public static string FileName(OrderPicture p) =>
@@ -40,8 +48,13 @@ public static class OrderChart
         var placedX = Left + shown.Count * slot;
         var endX = Left + (shown.Count + after) * slot;
 
-        var hi = new[] { shown.Max(c => c.High), p.Level, p.StopLoss ?? p.Level }.Max();
-        var lo = new[] { shown.Min(c => c.Low), p.Level, p.StopLoss ?? p.Level }.Min();
+        // Other setups whose pause is in view, without this order's own role.
+        var others = (p.Others ?? [])
+            .Where(o => o.PauseStartUtc >= shown[0].OpenUtc && o.PauseStartUtc < p.PlacedUtc && !(o.PauseStartUtc == p.PauseStartUtc && o.Reversal == p.Reversal))
+            .OrderBy(o => o.PauseStartUtc).ThenBy(o => o.Reversal).TakeLast(MaxOthers).ToList();
+
+        var hi = new[] { shown.Max(c => c.High), p.Level, p.StopLoss ?? p.Level }.Concat(others.Select(o => o.Level)).Max();
+        var lo = new[] { shown.Min(c => c.Low), p.Level, p.StopLoss ?? p.Level }.Concat(others.Select(o => o.Level)).Min();
         var pad = hi > lo ? (hi - lo) * 0.06 : p.PipSize * 10;
         hi += pad;
         lo -= pad;
@@ -99,6 +112,17 @@ public static class OrderChart
                 + $"<rect x=\"{N(x - body / 2)}\" y=\"{N(bt)}\" width=\"{N(body)}\" height=\"{N(Math.Max(1, bb - bt))}\" stroke=\"none\"/></g>\n");
         }
 
+        // A moment in time as an x position: inside the candle that was open then; the order's moment and later at its line.
+        double X(DateTime t)
+        {
+            var i = shown.FindIndex(c => c.OpenUtc + len > t);
+            if (t >= p.PlacedUtc || i < 0)
+                return placedX;
+            var frac = t <= shown[i].OpenUtc ? 0 : (t - shown[i].OpenUtc) / len;
+            return Left + (i + frac) * slot;
+        }
+        OtherSetups(sb, others, p, X, Y, placedX);
+
         // The moment of the order and its expiry.
         sb.Append($"<line x1=\"{N(placedX)}\" x2=\"{N(placedX)}\" y1=\"{N(Top)}\" y2=\"{N(H - Bottom)}\" stroke=\"{Muted}\" stroke-dasharray=\"2 3\"/>\n");
         sb.Append($"<text x=\"{N(placedX + 3)}\" y=\"{N(H - 7)}\" font-size=\"11\" fill=\"{Muted}\">placed {p.PlacedUtc.ToString("HH:mm", CultureInfo.InvariantCulture)}Z</text>\n");
@@ -124,6 +148,47 @@ public static class OrderChart
         sb.Append($"<text x=\"{N(Left + 4)}\" y=\"38\" font-size=\"12\" fill=\"{Muted}\">{Esc(sub)}</text>\n");
         sb.Append("</svg>\n");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Each other setup as a solid line at its level, from its pause to where its story ended (or to this order),
+    /// a triangle where it filled, ✕ where it closed, and a tag "Sell · closed −$15.91" placed where it covers no
+    /// other tag and no other setup's line.
+    /// </summary>
+    private static void OtherSetups(StringBuilder sb, List<PastSetup> others, OrderPicture p, Func<DateTime, double> x, Func<double, double> y, double placedX)
+    {
+        var lines = others.Select(o => (X1: x(o.PauseStartUtc), X2: Math.Max(x(o.PauseStartUtc) + 4, x(o.EndUtc ?? p.PlacedUtc)), Y: y(o.Level))).ToList();
+        var taken = lines.Select(l => (X: l.X1, Y: l.Y - 2, W: l.X2 - l.X1, H: 4.0)).ToList();
+        static bool Overlaps((double X, double Y, double W, double H) a, (double X, double Y, double W, double H) b) =>
+            a.X < b.X + b.W && b.X < a.X + a.W && a.Y < b.Y + b.H && b.Y < a.Y + a.H;
+        for (var k = 0; k < others.Count; k++)
+        {
+            var o = others[k];
+            var color = o.Tone switch { OutcomeTone.Info => Entry, OutcomeTone.Warning => Warn, OutcomeTone.Loss => Loss, OutcomeTone.Profit => Profit, _ => Muted };
+            var (x1, x2, ly) = lines[k];
+            sb.Append("<g class=\"other-setup\">");
+            sb.Append($"<line x1=\"{N(x1)}\" x2=\"{N(x2)}\" y1=\"{N(ly)}\" y2=\"{N(ly)}\" stroke=\"{color}\" stroke-width=\"2\"/>");
+            if (o.FilledUtc is { } filled)
+            {
+                var fx = x(filled);
+                var tip = o.Dir == 1 ? ly - 7 : ly + 7;
+                sb.Append($"<path d=\"M{N(fx - 4)} {N(ly)} L{N(fx + 4)} {N(ly)} L{N(fx)} {N(tip)} Z\" fill=\"{color}\"/>");
+            }
+            if (o.Closed)
+                sb.Append($"<text x=\"{N(x2 - 4)}\" y=\"{N(ly + 4)}\" font-size=\"11\" font-weight=\"bold\" fill=\"{color}\">✕</text>");
+
+            var text = $"{(o.Dir == 1 ? "Buy" : "Sell")}{(o.Reversal ? " reversal" : "")} · {o.Outcome}";
+            var w = text.Length * 5.9 + 6;
+            var tx = Math.Max(Left + 2, Math.Min(x1, placedX - w - 2));
+            // Its own line is not in the way; the first spot above or below it that covers nothing else wins.
+            double[] tries = [ly - 5, ly + 14, ly - 18, ly + 27, ly - 31, ly + 40];
+            var ty = tries.Select(t => Math.Clamp(t, Top + 12, H - Bottom - 3))
+                .FirstOrDefault(t => taken.Where((_, i) => i != k).All(r => !Overlaps(r, (tx, t - 10, w, 13))), Math.Clamp(tries[0], Top + 12, H - Bottom - 3));
+            taken.Add((tx, ty - 10, w, 13));
+            sb.Append($"<rect x=\"{N(tx)}\" y=\"{N(ty - 10)}\" width=\"{N(w)}\" height=\"13\" rx=\"2\" fill=\"#ffffff\" fill-opacity=\"0.85\"/>");
+            sb.Append($"<text x=\"{N(tx + 3)}\" y=\"{N(ty)}\" font-size=\"10\" fill=\"{color}\">{Esc(text)}</text>");
+            sb.Append("</g>\n");
+        }
     }
 
     private static void Level(StringBuilder sb, double price, double fromX, double toX, string color, string text, double y, double? tagY = null)

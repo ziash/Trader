@@ -690,7 +690,23 @@ internal sealed class AccountScout(
     // ── Order pictures (scout.md §3.1): never in the way of an order ────────────────────────────────────────────────
     private OrderPicture Picture(Want w, long orderId, double price, double? sl, DateTime placed, DateTime expires) =>
         new(w.Sym.Name, w.Chart.Chart.Timeframe, w.Sym.Digits, w.Sym.PipSize, account.Broker, account.AccountId, orderId, w.Dir, w.Reversal,
-            price, sl, placed, expires, w.PauseStart, w.Chart.HigherTimeframe, WithHigher(w));
+            price, sl, placed, expires, w.PauseStart, w.Chart.HigherTimeframe, WithHigher(w), History(w.Chart, placed));
+
+    /// <summary>Scout's other setups on the chart in view of a picture, from the logs (scout.md §3.1); none when they cannot be read.</summary>
+    private List<PastSetup> History(ChartTracker chart, DateTime placed)
+    {
+        try
+        {
+            var first = chart.Main.Candles.Where(c => c.OpenUtc + chart.Length <= placed).TakeLast(OrderChart.CandlesShown).FirstOrDefault();
+            return first is null ? [] : OrderLog.ReadHistory(Path.GetDirectoryName(logFolder)!, chart.Chart.Symbol, chart.Chart.Timeframe, first.OpenUtc, placed);
+        }
+        catch (Exception ex)
+        {
+            _log.Event("ScoutChartError").Warning("{Broker} {Symbol}: picture without other setups, the logs could not be read: {Message}",
+                account.Broker, chart.Chart.Symbol, ex.Message);
+            return [];
+        }
+    }
 
     /// <summary>Writes the picture next to that day's logs; returns its path relative to ~/tradebot/logs, or "" when it could not be drawn.</summary>
     private string DrawChart(ChartTracker chart, OrderPicture p)
@@ -742,7 +758,7 @@ internal sealed class AccountScout(
             }
             var p = new OrderPicture(s.Name, o.Timeframe, s.Digits, s.PipSize, account.Broker, account.AccountId, o.OrderId, o.Dir, o.Reversal,
                 o.Price, o.StopLoss, o.TimeUtc, o.ExpiresUtc ?? o.TimeUtc + config.ExpiryCandles * chart.Length, o.SetupUtc, chart.HigherTimeframe,
-                o.WithHigher != "unknown" ? o.WithHigher : TaggedEvent.Compare(chart.HigherTrendAt(o.TimeUtc), o.Dir));
+                o.WithHigher != "unknown" ? o.WithHigher : TaggedEvent.Compare(chart.HigherTrendAt(o.TimeUtc), o.Dir), History(chart, o.TimeUtc));
             if (DrawChart(chart, p) is not { Length: > 0 } path)
                 continue;
             record.Chart = path;

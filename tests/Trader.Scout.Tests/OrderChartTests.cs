@@ -129,6 +129,135 @@ public sealed class OrderChartTests
         Assert.All(live.Where((_, i) => i % 7 == 0), x => Assert.Equal(x.Trend, tracker.HigherTrendAt(x.Now)));
     }
 
+    private const string SetupsHeader = "time_utc,candle_utc,symbol,timeframe,event,side,level,far_side,setup_utc,pause_candles,pause_height_atr,move_atr,pullback,atr,higher_tf,higher_trend,with_higher,mode,reason\n";
+    private const string OrdersHeader = "time_utc,symbol,timeframe,setup_utc,role,action,side,lots,price_req,stop_loss,expires_utc,order_id,position_id,price_fill,slip_pips,gross,net,result,detail,chart\n";
+
+    private static void Write(string root, string instance, string day, string file, string text)
+    {
+        var dir = Path.Combine(root, instance, day);
+        Directory.CreateDirectory(dir);
+        File.AppendAllText(Path.Combine(dir, file), (File.Exists(Path.Combine(dir, file)) ? "" : file == "setups.csv" ? SetupsHeader : OrdersHeader) + text);
+    }
+
+    // The GBPUSD 1H move of 05–06 Nov 2026 (scout.md §7), as Scout's logs recorded it, across two instances.
+    private static string GbpusdLogs()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"scout-history-{Guid.NewGuid():N}");
+        Write(root, "Scout-6d48a6", "2026-11-05", "setups.csv",
+            "2026-11-05 03:00:09,2026-11-05 02:00:00,GBPUSD,H1,NewStop,Buy,1.34921,1.34822,2026-11-05 01:00:00,2,0.69,2.61,0.26,0.00144,H4,up,with,Trade,\n"
+            + "2026-11-05 21:00:06,2026-11-05 20:00:00,GBPUSD,H1,NewStop,Sell,1.34498,1.34634,2026-11-05 19:00:00,2,0.89,1.64,0.54,0.00177,H4,down,with,Trade,\n"
+            + "2026-11-05 21:00:07,2026-11-05 20:00:00,EURUSD,H1,NewStop,Sell,1.10000,1.10100,2026-11-05 19:00:00,2,0.89,1.64,0.54,0.00177,H4,down,with,Trade,\n");
+        Write(root, "Scout-6d48a6", "2026-11-05", "orders.csv",
+            "2026-11-05 03:00:19,GBPUSD,H1,2026-11-05 01:00:00,M,place,Buy,0.10,1.34921,1.34822,2026-11-05 19:00:19,1035910422,,,,,,ok,Scout-6d48a6-H1-202611050100-M,\n"
+            + "2026-11-05 03:15:33,GBPUSD,H1,2026-11-05 01:00:00,M,filled,Buy,0.10,1.34921,1.34822,,1035910422,692675771,1.34921,0.0,,,ok,,\n"
+            + "2026-11-05 21:00:16,GBPUSD,H1,2026-11-05 19:00:00,M,place,Sell,0.10,1.34498,1.34634,2026-11-06 13:00:16,1036403098,,,,,,ok,Scout-6d48a6-H1-202611051900-M,\n"
+            + "2026-11-05 21:00:17,GBPUSD,H1,2026-11-05 19:00:00,M,filled,Sell,0.10,1.34498,1.34634,,1036403098,692923991,1.34493,0.5,,,ok,,\n"
+            + "2026-11-05 22:01:07,GBPUSD,H1,2026-11-05 19:00:00,M,closed,Sell,0.10,,,,1036422173,692923991,1.34640,,-14.70,-15.91,ok,,\n");
+        Write(root, "Scout-567e7f", "2026-11-06", "setups.csv",
+            "2026-11-06 12:00:08,2026-11-06 11:00:00,GBPUSD,H1,NewStop,Sell,1.33816,1.34029,2026-11-06 10:00:00,2,1.48,5.60,0.26,0.00144,H4,down,with,Trade,\n"
+            + "2026-11-06 12:00:09,2026-11-06 11:00:00,GBPUSD,H4,NewStop,Sell,1.33700,1.34029,2026-11-06 08:00:00,2,1.48,5.60,0.26,0.00144,D1,down,with,Trade,\n"
+            + "2026-11-06 21:00:08,2026-11-06 20:00:00,GBPUSD,H1,NewStop,Sell,1.33464,1.33572,2026-11-06 19:00:00,2,0.66,7.29,0.12,0.00164,H4,down,with,Trade,\n");
+        Write(root, "Scout-567e7f", "2026-11-06", "orders.csv",
+            "2026-11-06 07:00:10,GBPUSD,H1,2026-11-06 05:00:00,M,skip,Sell,0.10,1.34100,1.34200,,,,,,,,no margin,needs $106.80,\n"
+            + "2026-11-06 12:00:18,GBPUSD,H1,2026-11-06 10:00:00,M,place,Sell,0.10,1.33816,1.34029,2026-11-07 04:00:18,1036689445,,,,,,ok,Scout-6d48a6-H1-202611061000-M,\n"
+            + "2026-11-06 13:12:25,GBPUSD,H1,2026-11-06 10:00:00,M,rejected,Sell,0.10,1.33816,1.34029,,1036689445,,,,,,ok,NOT_ENOUGH_MONEY,\n"
+            + "2026-11-06 21:00:18,GBPUSD,H1,2026-11-06 19:00:00,M,skip,Sell,0.10,1.33464,1.33572,,,,,,,,no margin,needs $106.80,\n");
+        Directory.CreateDirectory(Path.Combine(root, "TM-a76098", "2026-11-06"));
+        return root;
+    }
+
+    [Fact]
+    public void Other_setups_are_read_with_what_had_become_of_each_when_the_order_was_placed()
+    {
+        var root = GbpusdLogs();
+        try
+        {
+            var history = OrderLog.ReadHistory(root, "GBPUSD", "H1", new DateTime(2026, 11, 4, 4, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 6, 16, 0, 18, DateTimeKind.Utc));
+
+            Assert.Equal(
+            [
+                ("2026-11-05 01:00", 1, 1.34921, "filled, with TM"),
+                ("2026-11-05 19:00", -1, 1.34498, "closed −$15.91"),
+                ("2026-11-06 05:00", -1, 1.34100, "not placed: no margin"),
+                ("2026-11-06 10:00", -1, 1.33816, "refused: not enough money"),
+            ], history.Select(h => (h.PauseStartUtc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), h.Dir, h.Level, h.Outcome)));
+            var closed = history[1];
+            Assert.Equal((OutcomeTone.Loss, true), (closed.Tone, closed.Closed));
+            Assert.Equal(new DateTime(2026, 11, 5, 21, 0, 17, DateTimeKind.Utc), closed.FilledUtc);
+            Assert.Equal(new DateTime(2026, 11, 5, 22, 1, 7, DateTimeKind.Utc), closed.EndUtc);
+            Assert.Equal((OutcomeTone.Warning, (DateTime?)null), (history[3].Tone, history[3].FilledUtc));
+
+            // Drawn earlier, the same setups show what was known then: the refused order still waiting, the close not yet there.
+            var earlier = OrderLog.ReadHistory(root, "GBPUSD", "H1", new DateTime(2026, 11, 4, 4, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 6, 13, 0, 0, DateTimeKind.Utc));
+            Assert.Equal(("waiting", (DateTime?)null), (earlier.Single(h => h.Level == 1.33816).Outcome, earlier.Single(h => h.Level == 1.33816).EndUtc));
+            var beforeClose = OrderLog.ReadHistory(root, "GBPUSD", "H1", new DateTime(2026, 11, 5, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 5, 21, 30, 0, DateTimeKind.Utc));
+            Assert.Equal(["filled, with TM", "filled, with TM"], beforeClose.Select(h => h.Outcome));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_setup_without_an_order_and_a_part_close_have_their_own_tags()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"scout-history-{Guid.NewGuid():N}");
+        try
+        {
+            Write(root, "Scout-aaaaaa", "2026-11-05", "setups.csv",
+                "2026-11-05 03:00:09,2026-11-05 02:00:00,EURUSD,H1,NewStop,Buy,1.10000,1.09900,2026-11-05 01:00:00,2,0.69,2.61,0.26,0.00144,H4,up,with,Trade,\n"
+                + "2026-11-05 03:00:09,2026-11-05 02:00:00,EURUSD,H1,NewReversal,Sell,1.09900,1.10000,2026-11-05 01:00:00,2,0.69,2.61,0.26,0.00144,H4,up,against,Trade,\n");
+            Write(root, "Scout-aaaaaa", "2026-11-05", "orders.csv",
+                "2026-11-05 03:00:19,EURUSD,H1,2026-11-05 01:00:00,R,place,Sell,0.10,1.09900,1.10000,,1,,,,,,ok,x,\n"
+                + "2026-11-05 03:15:33,EURUSD,H1,2026-11-05 01:00:00,R,filled,Sell,0.10,1.09900,1.10000,,1,2,1.09900,0.0,,,ok,,\n"
+                + "2026-11-05 05:00:00,EURUSD,H1,2026-11-05 01:00:00,R,closed,Sell,0.05,,,,3,2,1.09800,,5.00,4.60,ok,,\n");
+
+            var history = OrderLog.ReadHistory(root, "EURUSD", "H1", new DateTime(2026, 11, 5, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 5, 12, 0, 0, DateTimeKind.Utc));
+
+            Assert.Equal([(false, "no order", OutcomeTone.Muted), (true, "part closed +$4.60", OutcomeTone.Profit)], history.Select(h => (h.Reversal, h.Outcome, h.Tone)));
+            Assert.Equal((false, (DateTime?)null), (history[1].Closed, history[1].EndUtc));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Picture_marks_the_other_setups_in_view_at_most_six_and_not_the_order_itself()
+    {
+        var (p, candles) = FirstOrder("EURUSD", 5, 0.0001);
+        Assert.DoesNotContain("other-setup", OrderChart.Svg(p, candles));
+
+        var shown = candles.Where(c => c.OpenUtc.AddHours(1) <= p.PlacedUtc).TakeLast(OrderChart.CandlesShown).ToList();
+        PastSetup At(int candle, string outcome, OutcomeTone tone, bool reversal = false) =>
+            new(shown[candle].OpenUtc, reversal, -1, shown[candle].Low, shown[candle].OpenUtc.AddHours(2), shown[candle].OpenUtc.AddHours(3), outcome, tone, tone is OutcomeTone.Loss or OutcomeTone.Profit);
+        var others = new List<PastSetup>
+        {
+            At(0, "out of view", OutcomeTone.Muted) with { PauseStartUtc = shown[0].OpenUtc.AddHours(-1) },
+            At(5, "expired", OutcomeTone.Muted),
+            At(10, "closed −$15.91", OutcomeTone.Loss),
+            At(20, "refused: not enough money", OutcomeTone.Warning),
+            At(25, "cancelled: stop filled", OutcomeTone.Muted, reversal: true),
+            At(30, "not placed: no margin", OutcomeTone.Warning),
+            At(35, "closed +$12.10", OutcomeTone.Profit),
+            At(40, "filled, with TM", OutcomeTone.Info),
+            new(p.PauseStartUtc, false, p.Dir, p.Level, null, null, "this order", OutcomeTone.Info, false),
+        };
+
+        var text = OrderChart.Svg(p with { Others = others }, candles);
+
+        var groups = XDocument.Parse(text).Descendants(Svg + "g").Where(g => (string?)g.Attribute("class") == "other-setup").ToList();
+        Assert.Equal(OrderChart.MaxOthers, groups.Count);
+        var tags = groups.Select(g => g.Elements(Svg + "text").Last().Value).ToList();
+        Assert.Equal(["Sell · closed −$15.91", "Sell · refused: not enough money", "Sell reversal · cancelled: stop filled", "Sell · not placed: no margin",
+            "Sell · closed +$12.10", "Sell · filled, with TM"], tags);
+        Assert.Equal(2, groups.Count(g => g.Elements(Svg + "text").Any(t => t.Value == "✕")));
+        Assert.Equal(OrderChart.Svg(p with { Others = others }, candles.Where(c => c.OpenUtc.AddHours(1) <= p.PlacedUtc).ToList()), text);
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "chart-sample-others.svg"), text); // to look at by eye
+    }
+
     [Fact]
     public void The_picture_path_survives_a_restart()
     {

@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9); setups the detector misses: missed-setup check and near-miss rows planned (§1.1); waiting for the owner's OK to build |
-| Document version | v1.3 (07-Nov-2026) |
+| Document version | v1.4 (07-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -41,7 +41,7 @@ The flow above runs one way: Scout Lens sees only what the detector found. A for
 owner marks a "missed" formation  →  missed-setup check  →  real misses ───────────►┘
 ```
 
-**First, a check of what looks missed.** On GBPUSD 1H (05–06 Nov 2026) two earlier pauses of a down move looked skipped on the order picture. Scout's logs show the detector found both: the first was filled and stopped out an hour later, the broker refused the second for lack of margin ([issue #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)). Not a detector gap, but the picture didn't show it — planned for the order picture ([scout.md §3.1](scout.md#31-order-pictures-owner-04-nov-2026), *other Scout orders*). The same history (this is the 3rd step; the 1st was stopped out) is an input to the scorer and the reviewer.
+**First, a check of what looks missed.** On GBPUSD 1H (05–06 Nov 2026) two earlier pauses of a down move looked skipped on the order picture. Scout's logs show the detector found both: the first was filled and stopped out an hour later, the broker refused the second for lack of margin ([issue #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)). Not a detector gap, but the picture didn't show it — the order picture now does (07-Nov-2026) ([scout.md §3.1](scout.md#31-order-pictures-owner-04-nov-2026), *other Scout orders*). The same history (this is the 3rd step; the 1st was stopped out) is an input to the scorer and the reviewer.
 
 | # | Addition | What it does | Status |
 |---|---|---|---|
@@ -339,3 +339,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.1 | 07 Nov 2026 | Documents reorganised (owner, [shared](../../shared.md) v1.13): moved to `docs/bots/scout/`, charts to `docs/bots/scout/images/` |
 | v1.2 | 07 Nov 2026 | **Decided (owner): options 1 + 3** (choice A, §8). Option 3 in two phases (§4.1): **a · training** — the caveat list tuned on replayed setups with Claude Code on the laptop at night; **b · inference** — Batch API check over history, then API calls from `Trader.Scout`. Plan for phase a's laptop loop (§9), waiting for the owner's OK to build. History moved to §10 |
 | v1.3 | 07 Nov 2026 | **Setups the detector never passes on** (owner, §1.1): the GBPUSD 05–06 Nov case (found, not missed: one stopped out, one refused for margin); planned **missed-setup check** (`missed.csv`, five cases) and **near-miss rows** (`NearMiss` in `setups.csv`, logging only) reviewed by Scout Lens in shadow mode; a pattern that pays becomes a rule change through the Scout spec. Chart scanner kept as a later option. §8 step 0. Order picture change in [scout.md](scout.md) v1.13 |
+| v1.4 | 07 Nov 2026 | §1.1: the order picture now shows Scout's other setups with their outcome ([scout.md](scout.md) v1.14, build step 6) |
