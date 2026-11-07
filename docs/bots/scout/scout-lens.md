@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9); setups the detector misses: missed-setup check and near-miss rows planned (§1.1); waiting for the owner's OK to build |
-| Document version | v1.4 (07-Nov-2026) |
+| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9); setups the detector misses: missed-setup check and near-miss rows planned (§1.1); **daily first** — monthly and daily pictures for Claude (§1.2); waiting for the owner's OK to build |
+| Document version | v1.5 (07-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -49,6 +49,21 @@ owner marks a "missed" formation  →  missed-setup check  →  real misses ─�
 | 2 | **Near-miss rows** | The detector also logs pauses that fail **one** rule by a small margin, as a new event `NearMiss` in `setups.csv`, with the rule and by how much — e.g. a move of 1.3 ATR where `minMove` is 1.5; a pull-back of 0.65 where `maxRetrace` is 0.6; a pause 3.3 ATR high where `maxPauseHeight` is 3.0. Margins set in `scout.json`. **Logging only:** no order, no change to the events Scout_Pine matches. In shadow mode Scout Lens reviews near-misses like setups (scorer score, Claude verdict) and the replay gives each its outcome in R. | Planned |
 | 3 | **Back to the rules** | When missed-setup cases or near-misses of one kind keep coming up and would have paid (in R, over enough cases), the fix is a **rule change**: written in the Scout spec, checked against Scout_Pine there first, then in `Detector.cs` (as for every rule change). Scout Lens never turns a near-miss into an order itself. | The way every change goes |
 | — | *Chart scanner (later option)* | *Claude reads each whole chart every few hours, independent of the detector, and lists formations it sees; shadow only. Costs more than reviewing single setups. Only worth it if the missed-setup check shows many real misses.* | *Not planned* |
+
+### 1.2 Daily first: the monthly and daily pictures (owner, 07-Nov-2026)
+
+The owner reads the charts top-down: **the daily chart sets the direction and the first entry; 4H and 1H pauses add to the position**, only in the daily direction (rules: Scout spec §4.7, D1–D5). Rules can measure the direction and the retracement depth; which daily levels are *good* zones is judgment, so it goes to Claude, from two pictures per symbol:
+
+| Picture | Shows | Refreshed | Claude writes |
+|---|---|---|---|
+| **Monthly** | Monthly candles, several years | Once, when a new monthly candle opens; it replaces the old one | The big zones: where a daily move is likely to stop or turn |
+| **Daily** | Daily candles, about a year, with the monthly zones drawn in | Every day after the daily close; it replaces the old one | Direction (up · down · range), the key daily levels (e.g. "support that held twice, now resistance"), and the **first entry**: side, stop level and why |
+
+- **One current picture per timeframe and symbol.** Old pictures are not kept; a level that still matters is carried forward as text in the context file (most are already in the monthly zones).
+- **Output:** one context file per symbol (e.g. `~/tradebot/run/lens/context-<symbol>.json`: direction, zones, first entry, picture dates, model). Scout reads it: pauses against the direction become alerts with the reason "against daily" (D1); the first entry is placed when **Automatic orders** is on (D2, a dashboard switch, on for the demo test).
+- **Without a context file** (Claude down, a new symbol), Scout runs as today, and says so in its log.
+- **Cost:** 18 symbols × one daily picture ≈ 400 reviews a month, plus 18 monthly; a few dollars a month on the API (estimate). Not time-critical, so phase a (§4.1) can run it on the laptop after the daily close.
+- **Measured first:** the replay (§8 step 1) tags every past setup with the daily direction and its retracement depth, so the gain from D1, D4 and D5 is known on years of history before Scout's rules change.
 
 ## 2. Option 1 — Setup scorer
 
@@ -232,8 +247,8 @@ The network replaces the detector instead of helping it. It needs huge amounts o
 **Decided (owner, 07-Nov-2026): options 1 and 3 together, in shadow mode first** (choice A below). The scorer handles what can be measured; the reviewer handles what can only be described. Each time "the rules miss X", X becomes either a new scorer input (if it can be measured) or a new line in the reviewer's caveat list (if it can't).
 
 0. **Missed setups (§1.1).** Start the missed-setup check now, by hand, on what the owner sees on the dashboard; add near-miss rows to the detector's log (with the replay of step 1, so they get outcomes too).
-1. **Build the dataset.** Add an outcome simulator to `--replay` (§5 of [scout.md](scout.md)) that plays every historical setup forward with Scout's real order rules: stop entry, stop-loss at the far side of the pause, trailing, 16-candle expiry, cancel when the setup ends. Run it on several years of 1H candles across 20+ symbols. Each setup gets its result in R.
-2. **Baseline.** Before any machine learning, slice the results by the existing fields: with or against 4H, pause height, staircase step, session. One plain filter is often most of the gain. The trial review (≈ 10-Nov-2026) feeds straight into this.
+1. **Build the dataset.** Add an outcome simulator to `--replay` (§5 of [scout.md](scout.md)) that plays every historical setup forward with Scout's real order rules: stop entry, stop-loss at the far side of the pause, trailing, 16-candle expiry, cancel when the setup ends. Run it on several years of 1H candles across 20+ symbols, with 4H, daily and monthly candles alongside. Each setup gets its result in R and the tags of §1.2: daily direction (with · against), retracement depth (≤ 0.382 · 0.382–0.5 · > 0.5) and one-candle pauses (traded as a test, D5).
+2. **Baseline.** Before any machine learning, slice the results by the existing fields: with or against the daily direction (§1.2) and 4H, retracement depth, pause height, staircase step, session. One plain filter is often most of the gain. The trial review (≈ 10-Nov-2026) feeds straight into this.
 3. **Train the scorer.** Walk-forward (train on older years, test on the next, step forward), with a gap between training and test periods so overlapping staircase setups don't leak. Judge it by total R and R per trade, not win rate.
 4. **Add the reviewer, in two phases (§4.1).**
    - **a · Training on the laptop (§9):** write the caveat list, the prompt and the reply schema; tune them on samples of replayed setups with Claude Code at night. Can start as soon as step 1 gives setups with outcomes, alongside steps 2–3.
@@ -340,3 +355,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.2 | 07 Nov 2026 | **Decided (owner): options 1 + 3** (choice A, §8). Option 3 in two phases (§4.1): **a · training** — the caveat list tuned on replayed setups with Claude Code on the laptop at night; **b · inference** — Batch API check over history, then API calls from `Trader.Scout`. Plan for phase a's laptop loop (§9), waiting for the owner's OK to build. History moved to §10 |
 | v1.3 | 07 Nov 2026 | **Setups the detector never passes on** (owner, §1.1): the GBPUSD 05–06 Nov case (found, not missed: one stopped out, one refused for margin); planned **missed-setup check** (`missed.csv`, five cases) and **near-miss rows** (`NearMiss` in `setups.csv`, logging only) reviewed by Scout Lens in shadow mode; a pattern that pays becomes a rule change through the Scout spec. Chart scanner kept as a later option. §8 step 0. Order picture change in [scout.md](scout.md) v1.13 |
 | v1.4 | 07 Nov 2026 | §1.1: the order picture now shows Scout's other setups with their outcome ([scout.md](scout.md) v1.14, build step 6) |
+| v1.5 | 07 Nov 2026 | **Daily first** (owner, §1.2; rules in Scout spec v1.5 §4.7): one monthly picture per symbol (replaced each new month) and one daily picture (replaced each day) for Claude: direction, key zones, the first entry; pauses against the daily direction become alerts; Automatic orders switch. Replay (§8 steps 1–2) tags daily direction, retracement depth and one-candle pauses |
