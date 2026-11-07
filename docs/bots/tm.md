@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout/scout.md)'s orders (`takeOver`, decision 12); from v1.9 reads the account's margin and acts on it (§5.1, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) |
-| Document version | v1.12 (08-Nov-2026) — history in §13 |
+| Document version | v1.13 (08-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -153,7 +153,7 @@ If the broker does not answer the status (e.g. a replay broker without it), the 
 
 ### 5.2 Spread guard and trigger on the other side (planned, 08-Nov-2026)
 
-**Status: design, waiting for the owner's OK to build.** After [issue-log.md #2](../issue-log.md#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026): at the daily rollover the spread widens many times over for minutes; buy-stop hedges filled on the spiking ask and TM's own rules then acted on the spike prices, up to the 3R loss limit. Owner's choice (08-Nov-2026): three parts.
+**Status: built and tested 08-Nov-2026, not deployed yet** (owner to OK the deploy). After [issue-log.md #2](../issue-log.md#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026): at the daily rollover the spread widens many times over for minutes; buy-stop hedges filled on the spiking ask and TM's own rules then acted on the spike prices, up to the 3R loss limit. Owner's choice (08-Nov-2026): three parts.
 
 **Terms:** *bid* — the price you can sell at (the chart shows it); *ask* — the price you can buy at; *spread* — ask minus bid. *Trigger method* — which price makes a stop order fire; cTrader's default is the trade's own side (a buy-stop on the ask, a sell-stop on the bid).
 
@@ -177,7 +177,9 @@ The guard ends when the spread is back under the threshold, or after **`spreadGu
 
 **What it does not change:** the protection rule — every leg keeps a protective order on the server at all times (shared §4); the hedge level H, 1R, the 2R/3R values.
 
-**Tests (planned):** the 05-Nov GBPUSD sequence as a test (ask 1.34644, bid 1.34484 at 22:01): no hedge close, no re-hedge, no loss limit while guarded, and normal handling once the spread is back; the guard ending after 15 minutes; the rollover window from a forex schedule; the trigger method sent on hedge orders and stops. Then a rollover replayed in Rewind before going live.
+**Built (08-Nov-2026):** `SpreadGuard.cs` (usual spread, guard, rollover window), the planner's guarded rules and trigger (`Planner.cs`), the trigger on `CTraderSession`'s stop-order, amend and position-protection calls. A guard start and end is a `SpreadGuard` line in `events.csv`; `SpreadGuardLong` pops up when it runs out after 15 minutes. Not guarded: the margin rescue (§5.1) — the account's survival comes first.
+
+**Tests (12 new, TM 69):** the 05-Nov GBPUSD sequence (ask 1.34644, bid 1.34484): without the guard TM closes the hedges at the spike price and warns at −2.2R, as on 05-Nov; with it TM waits, and once the spread is back the trade carries on at about −1.1R instead of −3R; with `DoubleOpposite` the spike fills no hedge while a real move does; hedge orders and TM's stops reported with another trigger are set again once; a new mirror waits while guarded; the guard on at 5×, off when back, ended after 15 minutes; the rollover window from a forex schedule (none for crypto); config checks. Still to do: a rollover replayed in Rewind (it does not send the trigger fields back yet) — or watch the first live rollover after the deploy.
 
 **Open for the owner:** Scout's entry orders with the same trigger (they can be filled falsely at the rollover too); Scout's picture tagging the whole trade's result.
 
@@ -314,3 +316,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.10 | 07 Nov 2026 | Documents reorganised (owner, [shared](../shared.md) v1.13): links to Scout and the Dashboard follow their new folders; Related line |
 | v1.11 | 07 Nov 2026 | **Pepperstone symbols for Scout** (owner): brokerB's list in `tm.json` = Scout's 18 plus EURGBP, with `symbolNames` for Pepperstone's names; brokerA's list unchanged so the IC Markets trades stay managed. Restarted 17:27Z (`TM-590e67`) |
 | v1.12 | 08 Nov 2026 | **§5.2 planned** (owner, after [issue #2](../issue-log.md#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026)): hedges and TM's stops triggered on the other side (`DOUBLE_OPPOSITE`), a spread guard on TM's own actions (5× the usual spread, at most 15 min), a rollover window from the broker's hours as backup. Design only |
+| v1.13 | 08 Nov 2026 | **§5.2 built** (owner's OK): hedges and TM's stops trigger `DoubleOpposite`; spread guard (5× the usual spread, at most 15 min) on the loss limit and warning, closing a hedge whose stop was passed, re-hedging and new mirrors; rollover window from the broker's hours. 12 new tests (TM 69). Not deployed yet |

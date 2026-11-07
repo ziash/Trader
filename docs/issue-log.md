@@ -4,14 +4,14 @@
 
 | Item | Value |
 |---|---|
-| Document version | v1.3 (08-Nov-2026) — history at the end |
+| Document version | v1.4 (08-Nov-2026) — history at the end |
 | Where the facts come from | `~/tradebot/logs/<broker>/<account>/` (`orders.csv`, `actions.csv`, `events.csv`), `~/tradebot/run/tm/`, and the broker itself (`dotnet run --project src/Trader.ListAccounts -- --positions`, read-only) |
 | Adding an issue | A new `## #n` section from the template at the end, a row in the table below, and a history row; link it from the bot documents it changed |
 
 | # | Date | Account | Summary | State |
 |---|---|---|---|---|
 | [1](#1-ic-markets-demo-in-a-margin-call-06-nov-2026) | 06-Nov-2026 | IC Markets demo | Too much exposure for the account: margin ran out, hedges were refused, five trades were left without protection, margin call at 92 % | Fixed (TM v1.9, Scout v1.7), running since 16:14 UTC 06-Nov: TM's margin rescue lifted the level to 122 % |
-| [2](#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026) | 05-Nov-2026 (found 08-Nov) | IC Markets and Pepperstone demos | At the daily rollover (22:00 UTC) the spread widens for minutes; buy-stop hedges filled on the spiking ask and TM's own rules (hedge stop, re-hedge, 3R loss limit) acted on the spike prices — 4 forex trades closed at the loss limit within 10 minutes of 22:00 | Fix designed ([tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026)), waiting for the owner's OK to build |
+| [2](#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026) | 05-Nov-2026 (found 08-Nov) | IC Markets and Pepperstone demos | At the daily rollover (22:00 UTC) the spread widens for minutes; buy-stop hedges filled on the spiking ask and TM's own rules (hedge stop, re-hedge, 3R loss limit) acted on the spike prices — 4 forex trades closed at the loss limit within 10 minutes of 22:00 | Fix built and tested 08-Nov-2026 ([tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026), TM v1.13), not deployed yet |
 
 ## #1 IC Markets demo in a margin call (06-Nov-2026)
 
@@ -168,9 +168,9 @@ At 22:01:00–22:01:01 the ask was 1.34644 while the bid was 1.34484: a **16-pip
 2. **TM acts on spike prices.** Its client-side rules — close a hedge whose stop the price has passed, re-hedge, the 2R warning and the 3R limit — use the current bid/ask without asking whether the spread is normal.
 3. **Visibility:** Scout's picture tags the trade with Scout's own position only (−$15.91), so the real loss (−$95) was not visible there.
 
-### Solution (designed 08-Nov-2026, not built yet)
+### Solution (built 08-Nov-2026, not deployed yet)
 
-Owner's choice: the stop orders' **trigger on the other side** for TM's hedges, plus a **spread guard** on TM's own actions, with a **rollover window** from the broker's trading hours as a backup. Design: [tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026), waiting for the owner's OK to build.
+Owner's choice: the stop orders' **trigger on the other side** for TM's hedges, plus a **spread guard** on TM's own actions, with a **rollover window** from the broker's trading hours as a backup. Built and tested the same day ([tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026), TM v1.13; 12 tests, among them this GBPUSD sequence: with the guard the trade carries on at about −1.1R instead of −3R). Deployed: not yet, on the owner's OK.
 
 ### Still open
 
@@ -186,6 +186,7 @@ Owner's choice: the stop orders' **trigger on the other side** for TM's hedges, 
 | v1.1 | 06 Nov 2026 | #1: what the bots did after the restart (TM's one-time folder switch, margin rescue of one SOLUSD trade, 7 backstops, IC from 86 % to 122 %); state updated |
 | v1.2 | 06 Nov 2026 | #1: the SOLUSD trade's whole result (−$45.20) from the broker's deals; the dashboard item done (dashboard step 5a) |
 | v1.3 | 08 Nov 2026 | **#2** rollover spread: hedges and TM's loss limit hit by the 22:00 UTC spread spike (GBPUSD −$95 whole trade; 4 such trades 03–05 Nov); fix designed in tm.md §5.2 |
+| v1.4 | 08 Nov 2026 | #2: fix built and tested (TM v1.13), not deployed yet |
 
 ## Template
 

@@ -40,6 +40,17 @@
   "marginWarnLevel": 300,
   "marginRescueLevel": 100,
 
+  // Spikes (tm.md §5.2, issue-log.md #2). Which price fires TM's hedges and the stops it sets: "DoubleOpposite" = the
+  // other side (a buy-stop on the bid, a sell-stop on the ask), two prices in a row; "Trade" = the broker's default.
+  // While a symbol's spread is above spreadGuardFactor × its usual (median of the last 2 h), and from rolloverBeforeMinutes
+  // before a close to rolloverAfterMinutes after a reopening (the broker's hours), TM's own reactions to the price wait —
+  // for at most spreadGuardMaxMinutes when only the spread is wide.
+  "stopTrigger": "DoubleOpposite",
+  "spreadGuardFactor": 5,
+  "spreadGuardMaxMinutes": 15,
+  "rolloverBeforeMinutes": 5,
+  "rolloverAfterMinutes": 15,
+
   // Pop-ups (tm.md §6): before each NFP/CPI release in news-releases.json and the Friday close (17:00 New York),
   // and when the connection to cTrader has been down this long.
   "alertMinutesBefore": 10,

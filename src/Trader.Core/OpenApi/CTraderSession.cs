@@ -264,8 +264,10 @@ public sealed class CTraderSession : IAsyncDisposable
     /// Places a pending STOP order (a buy-stop above the price or a sell-stop below it) and waits until the server
     /// accepts it. Returns the accepted order (its <c>OrderId</c> is used to move or cancel it).
     /// </summary>
+    /// <param name="trigger">Which price fires the order; null = the broker's default (<c>Trade</c>: a buy-stop on the ask,
+    /// a sell-stop on the bid). <c>DoubleOpposite</c>: the other side, two prices in a row (tm.md §5.2).</param>
     public Task<ProtoOAOrder> PlaceStopOrderAsync(long ctidTraderAccountId, long symbolId, ProtoOATradeSide side, long volume,
-        double stopPrice, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null)
+        double stopPrice, string label, string clientOrderId, string? comment = null, TimeSpan? timeout = null, ProtoOAOrderTriggerMethod? trigger = null)
     {
         var req = new ProtoOANewOrderReq
         {
@@ -278,6 +280,8 @@ public sealed class CTraderSession : IAsyncDisposable
             Label = label,
             ClientOrderId = clientOrderId,
         };
+        if (trigger is { } method)
+            req.StopTriggerMethod = method;
         if (!string.IsNullOrEmpty(comment))
             req.Comment = comment.Length <= 512 ? comment : comment[..512];
         return AcknowledgeAsync(req, timeout);
@@ -351,8 +355,15 @@ public sealed class CTraderSession : IAsyncDisposable
     }
 
     /// <summary>Moves a pending stop order to <paramref name="stopPrice"/>; waits for the server's confirmation.</summary>
-    public Task<ProtoOAOrder> AmendStopOrderAsync(long ctidTraderAccountId, long orderId, double stopPrice, TimeSpan? timeout = null) =>
-        AcknowledgeAsync(new ProtoOAAmendOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId, StopPrice = stopPrice }, timeout);
+    /// <param name="trigger">Also sets which price fires it (see <see cref="PlaceStopOrderAsync"/>); null leaves it.</param>
+    public Task<ProtoOAOrder> AmendStopOrderAsync(long ctidTraderAccountId, long orderId, double stopPrice, TimeSpan? timeout = null,
+        ProtoOAOrderTriggerMethod? trigger = null)
+    {
+        var req = new ProtoOAAmendOrderReq { CtidTraderAccountId = ctidTraderAccountId, OrderId = orderId, StopPrice = stopPrice };
+        if (trigger is { } method)
+            req.StopTriggerMethod = method;
+        return AcknowledgeAsync(req, timeout);
+    }
 
     /// <summary>Cancels a pending order; waits for the server's confirmation.</summary>
     public Task<ProtoOAOrder> CancelOrderAsync(long ctidTraderAccountId, long orderId, TimeSpan? timeout = null) =>
@@ -364,8 +375,10 @@ public sealed class CTraderSession : IAsyncDisposable
     /// </summary>
     /// <param name="trailingStopLoss">With a stop-loss: true makes it a trailing stop (the server moves it after the price,
     /// at the distance it has now, only in the position's favour), false a fixed one. Null sends nothing (as before v1.3).</param>
+    /// <param name="stopLossTrigger">With a stop-loss: which price fires it (a long's stop on the bid by default, a short's on
+    /// the ask; <c>DoubleOpposite</c> = the other side, two prices in a row, tm.md §5.2). Null sends nothing.</param>
     public Task<ProtoOAOrder> AmendPositionProtectionAsync(long ctidTraderAccountId, long positionId, double? stopLoss, double? takeProfit, TimeSpan? timeout = null,
-        bool? trailingStopLoss = null)
+        bool? trailingStopLoss = null, ProtoOAOrderTriggerMethod? stopLossTrigger = null)
     {
         var req = new ProtoOAAmendPositionSLTPReq { CtidTraderAccountId = ctidTraderAccountId, PositionId = positionId };
         if (stopLoss is { } sl)
@@ -374,6 +387,8 @@ public sealed class CTraderSession : IAsyncDisposable
             req.TakeProfit = tp;
         if (stopLoss is not null && trailingStopLoss is { } trailing)
             req.TrailingStopLoss = trailing;
+        if (stopLoss is not null && stopLossTrigger is { } method)
+            req.StopLossTriggerMethod = method;
         return AcknowledgeAsync(req, timeout);
     }
 

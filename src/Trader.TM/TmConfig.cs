@@ -22,9 +22,17 @@ public sealed record TmConfig(
     IReadOnlyDictionary<string, double>? FallbackDistance = null, // per symbol, in price, when the candle history is unavailable
     IReadOnlyList<string>? TakeOver = null, // labels whose positions and pending orders TM takes over as mains (tm.md §2)
     double MarginWarnLevel = 300,      // margin level %: below it no new mirrors, and a pop-up (tm.md §5.1)
-    double MarginRescueLevel = 100)    // margin level %: below it TM closes the trade holding the most margin, one at a time
+    double MarginRescueLevel = 100,    // margin level %: below it TM closes the trade holding the most margin, one at a time
+    double SpreadGuardFactor = 5,      // spread guard: a spread above this × the usual one pauses TM's own reactions (tm.md §5.2)
+    int SpreadGuardMaxMinutes = 15,    // ... for at most this long, then TM acts as usual
+    int RolloverBeforeMinutes = 5,     // rollover window: the same pause this long before each close in the broker's hours ...
+    int RolloverAfterMinutes = 15,     // ... and this long after each reopening
+    string StopTrigger = "DoubleOpposite") // which price fires TM's hedges and stops: DoubleOpposite, Opposite, DoubleTrade or Trade (the broker's default)
 {
     public const string FileName = "tm.json";
+
+    /// <summary>The trigger method sent with TM's hedge orders and the stops it sets (tm.md §5.2).</summary>
+    public ProtoOAOrderTriggerMethod TriggerMethod => Enum.Parse<ProtoOAOrderTriggerMethod>(StopTrigger, ignoreCase: true);
 
     /// <summary>TM's own bot name, the start of all its labels (tm.md §7).</summary>
     public const string BotName = "TM";
@@ -78,6 +86,10 @@ public sealed record TmConfig(
             throw new TmConfigException($"{FileName}: rule values must be above 0, and closeR above warnR");
         if (MarginRescueLevel <= 0 || MarginWarnLevel <= MarginRescueLevel)
             throw new TmConfigException($"{FileName}: marginRescueLevel must be above 0, and marginWarnLevel above it");
+        if (SpreadGuardFactor <= 1 || SpreadGuardMaxMinutes < 1 || RolloverBeforeMinutes < 0 || RolloverAfterMinutes < 0)
+            throw new TmConfigException($"{FileName}: spreadGuardFactor must be above 1, spreadGuardMaxMinutes at least 1, the rollover minutes 0 or more");
+        if (!Enum.TryParse<ProtoOAOrderTriggerMethod>(StopTrigger, ignoreCase: true, out _) || int.TryParse(StopTrigger, out _))
+            throw new TmConfigException($"{FileName}: stopTrigger must be one of {string.Join(", ", Enum.GetNames<ProtoOAOrderTriggerMethod>())}");
         if (AlertMinutesBefore < 1 || DisconnectAlertSeconds < 1)
             throw new TmConfigException($"{FileName}: alertMinutesBefore and disconnectAlertSeconds must be at least 1");
         if (TakeOver is { Count: 0 } || TakeOver?.Any(t => t is null) == true)

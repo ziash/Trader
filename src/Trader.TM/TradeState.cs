@@ -163,13 +163,16 @@ internal sealed record AmendMirrorOrder(TradeState Trade, long OrderId, Ord Like
 /// <param name="Price">Stop price; null = at market (price already beyond H when no hedge existed yet).</param>
 internal sealed record PlaceHedge(TradeState Trade, string Role, int Dir, long Volume, double? Price) : TmAction(Trade, Role);
 
+/// <summary>Moves a hedge order (and gives it TM's trigger method, tm.md §5.2).</summary>
 internal sealed record MoveOrder(TradeState Trade, string Role, long OrderId, double Price) : TmAction(Trade, Role);
 
 internal sealed record CancelOrder(TradeState Trade, string Role, long OrderId) : TmAction(Trade, Role);
 
-/// <summary>Sets a position's stop-loss and take-profit (null removes it); <paramref name="Trailing"/>: the stop-loss trails.</summary>
-internal sealed record SetProtection(TradeState Trade, string Role, long PositionId, double? StopLoss, double? TakeProfit, bool Trailing = false)
-    : TmAction(Trade, Role);
+/// <summary>Sets a position's stop-loss and take-profit (null removes it); <paramref name="Trailing"/>: the stop-loss trails;
+/// <paramref name="TmStop"/>: a stop TM sets (hedge stop, backstop, break-even), sent with TM's trigger method (tm.md §5.2) —
+/// the owner's own stop-loss keeps its own.</summary>
+internal sealed record SetProtection(TradeState Trade, string Role, long PositionId, double? StopLoss, double? TakeProfit, bool Trailing = false,
+    bool TmStop = false) : TmAction(Trade, Role);
 
 internal sealed record ClosePosition(TradeState Trade, string Role, long PositionId, long Volume) : TmAction(Trade, Role);
 

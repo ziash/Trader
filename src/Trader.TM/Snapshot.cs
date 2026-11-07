@@ -4,17 +4,19 @@ using Trader.Core.Hosting;
 namespace Trader.TM;
 
 /// <summary>An open position, as TM needs it. <see cref="Dir"/>: +1 buy (long), -1 sell (short); <see cref="Trailing"/>: its stop-loss trails;
-/// <see cref="Margin"/>: the margin it holds, in the account currency.</summary>
+/// <see cref="Margin"/>: the margin it holds, in the account currency; <see cref="StopTrigger"/>: which price fires its stop-loss, when
+/// the broker says (tm.md §5.2).</summary>
 internal sealed record Pos(long Id, long SymbolId, int Dir, long Volume, double Entry, double? StopLoss, double? TakeProfit, string Label, DateTime OpenUtc,
-    bool Trailing = false, double Margin = 0);
+    bool Trailing = false, double Margin = 0, ProtoOAOrderTriggerMethod? StopTrigger = null);
 
 /// <summary>
 /// A pending order: stop (TM's hedges; the owner's breakout entries) or limit (<see cref="Limit"/>), at <see cref="Price"/>,
 /// with the stop-loss, take-profit and trailing switch its position gets when it fills. The owner's own (those with a
-/// label in the take-over list, by default unlabelled) are mirrored by TM (tm.md §2, §3).
+/// label in the take-over list, by default unlabelled) are mirrored by TM (tm.md §2, §3). <see cref="Trigger"/>: which price fires a
+/// stop order, when the broker says (tm.md §5.2).
 /// </summary>
 internal sealed record Ord(long Id, long SymbolId, int Dir, long Volume, double Price, string Label, bool Limit = false,
-    double? StopLoss = null, double? TakeProfit = null, bool Trailing = false)
+    double? StopLoss = null, double? TakeProfit = null, bool Trailing = false, ProtoOAOrderTriggerMethod? Trigger = null)
 {
     public ProtoOAOrderType Type => Limit ? ProtoOAOrderType.Limit : ProtoOAOrderType.Stop;
 
@@ -29,13 +31,14 @@ internal sealed record Snapshot(IReadOnlyList<Pos> Positions, IReadOnlyList<Ord>
         res.Position.Select(p => new Pos(p.PositionId, p.TradeData.SymbolId, Dir(p.TradeData.TradeSide), p.TradeData.Volume, p.Price,
                 p.HasStopLoss && p.StopLoss > 0 ? p.StopLoss : null, p.HasTakeProfit && p.TakeProfit > 0 ? p.TakeProfit : null,
                 p.TradeData.Label ?? "", DateTimeOffset.FromUnixTimeMilliseconds(p.TradeData.OpenTimestamp).UtcDateTime,
-                p.HasStopLoss && p.StopLoss > 0 && p.TrailingStopLoss, (long)p.UsedMargin / Math.Pow(10, p.HasMoneyDigits ? p.MoneyDigits : 2)))
+                p.HasStopLoss && p.StopLoss > 0 && p.TrailingStopLoss, (long)p.UsedMargin / Math.Pow(10, p.HasMoneyDigits ? p.MoneyDigits : 2),
+                p.HasStopLossTriggerMethod ? p.StopLossTriggerMethod : null))
             .ToList(),
         res.Order.Where(o => o.OrderType is ProtoOAOrderType.Stop or ProtoOAOrderType.Limit && !o.ClosingOrder)
             .Select(o => new Ord(o.OrderId, o.TradeData.SymbolId, Dir(o.TradeData.TradeSide), o.TradeData.Volume,
                 o.OrderType == ProtoOAOrderType.Limit ? o.LimitPrice : o.StopPrice, o.TradeData.Label ?? "", o.OrderType == ProtoOAOrderType.Limit,
                 o.HasStopLoss && o.StopLoss > 0 ? o.StopLoss : null, o.HasTakeProfit && o.TakeProfit > 0 ? o.TakeProfit : null,
-                o.HasStopLoss && o.StopLoss > 0 && o.TrailingStopLoss))
+                o.HasStopLoss && o.StopLoss > 0 && o.TrailingStopLoss, o.HasStopTriggerMethod ? o.StopTriggerMethod : null))
             .ToList());
 
     public static int Dir(ProtoOATradeSide side) => side == ProtoOATradeSide.Buy ? 1 : -1;

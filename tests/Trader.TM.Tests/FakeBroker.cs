@@ -21,7 +21,9 @@ internal sealed class FakeBroker
     public Dictionary<long, long> OrderFills { get; } = [];  // pending orderId → position (from the execution events)
     public List<TmAction> Log { get; } = [];
     public TradeBook Book { get; } = new("");
-    public TmConfig Config { get; init; } = new([new TmAccount("brokerA", 1, ["EURUSD"])]);
+    // The rule tests move the price to a level by its ask/bid as the broker's default trigger does; the trigger on the
+    // other side (tm.md §5.2) has its own tests (SpreadGuardTests).
+    public TmConfig Config { get; init; } = new([new TmAccount("brokerA", 1, ["EURUSD"])], StopTrigger: "Trade");
     public DateTime Now { get; set; } = new(2026, 10, 20, 9, 0, 0, DateTimeKind.Utc);
     public double Bid { get; private set; } = 1.16000;
     public double Ask => Math.Round(Bid + Spread, 5);
@@ -33,6 +35,12 @@ internal sealed class FakeBroker
     /// <summary>The account status the planner sees (margin rules, tm.md §5.1); null = not known.</summary>
     public AccountStatus? Account { get; set; }
     public bool RescueAllowed { get; set; }
+
+    /// <summary>The spread guard or rollover window is on for the symbol (tm.md §5.2).</summary>
+    public bool Guarded { get; set; }
+
+    // A stop fires on the other side of the price with the Opposite trigger methods (tm.md §5.2): a buy on the bid, a sell on the ask.
+    private static bool OtherSide(ProtoOAOrderTriggerMethod? m) => m is ProtoOAOrderTriggerMethod.Opposite or ProtoOAOrderTriggerMethod.DoubleOpposite;
 
     /// <summary>Margin a position holds in the fake: $1 per 0.01 lot (1,000 units = 100,000 in Open API volume).</summary>
     public static double MarginOf(long volume) => volume / 100_000.0;
@@ -118,7 +126,8 @@ internal sealed class FakeBroker
         foreach (var o in Orders.ToList())
         {
             var market = o.Dir > 0 ? Ask : Bid;
-            if (o.Limit ? o.Dir * (market - o.Price) <= 0 : o.Dir * (market - o.Price) >= 0)
+            var trigger = !o.Limit && OtherSide(o.Trigger) ? (o.Dir > 0 ? Bid : Ask) : market;
+            if (o.Limit ? o.Dir * (market - o.Price) <= 0 : o.Dir * (trigger - o.Price) >= 0)
             {
                 Orders.Remove(o);
                 var p = new Pos(_nextId++, SymbolId, o.Dir, o.Volume, market, o.StopLoss, o.TakeProfit, o.Label, Now, o.Trailing, MarginOf(o.Volume));
@@ -129,7 +138,8 @@ internal sealed class FakeBroker
         foreach (var p in Positions.ToList())
         {
             var exit = p.Dir > 0 ? Bid : Ask;
-            var hitSl = p.StopLoss is { } sl && (p.Dir > 0 ? exit <= sl : exit >= sl);
+            var slPrice = OtherSide(p.StopTrigger) ? (p.Dir > 0 ? Ask : Bid) : exit;
+            var hitSl = p.StopLoss is { } sl && (p.Dir > 0 ? slPrice <= sl : slPrice >= sl);
             var hitTp = p.TakeProfit is { } tp && (p.Dir > 0 ? exit >= tp : exit <= tp);
             if (hitSl || hitTp)
                 Close(p.Id);
@@ -154,6 +164,7 @@ internal sealed class FakeBroker
                 FilledPosition = id => OrderFills.TryGetValue(id, out var p) ? p : null,
                 Account = Account,
                 RescueAllowed = RescueAllowed,
+                Guarded = _ => Guarded,
             };
             var actions = Planner.Plan(Book, new Snapshot(Positions.ToList(), Orders.ToList()), env);
             all.AddRange(actions);
@@ -193,7 +204,7 @@ internal sealed class FakeBroker
                 fill = new OrderFill(hp.Id, hp.Id, hp.Id, hp.Entry, h.Volume, Now, 0, hp.Label, TimeSpan.Zero);
                 break;
             case PlaceHedge h:
-                Orders.Add(new Ord(_nextId++, SymbolId, h.Dir, h.Volume, h.Price!.Value, Label(h.Trade!.MainId, h.Role)));
+                Orders.Add(new Ord(_nextId++, SymbolId, h.Dir, h.Volume, h.Price!.Value, Label(h.Trade!.MainId, h.Role), Trigger: Config.TriggerMethod));
                 break;
             case PlaceMirrorOrder po:
                 Orders.Add(po.Like with { Id = _nextId++, Label = $"TM-abcdef-{TmLabel.OrderLeg(po.Trade!.MainOrderId)}", StopLoss = po.StopLoss, TakeProfit = po.TakeProfit, Trailing = false });
@@ -204,14 +215,18 @@ internal sealed class FakeBroker
                 break;
             case MoveOrder mo:
                 var i = Orders.FindIndex(o => o.Id == mo.OrderId);
-                Orders[i] = Orders[i] with { Price = mo.Price };
+                Orders[i] = Orders[i] with { Price = mo.Price, Trigger = Config.TriggerMethod };
                 break;
             case CancelOrder c:
                 Orders.RemoveAll(o => o.Id == c.OrderId);
                 break;
             case SetProtection sp:
                 var j = Positions.FindIndex(p => p.Id == sp.PositionId);
-                Positions[j] = Positions[j] with { StopLoss = sp.StopLoss, TakeProfit = sp.TakeProfit, Trailing = sp.Trailing };
+                Positions[j] = Positions[j] with
+                {
+                    StopLoss = sp.StopLoss, TakeProfit = sp.TakeProfit, Trailing = sp.Trailing,
+                    StopTrigger = sp.TmStop && sp.StopLoss is not null ? Config.TriggerMethod : Positions[j].StopTrigger,
+                };
                 break;
             case ClosePosition cp:
                 Close(cp.PositionId);

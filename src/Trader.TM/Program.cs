@@ -64,6 +64,8 @@ return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
     bot.LogTap.Add(events);
     bot.Log.Information("Rules: hedge {Pct} % of the {Days}-day range (min {Floor} × spread), arm {Arm}R, hedge stop {Stop}R, warn {Warn}R, close {Close}R",
         config.RangePercent, config.RangeDays, config.SpreadFloor, config.ArmR, config.HedgeStopR, config.WarnR, config.CloseR);
+    bot.Log.Information("Spikes (tm.md §5.2): hedges and TM's stops trigger {Trigger}; spread guard above {Factor} × the usual spread, at most {Max} min; rollover window {Before} min before a close to {After} min after a reopening",
+        config.TriggerMethod, config.SpreadGuardFactor, config.SpreadGuardMaxMinutes, config.RolloverBeforeMinutes, config.RolloverAfterMinutes);
     bot.Log.Information("Takes over: {Labels} (tm.md §2)",
         string.Join(", ", config.TakeOverLabels.Select(t => t.Length == 0 ? "no label (owner's trades)" : $"labels starting \"{t}\"")));
 

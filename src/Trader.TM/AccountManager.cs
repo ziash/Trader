@@ -54,6 +54,7 @@ internal sealed class AccountManager(
     private volatile IReadOnlyList<string> _openTrades = Describe(book, account);
     private readonly Dictionary<string, DateTime> _failedAlerts = [];
     private AccountStatus? _status;
+    private readonly SpreadGuard _guard = new(config);
     private bool _statusDue = true;
     private DateTime _statusLogged = DateTime.MinValue, _marginAlerted = DateTime.MinValue, _lastRescue = DateTime.MinValue, _statusFailed = DateTime.MinValue;
 
@@ -128,6 +129,7 @@ internal sealed class AccountManager(
         }
 
         var symbols = _symbols;
+        UpdateGuards(symbols, now);
         var env = new PlanEnv
         {
             Config = config,
@@ -140,6 +142,7 @@ internal sealed class AccountManager(
             FilledPosition = id => _orderFills.TryGetValue(id, out var p) ? p : null,
             Account = _status is { } st && now - st.TimeUtc < 5 * StatusEvery ? st : null,
             RescueAllowed = _status is { } fresh && fresh.TimeUtc > _lastRescue.AddSeconds(5) && now - _lastRescue >= RescueGap,
+            Guarded = _guard.IsGuarded,
         };
 
         var actions = Planner.Plan(book, _snapshot, env);
@@ -152,6 +155,25 @@ internal sealed class AccountManager(
             _dirty = true;
         book.Save();
         _openTrades = Describe(book, account);
+    }
+
+    /// <summary>
+    /// The spread guard per symbol (tm.md §5.2, issue-log.md #2): a line in events.csv when it starts and ends; a pop-up
+    /// when the spread is still wide after the maximum time and TM acts again.
+    /// </summary>
+    private void UpdateGuards(IReadOnlyDictionary<long, SymbolInfo> symbols, DateTime now)
+    {
+        foreach (var s in symbols.Values)
+        {
+            if (_guard.Update(s.SymbolId, feed.Last(account.AccountId, s.SymbolId), s.Schedule, now) is not { } change)
+                continue;
+            if (change.Kind == "long")
+                notify.Warning("SpreadGuardLong", $"{account.Broker} {s.Name}: spread still wide",
+                    $"{change.Reason}; TM acts on the price again (tm.md §5.2)", account.AccountId);
+            else
+                _log.Event("SpreadGuard").Information("{Broker} {Symbol}: spread guard {Kind} — {Reason}{Then}", account.Broker, s.Name, change.Kind,
+                    change.Reason, change.Kind == "on" ? "; TM's own reactions to the price wait" : "");
+        }
     }
 
     /// <summary>
@@ -228,7 +250,8 @@ internal sealed class AccountManager(
                     break;
                 case PlaceHedge h:
                     (side, lots, requested) = (SideText(h.Dir), Lots(s, h.Volume), Num(h.Price, s));
-                    await session.PlaceStopOrderAsync(ctid, s.SymbolId, Snapshot.Side(h.Dir), h.Volume, h.Price!.Value, label, ClientId(), comment, OrderTimeout);
+                    await session.PlaceStopOrderAsync(ctid, s.SymbolId, Snapshot.Side(h.Dir), h.Volume, h.Price!.Value, label, ClientId(), comment, OrderTimeout,
+                        config.TriggerMethod);
                     break;
                 case PlaceMirrorOrder po:
                     (side, lots, requested) = (SideText(po.Like.Dir), Lots(s, po.Like.Volume), $"{po.Like.Name} {Num(po.Like.Price, s)} {Protection(po.StopLoss, po.TakeProfit, s)}");
@@ -241,14 +264,15 @@ internal sealed class AccountManager(
                     break;
                 case MoveOrder mo:
                     requested = Num(mo.Price, s);
-                    await session.AmendStopOrderAsync(ctid, mo.OrderId, mo.Price, OrderTimeout);
+                    await session.AmendStopOrderAsync(ctid, mo.OrderId, mo.Price, OrderTimeout, config.TriggerMethod);
                     break;
                 case CancelOrder c:
                     await session.CancelOrderAsync(ctid, c.OrderId, OrderTimeout);
                     break;
                 case SetProtection sp:
                     requested = $"SL {(sp.StopLoss is null ? "none" : Num(sp.StopLoss, s) + (sp.Trailing ? " trailing" : ""))} TP {(sp.TakeProfit is null ? "none" : Num(sp.TakeProfit, s))}";
-                    await session.AmendPositionProtectionAsync(ctid, sp.PositionId, sp.StopLoss, sp.TakeProfit, OrderTimeout, trailingStopLoss: sp.Trailing);
+                    await session.AmendPositionProtectionAsync(ctid, sp.PositionId, sp.StopLoss, sp.TakeProfit, OrderTimeout, trailingStopLoss: sp.Trailing,
+                        stopLossTrigger: sp.TmStop ? config.TriggerMethod : null);
                     break;
                 case ClosePosition cp:
                     lots = Lots(s, cp.Volume);

@@ -32,6 +32,12 @@ internal sealed class PlanEnv
     /// <summary>The account status is fresh since the last margin rescue, so another may be planned.</summary>
     public bool RescueAllowed { get; init; }
 
+    /// <summary>
+    /// The symbol's spread is far above its usual, or it is in the rollover window (tm.md §5.2): TM's own reactions to the
+    /// price — loss limit and warning, closing a hedge whose stop was passed, re-hedging, a new mirror — wait.
+    /// </summary>
+    public Func<long, bool> Guarded { get; init; } = _ => false;
+
     /// <summary>Margin is short: below the warning level no new mirrors are opened (tm.md §5.1).</summary>
     public bool LowMargin => Account?.MarginLevel is { } level && level < Config.MarginWarnLevel;
 }
@@ -424,7 +430,7 @@ internal static class Planner
                     t.NoMirror = true;
                     actions.Add(LowMarginNoMirror(t, env));
                 }
-                else if (!t.MirrorRequested && mainPos is not null)
+                else if (!t.MirrorRequested && mainPos is not null && !env.Guarded(t.SymbolId)) // a mirror at a spike price waits (§5.2)
                 {
                     t.MirrorRequested = true;
                     actions.Add(new OpenMirror(t, t.Dir, mainPos.Volume, t.H)
@@ -529,6 +535,7 @@ internal static class Planner
             var legExit = t.Dir > 0 ? _q.Bid : _q.Ask;   // price the leg would close at
             var hedgeExit = hd > 0 ? _q.Bid : _q.Ask;    // price the hedge would close at
             var hedgeEntry = hd > 0 ? _q.Ask : _q.Bid;   // price a new hedge would open at
+            var guarded = env.Guarded(t.SymbolId);       // spread guard / rollover window (tm.md §5.2)
             var profit = t.Dir * (legExit - leg.Entry);
             var tp = role == "MAIN" ? pos.TakeProfit : mainPos?.TakeProfit ?? pos.TakeProfit;
 
@@ -561,14 +568,15 @@ internal static class Planner
                 if (hPos is not null)
                     actions.Add(new ClosePosition(t, hedgeRole, hPos.Id, hPos.Volume));
                 var keep = pos.StopLoss is { } sl && t.Dir * (sl - leg.Entry) >= -_s.PipSize * 0.05 ? sl : leg.Entry;
-                Protect(pos, role, Math.Round(keep, _s.Digits), tp, trailing: t.Trailing);
+                Protect(pos, role, Math.Round(keep, _s.Digits), tp, trailing: t.Trailing, tmStop: true);
                 return;
             }
 
-            // Loss limits (tm.md §5): the leg, its open hedge and its earlier hedges together, in R.
+            // Loss limits (tm.md §5): the leg, its open hedge and its earlier hedges together, in R. Not judged on a spike
+            // price (§5.2); the server-side stops protect meanwhile.
             var result = profit + (hPos is not null ? hd * (hedgeExit - hPos.Entry) : 0) + leg.Realized;
             var lossR = leg.R > 0 ? -result / leg.R : 0;
-            if (AtLeast(lossR * leg.R, env.Config.CloseR * leg.R))
+            if (!guarded && AtLeast(lossR * leg.R, env.Config.CloseR * leg.R))
             {
                 actions.Add(new ClosePosition(t, role, pos.Id, pos.Volume));
                 if (hPos is not null)
@@ -579,7 +587,7 @@ internal static class Planner
                     $"Loss limit {env.Config.CloseR:0.#}R reached; leg and hedge closed"));
                 return;
             }
-            if (AtLeast(lossR * leg.R, env.Config.WarnR * leg.R) && !leg.Warned)
+            if (!guarded && AtLeast(lossR * leg.R, env.Config.WarnR * leg.R) && !leg.Warned)
             {
                 leg.Warned = true;
                 actions.Add(new Notify(t, role, NotificationLevel.Warning, "LossWarning", $"{t.Symbol} {name} at -{lossR:0.0}R",
@@ -589,7 +597,7 @@ internal static class Planner
             // Break-even at 1R (R2): stop-loss first, the hedge is removed next time.
             if (AtLeast(profit, leg.R) && hPos is null)
             {
-                if (Protect(pos, role, Math.Round(leg.Entry, _s.Digits), tp, () => leg.Protected = true, t.Trailing))
+                if (Protect(pos, role, Math.Round(leg.Entry, _s.Digits), tp, () => leg.Protected = true, t.Trailing, tmStop: true))
                     actions.Add(new Notify(t, role, NotificationLevel.Info, "BreakEven", $"{t.Symbol} {name} at +1R: stop at break-even",
                         $"Stop-loss {P(leg.Entry, _s)}{(t.Trailing ? ", trailing" : "")}; hedge removed"));
                 return;
@@ -603,7 +611,7 @@ internal static class Planner
                 var hedgeProfit = hd * (hedgeExit - hPos.Entry);
                 if (!leg.Armed && AtLeast(hedgeProfit, env.Config.ArmR * leg.R))
                 {
-                    if (Protect(hPos, hedgeRole, Math.Round(hPos.Entry + hd * _s.PipSize, _s.Digits), null, () => leg.Armed = true))
+                    if (Protect(hPos, hedgeRole, Math.Round(hPos.Entry + hd * _s.PipSize, _s.Digits), null, () => leg.Armed = true, tmStop: true))
                         actions.Add(new Notify(t, hedgeRole, NotificationLevel.Info, "HedgeArmed", $"{t.Symbol} {name} hedge exit armed",
                             $"Hedge closes at {P(hPos.Entry + hd * _s.PipSize, _s)} if the move reverses"));
                 }
@@ -611,11 +619,15 @@ internal static class Planner
                 {
                     var stop = Math.Round(leg.Armed ? hPos.Entry + hd * _s.PipSize : hPos.Entry - hd * env.Config.HedgeStopR * leg.R, _s.Digits);
                     // In a fast market the price can pass the hedge's stop before the stop is set; the broker then
-                    // refuses it. The rule says the hedge closes there, so close it at market.
+                    // refuses it. The rule says the hedge closes there, so close it at market — but not at a spike price
+                    // (§5.2): then it waits for the spread to settle.
                     if (hd > 0 ? stop > hedgeExit : stop < hedgeExit)
-                        actions.Add(new ClosePosition(t, hedgeRole, hPos.Id, hPos.Volume));
+                    {
+                        if (!guarded)
+                            actions.Add(new ClosePosition(t, hedgeRole, hPos.Id, hPos.Volume));
+                    }
                     else
-                        Protect(hPos, hedgeRole, stop, null);
+                        Protect(hPos, hedgeRole, stop, null, tmStop: true);
                 }
             }
             else if (hOrd is not null)
@@ -627,6 +639,8 @@ internal static class Planner
                 }
                 else if (!Same(hOrd.Price, t.H))
                     actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, t.H));
+                else if (hOrd.Trigger is { } have && have != env.Config.TriggerMethod)
+                    actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, hOrd.Price)); // an older hedge order gets TM's trigger (§5.2)
             }
             else
             {
@@ -638,6 +652,11 @@ internal static class Planner
                 {
                     if (!noMoney)
                         actions.Add(new PlaceHedge(t, hedgeRole, hd, pos.Volume, t.H) { Done = _ => (leg.Raised, leg.NoMoneyUtc) = (false, null), Failed = failed });
+                }
+                else if (guarded)
+                {
+                    // Price past H at a spike price: re-hedging beyond it, hedging at market or closing the leg waits (§5.2);
+                    // the leg's backstop protects meanwhile.
                 }
                 else if (leg.EverHedged)
                 {
@@ -673,7 +692,7 @@ internal static class Planner
             {
                 var backstop = Math.Round(leg.Entry - t.Dir * env.Config.CloseR * leg.R, _s.Digits);
                 if (ValidStopLoss(t.Dir, backstop))
-                    Protect(pos, role, backstop, tp, () => (leg.StopCleared, leg.Backstop) = (true, backstop));
+                    Protect(pos, role, backstop, tp, () => (leg.StopCleared, leg.Backstop) = (true, backstop), tmStop: true);
                 else
                     Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing); // price already past it: the loss limit above closes the leg
             }
@@ -683,17 +702,20 @@ internal static class Planner
 
         /// <summary>Plans a stop-loss / take-profit change if the position differs; false if nothing to do or already planned.</summary>
         /// <param name="trailing">The stop-loss trails (ignored without one).</param>
-        private bool Protect(Pos p, string role, double? stopLoss, double? takeProfit, Action? done = null, bool trailing = false)
+        /// <param name="tmStop">A stop TM sets (hedge stop, backstop, break-even): it carries TM's trigger method (tm.md §5.2), and
+        /// one the broker reports with another trigger is set again.</param>
+        private bool Protect(Pos p, string role, double? stopLoss, double? takeProfit, Action? done = null, bool trailing = false, bool tmStop = false)
         {
             trailing &= stopLoss is not null;
-            if (Same(p.StopLoss, stopLoss) && Same(p.TakeProfit, takeProfit) && p.Trailing == trailing)
+            var otherTrigger = tmStop && stopLoss is not null && p.StopTrigger is { } have && have != env.Config.TriggerMethod;
+            if (Same(p.StopLoss, stopLoss) && Same(p.TakeProfit, takeProfit) && p.Trailing == trailing && !otherTrigger)
             {
                 done?.Invoke();
                 return false;
             }
             if (!_touched.Add(p.Id))
                 return false;
-            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit, trailing) { Done = done is null ? null : _ => done() });
+            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit, trailing, tmStop) { Done = done is null ? null : _ => done() });
             return true;
         }
 
