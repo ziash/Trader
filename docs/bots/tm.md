@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout/scout.md)'s orders (`takeOver`, decision 12); from v1.9 reads the account's margin and acts on it (§5.1, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) |
-| Document version | v1.11 (07-Nov-2026) — history in §13 |
+| Document version | v1.12 (08-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -151,6 +151,36 @@ After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../issue-log.
 
 If the broker does not answer the status (e.g. a replay broker without it), the margin rules wait and TM asks again after 5 minutes. Hedging, the backstop and the 3R rule work without it.
 
+### 5.2 Spread guard and trigger on the other side (planned, 08-Nov-2026)
+
+**Status: design, waiting for the owner's OK to build.** After [issue-log.md #2](../issue-log.md#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026): at the daily rollover the spread widens many times over for minutes; buy-stop hedges filled on the spiking ask and TM's own rules then acted on the spike prices, up to the 3R loss limit. Owner's choice (08-Nov-2026): three parts.
+
+**Terms:** *bid* — the price you can sell at (the chart shows it); *ask* — the price you can buy at; *spread* — ask minus bid. *Trigger method* — which price makes a stop order fire; cTrader's default is the trade's own side (a buy-stop on the ask, a sell-stop on the bid).
+
+**A. Hedges triggered on the other side.** TM's hedge orders are placed with the trigger method **`DOUBLE_OPPOSITE`**: a buy-stop fires when the **bid** reaches it, a sell-stop when the **ask** does, and only on **two prices in a row** beyond the level. A spread blow-out (one side jumps) or a single odd price no longer fills a hedge; a real move still does, one spread and one price later. The same for the stops TM sets on positions — the hedge's own stop, the backstop (§5.1) and the break-even stop (§5) — with the stop-loss trigger method `DOUBLE_OPPOSITE`. Hedge orders already on the server get it at TM's next start (amended once). In code: an optional trigger-method argument on `CTraderSession`'s stop-order, amend and position-protection calls ([Open Code Pieces](../open-code-pieces.md)); default unchanged for other bots.
+
+**B. Spread guard.** TM keeps each symbol's **usual spread**: the median of the spreads it saw in the last 2 hours (from the price feed it already has; sampled every 10 s). While the current spread is more than **`spreadGuardFactor` × usual** (5×), that symbol is *guarded*:
+
+| TM rule | While guarded |
+|---|---|
+| Loss limit 3R, loss warning 2R (§5) | Not judged — the spike price is not the market |
+| Close a hedge whose stop the price has passed (§4) | Waits; the hedge's server-side stop still works |
+| Re-hedge at market / 1R beyond the price (§4) | Waits |
+| Hedge orders at the fixed level H, the backstop, break-even, orders the owner places | Unchanged — they are on the server and protect |
+| Mirroring a new trade | Waits |
+
+The guard ends when the spread is back under the threshold, or after **`spreadGuardMaxMinutes`** (15) — then TM acts as usual, with a Warning that the spread is still wide. One `SpreadGuard` event at its start and end (symbol, spread, usual spread); a pop-up only when it lasts the full 15 minutes.
+
+**C. Rollover window (backup).** The same guard for every symbol from **5 minutes before each close to 15 minutes after each reopening** in its trading hours from the broker (the daily break — 17:00 New York for forex — and the weekend), whatever the spread looks like. It covers the case where the usual spread is not known yet (just after TM starts). Symbols traded around the clock (crypto) have no window; B covers them.
+
+**Config (`tm.json`, new):** `spreadGuardFactor` 5, `spreadGuardMaxMinutes` 15, `rolloverBeforeMinutes` 5, `rolloverAfterMinutes` 15, `stopTrigger` `"DoubleOpposite"` (or `"Opposite"`, `"Trade"` = today's behaviour).
+
+**What it does not change:** the protection rule — every leg keeps a protective order on the server at all times (shared §4); the hedge level H, 1R, the 2R/3R values.
+
+**Tests (planned):** the 05-Nov GBPUSD sequence as a test (ask 1.34644, bid 1.34484 at 22:01): no hedge close, no re-hedge, no loss limit while guarded, and normal handling once the spread is back; the guard ending after 15 minutes; the rollover window from a forex schedule; the trigger method sent on hedge orders and stops. Then a rollover replayed in Rewind before going live.
+
+**Open for the owner:** Scout's entry orders with the same trigger (they can be filled falsely at the rollover too); Scout's picture tagging the whole trade's result.
+
 ## 6. Start-up, restarts and news (Q13, Q20)
 
 - **TM's own orders** (mirrors, hedges) are found again after a restart from their labels and linked to their main by its `positionId` (labels below).
@@ -283,3 +313,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.9 | 06 Nov 2026 | **Margin rules** (§5.1, decision 13, after the IC Markets margin call, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)): TM reads balance, equity and margin (Trader.Core `AccountStatus`, [Open Code Pieces](../open-code-pieces.md) v1.9); backstop stop-loss at 3R replaces "stop-loss removed once hedged"; `NOT_ENOUGH_MONEY` on a hedge → retry after 1 min, past H the leg is closed; no mirror below `marginWarnLevel` 300 %; margin rescue below `marginRescueLevel` 100 %; `AccountStatus` line every 15 min, `MarginLow` pop-up; a refused action pops up once per 10 min. Code: `Planner` (`Rescue`, backstop, no-money branch), `AccountManager.ReadStatusAsync`, `LegState.Backstop` / `NoMoneyUtc`, `Pos.Margin`, `TmConfig.MarginWarnLevel` / `MarginRescueLevel`. TM tests: 57 (10 new in `MarginTests` and `PlannerTests`, 6 updated for the backstop) |
 | v1.10 | 07 Nov 2026 | Documents reorganised (owner, [shared](../shared.md) v1.13): links to Scout and the Dashboard follow their new folders; Related line |
 | v1.11 | 07 Nov 2026 | **Pepperstone symbols for Scout** (owner): brokerB's list in `tm.json` = Scout's 18 plus EURGBP, with `symbolNames` for Pepperstone's names; brokerA's list unchanged so the IC Markets trades stay managed. Restarted 17:27Z (`TM-590e67`) |
+| v1.12 | 08 Nov 2026 | **§5.2 planned** (owner, after [issue #2](../issue-log.md#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026)): hedges and TM's stops triggered on the other side (`DOUBLE_OPPOSITE`), a spread guard on TM's own actions (5× the usual spread, at most 15 min), a rollover window from the broker's hours as backup. Design only |

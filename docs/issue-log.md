@@ -4,13 +4,14 @@
 
 | Item | Value |
 |---|---|
-| Document version | v1.2 (06-Nov-2026) — history at the end |
+| Document version | v1.3 (08-Nov-2026) — history at the end |
 | Where the facts come from | `~/tradebot/logs/<broker>/<account>/` (`orders.csv`, `actions.csv`, `events.csv`), `~/tradebot/run/tm/`, and the broker itself (`dotnet run --project src/Trader.ListAccounts -- --positions`, read-only) |
 | Adding an issue | A new `## #n` section from the template at the end, a row in the table below, and a history row; link it from the bot documents it changed |
 
 | # | Date | Account | Summary | State |
 |---|---|---|---|---|
 | [1](#1-ic-markets-demo-in-a-margin-call-06-nov-2026) | 06-Nov-2026 | IC Markets demo | Too much exposure for the account: margin ran out, hedges were refused, five trades were left without protection, margin call at 92 % | Fixed (TM v1.9, Scout v1.7), running since 16:14 UTC 06-Nov: TM's margin rescue lifted the level to 122 % |
+| [2](#2-hedges-and-loss-limit-hit-by-the-daily-rollover-spread-05-nov-2026) | 05-Nov-2026 (found 08-Nov) | IC Markets and Pepperstone demos | At the daily rollover (22:00 UTC) the spread widens for minutes; buy-stop hedges filled on the spiking ask and TM's own rules (hedge stop, re-hedge, 3R loss limit) acted on the spike prices — 4 forex trades closed at the loss limit within 10 minutes of 22:00 | Fix designed ([tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026)), waiting for the owner's OK to build |
 
 ## #1 IC Markets demo in a margin call (06-Nov-2026)
 
@@ -116,6 +117,67 @@ Lesson for deploys: read the output of the deploy script before restarting. A "N
 - **Rewind** (the replay simulator, a separate project) does not answer the two new requests yet. Under replay, TM runs without its margin rules and Scout places no orders until it does.
 - **Values to tune:** 300 % / 100 % levels, 50 % budget, factor 4.
 
+## #2 Hedges and loss limit hit by the daily rollover spread (05-Nov-2026)
+
+### What happened, in general terms
+
+Every day at 17:00 New York (22:00 UTC since US winter time began on 01-Nov) brokers roll positions over to the next day, and for a few minutes liquidity is thin: the **spread widens many times over**, mostly on one side of the price. A buy-stop is triggered by the **ask**, so TM's buy-stop hedges filled although the bid — the price on the chart — never reached them. TM then saw the bid already below the new hedge's stop and closed the hedge at once, placed a new hedge that filled again on the same wide ask, and counted all of it against the leg: the **3R loss limit** closed the whole trade. All within four seconds. A stop-loss would not have done better — on a short it is triggered by the ask as well — but it would have lost one spread once, not the chain.
+
+Found by the owner on 08-Nov from Scout's order picture of GBPUSD (`closed −$15.91`), which shows only Scout's own position; the whole trade lost about **$95**.
+
+### The facts (from TM's `events.csv` / `actions.csv` and the dashboard's `deals.csv`, IC Markets demo 49123893)
+
+GBPUSD trade P692923991: Scout's Sell Stop 1.34498 filled at 1.34493 on 05-Nov 21:00:17 (main and mirror, 0.1 lot each); TM removed the stop-loss and placed two buy-stop hedges at 1.34634 (1R = 0.00141 = 14.1 pips).
+
+| Position | Opened | Closed | Net |
+|---|---|---|---|
+| Main (sell) | 1.34493 | 1.34640 | −$15.91 |
+| Mirror (sell) | 1.34493 | 1.34625 | −$14.41 |
+| Hedge 1, main (buy) | 1.34644 | 1.34484 | −$16.80 |
+| Hedge 1, mirror (buy) | 1.34644 | 1.34484 | −$16.80 |
+| Hedge 2, main (buy) | 1.34640 | 1.34505 | −$14.30 |
+| Hedge 2, mirror (buy) | 1.34640 | 1.34505 | −$14.30 |
+| **Whole trade** | | | **≈ −$95** (with the opening commissions) |
+
+At 22:01:00–22:01:01 the ask was 1.34644 while the bid was 1.34484: a **16-pip spread** (GBPUSD normally ≈ 0.2 pip at IC Markets).
+
+**The same pattern elsewhere** — loss-limit closes within 10 minutes after 22:00 UTC (17 trades were closed by the loss limit from 03 to 07-Nov):
+
+| When (UTC) | Broker | Trade | Loss limit at |
+|---|---|---|---|
+| 03-Nov 22:06 | Pepperstone | GBPJPY (hedge filled 22:06:11, closed 22:06:12) | −4.1R |
+| 03-Nov 22:10 | IC Markets | GBPJPY | −3.4R |
+| 04-Nov 22:02 | Pepperstone | AUDJPY | −3.4R |
+| 05-Nov 22:01 | IC Markets | GBPUSD (above) | −3.0R |
+
+(EURUSD at IC Markets on 05-Nov 22:33 may be the same; spreads can stay wide for half an hour.)
+
+### Timeline (UTC, 05-Nov)
+
+| Time | What happened |
+|---|---|
+| 21:00:16–18 | Sell filled; mirror; two buy-stop hedges at 1.34634; stop-losses removed (before TM's backstop, v1.9) |
+| 22:01:00 | Rollover spread: both hedges filled at 1.34644 on the ask (`HedgeFilled`, hedge stop 1.34573) |
+| 22:01:01 | Bid 1.34484 already below the hedge stop: TM closed both hedges at market (−1.13R each, `HedgeClosed`) |
+| 22:01:02 | TM placed new hedges at 1.34634; they filled at once at 1.34640; `LossWarning` −2.2R |
+| 22:01:03–04 | Loss limit 3R: main, mirror and both hedges closed (`LossLimit`, `TradeDone`) |
+
+### Causes
+
+1. **Stop orders triggered by the side that spikes.** A buy-stop fills on the ask, a sell-stop on the bid (cTrader's default). At the rollover one side jumps by many spreads.
+2. **TM acts on spike prices.** Its client-side rules — close a hedge whose stop the price has passed, re-hedge, the 2R warning and the 3R limit — use the current bid/ask without asking whether the spread is normal.
+3. **Visibility:** Scout's picture tags the trade with Scout's own position only (−$15.91), so the real loss (−$95) was not visible there.
+
+### Solution (designed 08-Nov-2026, not built yet)
+
+Owner's choice: the stop orders' **trigger on the other side** for TM's hedges, plus a **spread guard** on TM's own actions, with a **rollover window** from the broker's trading hours as a backup. Design: [tm.md §5.2](bots/tm.md#52-spread-guard-and-trigger-on-the-other-side-planned-08-nov-2026), waiting for the owner's OK to build.
+
+### Still open
+
+- Scout's entry orders: the same trigger choice? (owner to decide)
+- Scout's picture: tag the whole trade's result instead of Scout's position? (owner to decide)
+- Testing the fix with Rewind (the replay simulator) on a rollover spike before it goes live.
+
 ## History
 
 | Version | Date | Change |
@@ -123,6 +185,7 @@ Lesson for deploys: read the output of the deploy script before restarting. A "N
 | v1.0 | 06 Nov 2026 | First issue: #1, IC Markets demo margin call; the account status calls and the bots' margin rules (TM v1.9, Scout v1.7, Open Code Pieces v1.9, shared v1.11) |
 | v1.1 | 06 Nov 2026 | #1: what the bots did after the restart (TM's one-time folder switch, margin rescue of one SOLUSD trade, 7 backstops, IC from 86 % to 122 %); state updated |
 | v1.2 | 06 Nov 2026 | #1: the SOLUSD trade's whole result (−$45.20) from the broker's deals; the dashboard item done (dashboard step 5a) |
+| v1.3 | 08 Nov 2026 | **#2** rollover spread: hedges and TM's loss limit hit by the 22:00 UTC spread spike (GBPUSD −$95 whole trade; 4 such trades 03–05 Nov); fix designed in tm.md §5.2 |
 
 ## Template
 
