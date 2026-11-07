@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9), waiting for the owner's OK to build |
-| Document version | v1.2 (07-Nov-2026) |
+| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9); setups the detector misses: missed-setup check and near-miss rows planned (§1.1); waiting for the owner's OK to build |
+| Document version | v1.3 (07-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -17,7 +17,7 @@ Scout's C# rules (`Detector.cs`, the same rules as Scout_Pine) find every pause.
 1H candles  →  Detector (C# rules, unchanged)  →  candidate: setups.csv row + order picture  →  Scout Lens: take · skip · smaller  →  Buy Stop / Sell Stop, then TM
 ```
 
-The rules stay the safety net: the layer can only **remove or shrink** an order the rules already wanted; it never makes one up.
+The rules stay the safety net: the layer can only **remove or shrink** an order the rules already wanted; it never makes one up. That leaves the other gap — setups the detector never passes on — which §1.1 covers.
 
 **Terms used below**
 
@@ -27,6 +27,28 @@ The rules stay the safety net: the layer can only **remove or shrink** an order 
 - **Overfitting** — a model or setting that fits the past by luck (it learned the noise) and then fails on new data.
 - **Backtest / replay** — running Scout over past candles to see what it would have done.
 - **Shadow mode** — the layer gives its verdict and it is logged, but it changes no order; we compare afterwards.
+- **Near-miss** — a pause that fails one of the detector's rules by a small margin, so the rules don't count it as a setup.
+
+### 1.1 Setups the detector never passes on (owner, 07-Nov-2026)
+
+The flow above runs one way: Scout Lens sees only what the detector found. A formation the rules miss never reaches it. Three additions close that gap without letting the layer place orders:
+
+```
+                    ┌──────────── rule change, through the Scout spec ◄─────────────┐
+                    ▼                                                               │
+1H candles  →  Detector  →  setups + near-misses  →  Scout Lens  →  verdicts (ai.csv)
+                    ▲                                                               │
+owner marks a "missed" formation  →  missed-setup check  →  real misses ───────────►┘
+```
+
+**First, a check of what looks missed.** On GBPUSD 1H (05–06 Nov 2026) two earlier pauses of a down move looked skipped on the order picture. Scout's logs show the detector found both: the first was filled and stopped out an hour later, the broker refused the second for lack of margin ([issue #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)). Not a detector gap, but the picture didn't show it — fixed in the order picture ([scout.md §3.1](scout.md#31-order-pictures-owner-04-nov-2026), *other Scout orders*). The same history (this is the 3rd step; the 1st was stopped out) is an input to the scorer and the reviewer.
+
+| # | Addition | What it does | Status |
+|---|---|---|---|
+| 1 | **Missed-setup check** | The owner marks a formation they expected Scout to take (a symbol, timeframe and candle, e.g. from the dashboard picture). It is matched against the logs and sorted into one of five cases: **not found** by the detector · found but **cancelled** (with the reason, e.g. "pause too long or too deep") · **refused** by the broker · **filled and stopped out** · **held back** (margin budget or a control). Only *not found* — and *cancelled* where the owner disagrees with the reason — are detector gaps. Each case is kept in `missed.csv` with the owner's note. | Planned — first by hand (Claude reads the logs), later a button on the dashboard picture |
+| 2 | **Near-miss rows** | The detector also logs pauses that fail **one** rule by a small margin, as a new event `NearMiss` in `setups.csv`, with the rule and by how much — e.g. a move of 1.3 ATR where `minMove` is 1.5; a pull-back of 0.65 where `maxRetrace` is 0.6; a pause 3.3 ATR high where `maxPauseHeight` is 3.0. Margins set in `scout.json`. **Logging only:** no order, no change to the events Scout_Pine matches. In shadow mode Scout Lens reviews near-misses like setups (scorer score, Claude verdict) and the replay gives each its outcome in R. | Planned |
+| 3 | **Back to the rules** | When missed-setup cases or near-misses of one kind keep coming up and would have paid (in R, over enough cases), the fix is a **rule change**: written in the Scout spec, checked against Scout_Pine there first, then in `Detector.cs` (as for every rule change). Scout Lens never turns a near-miss into an order itself. | The way every change goes |
+| — | *Chart scanner (later option)* | *Claude reads each whole chart every few hours, independent of the detector, and lists formations it sees; shadow only. Costs more than reviewing single setups. Only worth it if the missed-setup check shows many real misses.* | *Not planned* |
 
 ## 2. Option 1 — Setup scorer
 
@@ -209,6 +231,7 @@ The network replaces the detector instead of helping it. It needs huge amounts o
 
 **Decided (owner, 07-Nov-2026): options 1 and 3 together, in shadow mode first** (choice A below). The scorer handles what can be measured; the reviewer handles what can only be described. Each time "the rules miss X", X becomes either a new scorer input (if it can be measured) or a new line in the reviewer's caveat list (if it can't).
 
+0. **Missed setups (§1.1).** Start the missed-setup check now, by hand, on what the owner sees on the dashboard; add near-miss rows to the detector's log (with the replay of step 1, so they get outcomes too).
 1. **Build the dataset.** Add an outcome simulator to `--replay` (§5 of [scout.md](scout.md)) that plays every historical setup forward with Scout's real order rules: stop entry, stop-loss at the far side of the pause, trailing, 16-candle expiry, cancel when the setup ends. Run it on several years of 1H candles across 20+ symbols. Each setup gets its result in R.
 2. **Baseline.** Before any machine learning, slice the results by the existing fields: with or against 4H, pause height, staircase step, session. One plain filter is often most of the gain. The trial review (≈ 10-Nov-2026) feeds straight into this.
 3. **Train the scorer.** Walk-forward (train on older years, test on the next, step forward), with a gap between training and test periods so overlapping staircase setups don't leak. Judge it by total R and R per trade, not win rate.
@@ -246,7 +269,7 @@ Step 1 of §8: replayed setups **with their outcome in R**. Without outcomes the
 | `config/scout-lens/caveats.md` (repo; copy in `~/tradebot/config/scout-lens/`) | The caveat list in plain English, one numbered caveat each, with a short example. The one place caveats live: phase a, phase b and the skill all read it |
 | `config/scout-lens/prompt.md` | The reviewer's instructions: its job, veto-only rights, how to read the inputs |
 | `config/scout-lens/reply.schema.json` | The reply shape: `verdict` (approve · smaller · veto), `caveat` (number or none), `reason` (one or two sentences) |
-| `~/tradebot/lens/<set>/inbox/<setupId>/` | One folder per setup: `setup.json` (the setups.csv row), `candles-h1.csv` and `candles-h4.csv` (last 100 each), `chart.png` (the order picture) |
+| `~/tradebot/lens/<set>/inbox/<setupId>/` | One folder per setup or near-miss (§1.1): `setup.json` (the setups.csv row), `candles-h1.csv` and `candles-h4.csv` (last 100 each), `chart.png` (the order picture) |
 | `~/tradebot/lens/<set>/outcomes.csv` | Each setup's result in R — **kept outside the inbox**, never shown to Claude |
 | `~/tradebot/lens/<set>/outbox/<setupId>.json` | Claude's reply, plus model, effort, time and token counts |
 | `~/tradebot/lens/<set>/run.log` | One line per call: setup, verdict or error, seconds taken |
@@ -315,3 +338,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.0 | 07 Nov 2026 | First issue: five options with pros, cons and two example charts each; recommendation (options 1 + 3, shadow mode first). Proposal only |
 | v1.1 | 07 Nov 2026 | Documents reorganised (owner, [shared](../../shared.md) v1.13): moved to `docs/bots/scout/`, charts to `docs/bots/scout/images/` |
 | v1.2 | 07 Nov 2026 | **Decided (owner): options 1 + 3** (choice A, §8). Option 3 in two phases (§4.1): **a · training** — the caveat list tuned on replayed setups with Claude Code on the laptop at night; **b · inference** — Batch API check over history, then API calls from `Trader.Scout`. Plan for phase a's laptop loop (§9), waiting for the owner's OK to build. History moved to §10 |
+| v1.3 | 07 Nov 2026 | **Setups the detector never passes on** (owner, §1.1): the GBPUSD 05–06 Nov case (found, not missed: one stopped out, one refused for margin); planned **missed-setup check** (`missed.csv`, five cases) and **near-miss rows** (`NearMiss` in `setups.csv`, logging only) reviewed by Scout Lens in shadow mode; a pattern that pays becomes a rule change through the Scout spec. Chart scanner kept as a later option. §8 step 0. Order picture change in [scout.md](scout.md) v1.13 |
