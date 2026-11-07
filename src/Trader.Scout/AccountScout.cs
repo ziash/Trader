@@ -46,14 +46,15 @@ internal sealed class AccountScout(
     private static readonly TimeSpan Cycle = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan FullSync = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan OrderTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan LateWindow = TimeSpan.FromMinutes(10);  // keep asking for a candle this long after it should have closed
-    private static readonly TimeSpan HistoryGap = TimeSpan.FromMilliseconds(300); // historical data: 5 requests/s per connection
-    private static readonly SemaphoreSlim HistoryLock = new(1, 1);           // shared by all accounts on the one connection
-    private static DateTime _lastHistoryRequest = DateTime.MinValue;
+    private static readonly TimeSpan CloseDelay = TimeSpan.FromSeconds(5);   // ask this long after a candle should have closed
+    // A late candle (market open by the broker's hours, candle not in yet) is asked for again after these, then once
+    // per candle length (scout.md §2). The session paces all candle requests to 2/s (CTraderSession.TrendbarSpacing).
+    private static readonly TimeSpan[] LateRetries = [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(8)];
 
     private readonly ILogger _log = log.ForAccount(account.AccountId);
     private readonly List<ChartTracker> _charts = account.Charts.Select(c => new ChartTracker(c, config.SetupSettings)).ToList();
     private readonly Dictionary<ChartTracker, DateTime> _nextFetch = [];
+    private readonly Dictionary<ChartTracker, int> _misses = [];      // fetches in a row that found a due candle missing
     private readonly ConcurrentQueue<ProtoOAExecutionEvent> _executions = new();
     private readonly Dictionary<string, string> _endReason = [];   // key → why its setup ended (from the last Cancelled event)
     private readonly HashSet<long> _cancelling = [];
@@ -146,7 +147,16 @@ internal sealed class AccountScout(
             now = DateTime.UtcNow;
             foreach (var e in chart.Feed(main, higher, now))
                 Record(chart, sym, e, now);
-            _nextFetch[chart] = NextFetch(chart, now);
+            var offset = Offset(chart);
+            var misses = chart.Main.LastCandleUtc != before ? 0
+                : before is null || now >= CandleDue(before.Value, chart.Length, sym.Schedule, offset) ? _misses.GetValueOrDefault(chart) + 1
+                : 0;
+            _misses[chart] = misses;
+            var next = NextFetch(chart.Main.LastCandleUtc, chart.Length, sym.Schedule, misses, offset, now);
+            if (misses == 1)
+                _log.Event("ScoutCandleLate").Information("{Broker} {Symbol} {Tf}: the candle after {Last:yyyy-MM-dd HH:mm} is not in yet; asking again at {Next:HH:mm:ss}Z, then after 2, 4 and 8 min, then once per candle",
+                    account.Broker, sym.Name, chart.Chart.Timeframe, before, next);
+            _nextFetch[chart] = next;
             _dirty |= chart.Main.LastCandleUtc != before;
         }
 
@@ -227,6 +237,7 @@ internal sealed class AccountScout(
             var chart = new ChartTracker(configured[0] with { Timeframe = tf }, config.SetupSettings);
             _charts[i] = chart;
             _nextFetch.Remove(old);
+            _misses.Remove(old);
             _log.Event("ScoutTimeframe").Information("{Broker} {Symbol}: now on {Tf} (was {Old}); pending orders from {Old} stay until filled or expired",
                 account.Broker, old.Chart.Symbol, tf, old.Chart.Timeframe, old.Chart.Timeframe);
             if (_loaded && symbols.TryGetValue(chart.Chart.Symbol, out var sym))
@@ -252,16 +263,44 @@ internal sealed class AccountScout(
         }
     }
 
-    // The next candle is due when the last one's period has passed twice; until then nothing to ask for. A candle that
-    // does not come (market closed, weekend) is asked for every 30 s for 10 minutes, then once per candle length.
-    private static DateTime NextFetch(ChartTracker chart, DateTime now)
+    // ── When to ask for candles (scout.md §2): market hours, late-candle backoff, charts spread out ────────────────────
+    // Each chart asks a few seconds after the others (0–18 s by its place in the list), so 18 symbols don't ask at once.
+    private TimeSpan Offset(ChartTracker chart) => TimeSpan.FromSeconds(_charts.IndexOf(chart) % 10 * 2);
+
+    /// <summary>
+    /// When the candle after <paramref name="lastCandle"/> can be asked for: once it should have closed, plus the
+    /// chart's offset. Candles whose market was closed throughout by the broker's hours (weekend, daily break) are skipped,
+    /// so a closed market costs no requests.
+    /// </summary>
+    internal static DateTime CandleDue(DateTime lastCandle, TimeSpan length, TradingSchedule schedule, TimeSpan offset)
     {
-        if (chart.Main.LastCandleUtc is not { } last)
-            return now.AddSeconds(30);
-        var due = last + 2 * chart.Length + TimeSpan.FromSeconds(5);
-        if (due > now)
+        var open = lastCandle + length;
+        for (var i = 0; i < 1000 && !TradedDuring(schedule, open, length); i++)
+            open += length;
+        return open + length + CloseDelay + offset;
+    }
+
+    /// <summary>
+    /// The next time to ask: when the next candle is due, or — while a due candle is missing (<paramref name="misses"/>
+    /// fetches in a row) — again after 1, 2, 4 and 8 minutes, then once per candle length (at least 8 minutes).
+    /// </summary>
+    internal static DateTime NextFetch(DateTime? lastCandle, TimeSpan length, TradingSchedule schedule, int misses, TimeSpan offset, DateTime now)
+    {
+        if (lastCandle is { } last && CandleDue(last, length, schedule, offset) is var due && due > now)
             return due;
-        return now - due < LateWindow ? now.AddSeconds(30) : now + chart.Length;
+        if (misses <= 0)
+            return now;
+        return now + (misses <= LateRetries.Length ? LateRetries[misses - 1] : Max(length, LateRetries[^1]));
+    }
+
+    // True if the market traded at some moment of [open, open + length), checked every 5 minutes (or per candle if shorter).
+    private static bool TradedDuring(TradingSchedule schedule, DateTime open, TimeSpan length)
+    {
+        var step = length < TimeSpan.FromMinutes(5) ? length : TimeSpan.FromMinutes(5);
+        for (var t = open; t < open + length; t += step)
+            if (schedule.IsOpen(t))
+                return true;
+        return false;
     }
 
     /// <summary>Rebuilds the detectors from past candles once per process start; their events are not logged or acted on.</summary>
@@ -285,27 +324,13 @@ internal sealed class AccountScout(
             account.Broker, sym.Name, chart.Chart.Timeframe, d.Count, skipped, TrendName(d.Trend), chart.HigherTimeframe ?? "-",
             TrendName(chart.Higher?.Trend ?? 0), d.MainLevel is { } m ? $"{Side(d.Trend)} Stop {Num(m, sym)}" : "none",
             d.ReversalLevel is { } r ? $", reversal {Side(-d.Trend)} Stop {Num(r, sym)}" : "");
-        _nextFetch[chart] = NextFetch(chart, DateTime.UtcNow);
+        _nextFetch[chart] = NextFetch(chart.Main.LastCandleUtc, chart.Length, sym.Schedule, 0, Offset(chart), DateTime.UtcNow);
     }
 
     private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
 
     private async Task<IReadOnlyList<Candle>> HistoryAsync(CTraderSession session, SymbolInfo sym, string tf, DateTime from, DateTime to)
-    {
-        await HistoryLock.WaitAsync();
-        try
-        {
-            var wait = _lastHistoryRequest + HistoryGap - DateTime.UtcNow;
-            if (wait > TimeSpan.Zero)
-                await Task.Delay(wait);
-            _lastHistoryRequest = DateTime.UtcNow;
-            return await session.GetTrendbarsAsync(account.AccountId, sym.SymbolId, Timeframes.Period(tf), from, to);
-        }
-        finally
-        {
-            HistoryLock.Release();
-        }
-    }
+        => await session.GetTrendbarsAsync(account.AccountId, sym.SymbolId, Timeframes.Period(tf), from, to); // paced by the session
 
     // ── Setup events → setups.csv and the log ────────────────────────────────────────────────────────────────────────
     private void Record(ChartTracker chart, SymbolInfo sym, TaggedEvent te, DateTime now)

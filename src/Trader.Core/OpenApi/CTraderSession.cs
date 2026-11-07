@@ -40,6 +40,10 @@ public sealed class CTraderSession : IAsyncDisposable
     private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(15);
 
+    /// <summary>At most 2 historical-candle requests per second on this connection (Spotware's limit is 5).</summary>
+    public static readonly TimeSpan TrendbarSpacing = TimeSpan.FromMilliseconds(500);
+    private readonly RequestPacer _trendbars = new(TrendbarSpacing);
+
     private readonly IOpenApiClient _client;
     private readonly ILogger _log;
     private readonly IDisposable _subscription;
@@ -373,9 +377,10 @@ public sealed class CTraderSession : IAsyncDisposable
         return AcknowledgeAsync(req, timeout);
     }
 
-    /// <summary>Historical candles from the broker (5 requests/s limit), oldest first.</summary>
+    /// <summary>Historical candles from the broker, oldest first; paced to 2 requests/s (Spotware's limit: 5/s).</summary>
     public async Task<IReadOnlyList<Candle>> GetTrendbarsAsync(long ctidTraderAccountId, long symbolId, ProtoOATrendbarPeriod period, DateTime fromUtc, DateTime toUtc)
     {
+        await _trendbars.WaitAsync();
         var res = await RequestAsync<ProtoOAGetTrendbarsRes>(new ProtoOAGetTrendbarsReq
         {
             CtidTraderAccountId = ctidTraderAccountId,
