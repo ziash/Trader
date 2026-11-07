@@ -41,7 +41,7 @@ The flow above runs one way: Scout Lens sees only what the detector found. A for
 owner marks a "missed" formation  →  missed-setup check  →  real misses ───────────►┘
 ```
 
-**First, a check of what looks missed.** On GBPUSD 1H (05–06 Nov 2026) two earlier pauses of a down move looked skipped on the order picture. Scout's logs show the detector found both: the first was filled and stopped out an hour later, the broker refused the second for lack of margin ([issue #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)). Not a detector gap, but the picture didn't show it — fixed in the order picture ([scout.md §3.1](scout.md#31-order-pictures-owner-04-nov-2026), *other Scout orders*). The same history (this is the 3rd step; the 1st was stopped out) is an input to the scorer and the reviewer.
+**First, a check of what looks missed.** On GBPUSD 1H (05–06 Nov 2026) two earlier pauses of a down move looked skipped on the order picture. Scout's logs show the detector found both: the first was filled and stopped out an hour later, the broker refused the second for lack of margin ([issue #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)). Not a detector gap, but the picture didn't show it — planned for the order picture ([scout.md §3.1](scout.md#31-order-pictures-owner-04-nov-2026), *other Scout orders*). The same history (this is the 3rd step; the 1st was stopped out) is an input to the scorer and the reviewer.
 
 | # | Addition | What it does | Status |
 |---|---|---|---|
