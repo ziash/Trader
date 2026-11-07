@@ -2,10 +2,12 @@
 
 The original trading idea of this repo: **you read the trend and decide on TradingView; the bot executes and manages the trade** through the cTrader Open API — hedge instead of stop-loss, a 4-leg structure, scale-out, trailing and pyramiding. It is a project of its own; much of it is still open.
 
+**Related:** [TM](tm.md) (manual trading with hedges, built first) · [shared rules](../shared.md) · [all projects](../../README.md#projects)
+
 | Item | Value |
 |---|---|
 | Status | **Concept** — exit logic Scenario 1 and the position structure are defined; entry rules, Scenarios 2–5 and many parameters are open (§9). Not built |
-| Document version | v1.0 (20-Oct-2026) — history in §10 |
+| Document version | v1.1 (07-Nov-2026) — history in §10 |
 | Code | Not started. Will be `src/Trader.AutoBot`, on the [Open Code Pieces](../open-code-pieces.md) |
 | Accounts | Demo only until a go-live is decided ([shared rules](../shared.md#4-safety-rules-for-every-bot)) |
 | Related | [TM](tm.md) already runs a hedge-and-recover logic for manually opened trades; its answers to Scenarios 2–5 (TM §4–§5) are a starting point here |
@@ -249,3 +251,4 @@ Effect: the position pyramids by half a trade per add. Older runners sit on stop
 |---|---|---|
 | — | 08–10 Oct 2026 | (as part of the old single plan, v1.0–v1.3) Purpose, TradingView, hedge-and-recover exit logic, Scenario 1 with the AUD/JPY example, 4-leg structure, leg naming, lifecycle rules R1–R8, risk guardrails |
 | v1.0 | 20 Oct 2026 | Own project document, split out of the old plan ([archive](../archive/plan-v1.22.md), Sections 1–4, 9, 10.1–10.8, open items). Named **Auto Bot**. Content unchanged |
+| v1.1 | 07 Nov 2026 | Documents reorganised (owner, [shared](../shared.md) v1.13): Related line |

@@ -2,7 +2,7 @@
   "name": "trader-dashboard-ui",
   "private": true,
   "version": "0.1.0",
-  "description": "Trader Dashboard screens: Next.js static export (docs/dashboard.md §4.1)",
+  "description": "Trader Dashboard screens: Next.js static export (docs/dashboard/dashboard.md §4.1)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -1,4 +1,4 @@
-// Scout (docs/bots/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Watches the owner's charts for the
+// Scout (docs/bots/scout/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Watches the owner's charts for the
 // "pause, then stop order" setup on the broker's own closed candles. Watch mode alerts; Trade mode places the first
 // stop order of each setup (label Scout-<6hex>-<tf>-<pause start>-M/R) and TM takes it over. Demo accounts only.
 // - Reads ~/tradebot/config/scout.json and notifications.json.

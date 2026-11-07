@@ -1,5 +1,5 @@
 {
-  // Scout (docs/bots/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Live copy: ~/tradebot/config/scout.json
+  // Scout (docs/bots/scout/scout.md; setup rules: github.com/ziash/Scout docs/spec.md). Live copy: ~/tradebot/config/scout.json
   // Each chart: symbol, timeframe (H1, H4, D1) and mode: "watch" = alerts only, "trade" = Scout places the first stop
   // order of each setup and TM takes it over ("Scout-" in tm.json's takeOver).
   // Trial run from 03-Nov-2026 (Scout spec §4.6): trade, 1H. From 04-Nov-2026 (owner): IC Markets only, top three

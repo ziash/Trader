@@ -1,6 +1,6 @@
 /*
  * Trader Dashboard — design tokens (CSS custom properties)
- * Source: Claude Design canvas "Trader Dashboard", 05-Nov-2026 (docs/design/HANDOFF.md).
+ * Source: Claude Design canvas "Trader Dashboard", 05-Nov-2026 (docs/dashboard/design/HANDOFF.md).
  * Use: import once at the app root (web/dashboard/ui/), then style only with var(--…).
  *
  * Dark mode follows the system setting; a manual toggle sets

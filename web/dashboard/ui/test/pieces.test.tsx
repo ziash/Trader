@@ -13,8 +13,8 @@ import type { Data } from "@/lib/useData";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), usePathname: () => "/" }));
 
 group("design tokens", () => {
-  it("are the exact copy of docs/design/tokens.css", () => {
-    expect(readFileSync("src/styles/tokens.css", "utf8")).toBe(readFileSync("../../../docs/design/tokens.css", "utf8"));
+  it("are the exact copy of docs/dashboard/design/tokens.css", () => {
+    expect(readFileSync("src/styles/tokens.css", "utf8")).toBe(readFileSync("../../../docs/dashboard/design/tokens.css", "utf8"));
   });
 });
 

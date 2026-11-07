@@ -1,24 +1,17 @@
 # Shared by all projects
 
-Each bot is a project of its own, with its own document in [`docs/bots/`](bots/README.md). This page holds only what all of them share: the brokers and accounts, the machine, the safety rules, the folders and file format, how the documents are kept, and the glossary. The reusable code has its own document: [Open Code Pieces](open-code-pieces.md).
+Each bot is a project of its own, with its own document in [`docs/bots/`](bots/README.md); all documents: [documents map](README.md). This page holds only what all of them share: the brokers and accounts, the machine, the safety rules, the folders and file format, how the documents are kept, and the glossary. The reusable code has its own document: [Open Code Pieces](open-code-pieces.md).
 
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.12 (06-Nov-2026) — history in §10 |
+| Document version | v1.13 (07-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
 ## 1. The projects
 
-| Project | What it is | Status | Document |
-|---|---|---|---|
-| **Audit Bot** | Compares two brokers' spreads, slippage, latency and reliability with tiny probe orders; daily report | Built and finished; audit run 18-Oct → 04-Nov-2026, bot stopped | [bots/audit-bot.md](bots/audit-bot.md) |
-| **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them and manages the hedges | Built; runs on demo as a service (`trader-tm`); can also trade replayed prices on Rewind | [bots/tm.md](bots/tm.md) |
-| **Scout** | Finds the owner's pause-then-stop setup on many charts and places the first stop order; TM manages it (setup rules: [Scout repository](https://github.com/ziash/Scout)) | Trial on demo from 03-Nov-2026 (`trader-scout`); IC Markets only, 18 symbols from 04-Nov | [bots/scout.md](bots/scout.md) |
-| **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [bots/auto-bot.md](bots/auto-bot.md) |
-| **Dashboard** | Private web page at trader.uzlabz.com (Hostinger): Scout's setups and orders with pictures, TM's trades, accounts and trading conditions, bot status; steers Scout through an options catalogue; Google sign-in (owner, approved viewers), M2M sign-in (Claude) | Live since 05-Nov-2026: sign-in, Status, Users; 30-min upload and Scout page (view only) since 06-Nov-2026 | [dashboard.md](dashboard.md) |
-| **Open Code Pieces** | The reusable code all bots are built from | In use by the Audit Bot, TM and Scout | [open-code-pieces.md](open-code-pieces.md) |
+The projects — what each one is, its status and every document that belongs to it — are listed in one place only: the [projects table on the front page](../README.md#projects). The full list of documents is the [documents map](README.md). In short: the bots **Scout**, **TM**, **Audit Bot** (finished) and **Auto Bot** (concept), each in [`bots/`](bots/README.md); the **Dashboard** in [`dashboard/`](dashboard/README.md); the **Open Code Pieces** in [open-code-pieces.md](open-code-pieces.md).
 
 ## 2. Brokers and accounts
 
@@ -49,7 +42,7 @@ Broker login numbers differ from the `ctidTraderAccountId` the API uses (`dotnet
 
 **Bots run as systemd user services** (one unit per bot), each from a **published Release build** in `~/tradebot/bin/<Bot>/`, so code changes never affect a running bot until it is redeployed and restarted. Each bot's document says how it is run.
 
-**Deploying never touches a running bot's files** (since v1.6). `scripts/deploy-<bot>.sh` publishes each build into a new folder `~/tradebot/bin/<Bot>-<git hash>` (`-dirty` when the repository had uncommitted changes; `-2`, `-3` … when that name exists) and then switches the link `~/tradebot/bin/<Bot>` to it in one step; the units start the bot through that link (shared code: `scripts/deploy-lib.sh`). The .NET host follows the link once, at start, so a running bot keeps loading from its own folder and switches only when it is restarted (tested 04-Nov-2026). The scripts keep the newest three builds plus any folder a running process uses, and still never start, stop or restart a bot. Before, they published into a fresh folder but renamed the live one away and deleted the previous one, so a bot that loaded a file late (often while stopping) read it from the new build or found it gone: Scout's crash on stop on 04-Nov-2026 ([Scout §7](bots/scout.md#7-decisions-and-open-items)). **One-time switch:** a bot still running from a plain `~/tradebot/bin/<Bot>/` folder is left alone; its next deploy prints a single command that stops it, renames the folder, makes the link and starts it again (a few seconds). Not covered: a .NET runtime update from Ubuntu changes the shared runtime under every running bot ([Audit Bot](bots/audit-bot.md) v1.4) — restart the bots after one.
+**Deploying never touches a running bot's files** (since v1.6). `scripts/deploy-<bot>.sh` publishes each build into a new folder `~/tradebot/bin/<Bot>-<git hash>` (`-dirty` when the repository had uncommitted changes; `-2`, `-3` … when that name exists) and then switches the link `~/tradebot/bin/<Bot>` to it in one step; the units start the bot through that link (shared code: `scripts/deploy-lib.sh`). The .NET host follows the link once, at start, so a running bot keeps loading from its own folder and switches only when it is restarted (tested 04-Nov-2026). The scripts keep the newest three builds plus any folder a running process uses, and still never start, stop or restart a bot. Before, they published into a fresh folder but renamed the live one away and deleted the previous one, so a bot that loaded a file late (often while stopping) read it from the new build or found it gone: Scout's crash on stop on 04-Nov-2026 ([Scout §7](bots/scout/scout.md#7-decisions-and-open-items)). **One-time switch:** a bot still running from a plain `~/tradebot/bin/<Bot>/` folder is left alone; its next deploy prints a single command that stops it, renames the folder, makes the link and starts it again (a few seconds). Not covered: a .NET runtime update from Ubuntu changes the shared runtime under every running bot ([Audit Bot](bots/audit-bot.md) v1.4) — restart the bots after one.
 
 ## 4. Safety rules for every bot
 
@@ -98,8 +91,8 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 
 ## 6. How the documents are kept
 
-- **One document per project** — each bot in `docs/bots/<bot>.md` (from [`_template.md`](bots/_template.md)), plus this page and [Open Code Pieces](open-code-pieces.md). Each has its own **version** (v1.0, v1.1 …) and **history** table. A change of decision, scope or design goes into the document it belongs to: bump its version, add a history row, commit as `<doc> vX.Y: <what changed>` (e.g. `tm v1.1: news pop-ups`).
-- The **README** lists every project with its status; the [bot index](bots/README.md) too.
+- **One document per project** — each bot in `docs/bots/<bot>.md` (from [`_template.md`](bots/_template.md)); a project with several documents has its own folder with a short `README.md`: Scout in [`docs/bots/scout/`](bots/scout/README.md), the Dashboard in [`docs/dashboard/`](dashboard/README.md). Plus this page and [Open Code Pieces](open-code-pieces.md). Each has its own **version** (v1.0, v1.1 …) and **history** table. A change of decision, scope or design goes into the document it belongs to: bump its version, add a history row, commit as `<doc> vX.Y: <what changed>` (e.g. `tm v1.1: news pop-ups`).
+- The **README** on the front page holds the one projects table: each project's status and links to all its documents. The [documents map](README.md) lists every document; the [bot index](bots/README.md) and the project folders' `README.md` link their own documents only, without a status, so nothing is kept twice.
 - Code comments point at the document sections, e.g. `(tm.md §4)`.
 - Earlier history: [the old single plan](archive/plan-v1.22.md) (v1.0–v1.22, 8–20 Oct 2026).
 
@@ -208,8 +201,9 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.5 | 03 Nov 2026 | Scout added to the projects (§1); Audit Bot no longer started at login (audit-bot.md v1.3) |
 | v1.6 | 04 Nov 2026 | §3, §5: deploy scripts publish each build into its own folder `~/tradebot/bin/<Bot>-<git hash>` and switch the link `~/tradebot/bin/<Bot>` to it; a running bot's files are never overwritten, moved or deleted (Scout's crash on stop, scout.md v1.3). Glossary: link |
 | v1.7 | 04 Nov 2026 | §1: Audit Bot's audit run over and the bot stopped (audit-bot.md v1.5); Scout on IC Markets only with 18 symbols (scout.md v1.4) |
-| v1.8 | 05 Nov 2026 | Dashboard added to the projects (§1, [dashboard.md](dashboard.md) v1.3); its folders and credential files (§5); glossary: SSH / rsync, PHP, subdomain, HTTPS, API / JSON, Sign in with Google, M2M sign-in, hash, session cookie, options catalogue |
-| v1.9 | 05 Nov 2026 | Glossary: PHP now for the dashboard's API; React / Next.js added (dashboard stack, [dashboard.md](dashboard.md) v1.4) |
-| v1.10 | 06 Nov 2026 | Dashboard live with the 30-min upload and the Scout page ([dashboard.md](dashboard.md) v1.10): §1 status, §5 `~/tradebot/dashboard/outbox/`; glossary: outbox |
-| v1.11 | 06 Nov 2026 | New [issue log](issue-log.md) (#1: IC Markets demo margin call); §4 protection rule: a hedge order alone is not enough (backstop), and a margin rule for bots that add exposure ([TM](bots/tm.md) v1.9, [Scout](bots/scout.md) v1.7, [Open Code Pieces](open-code-pieces.md) v1.9); glossary: equity, margin, margin level (merged), backstop |
+| v1.8 | 05 Nov 2026 | Dashboard added to the projects (§1, [dashboard.md](dashboard/dashboard.md) v1.3); its folders and credential files (§5); glossary: SSH / rsync, PHP, subdomain, HTTPS, API / JSON, Sign in with Google, M2M sign-in, hash, session cookie, options catalogue |
+| v1.9 | 05 Nov 2026 | Glossary: PHP now for the dashboard's API; React / Next.js added (dashboard stack, [dashboard.md](dashboard/dashboard.md) v1.4) |
+| v1.10 | 06 Nov 2026 | Dashboard live with the 30-min upload and the Scout page ([dashboard.md](dashboard/dashboard.md) v1.10): §1 status, §5 `~/tradebot/dashboard/outbox/`; glossary: outbox |
+| v1.11 | 06 Nov 2026 | New [issue log](issue-log.md) (#1: IC Markets demo margin call); §4 protection rule: a hedge order alone is not enough (backstop), and a margin rule for bots that add exposure ([TM](bots/tm.md) v1.9, [Scout](bots/scout/scout.md) v1.7, [Open Code Pieces](open-code-pieces.md) v1.9); glossary: equity, margin, margin level (merged), backstop |
 | v1.12 | 06 Nov 2026 | §8: live broker chosen — IC Markets (owner, Audit Bot v1.7), the regulation note weighed in |
+| v1.13 | 07 Nov 2026 | Documents reorganised (owner): Scout's documents moved to `docs/bots/scout/` and the Dashboard's to `docs/dashboard/`; the projects table now kept only on the front page README (§1 points to it); new [documents map](README.md); §6 updated |

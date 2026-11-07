@@ -24,7 +24,7 @@
 
   // Labels TM takes over as mains (tm.md §2.1): "" = no label (your manual trades); any other entry matches
   // labels that start with it, e.g. "AuditBot-". Example: ["", "ABC"]. Default when missing: [""].
-  // "Scout-": the first orders Scout places (docs/bots/scout.md; tm.md decision 12), from 03-Nov-2026.
+  // "Scout-": the first orders Scout places (docs/bots/scout/scout.md; tm.md decision 12), from 03-Nov-2026.
   "takeOver": ["", "Scout-"],
 
   "mirrorWithinSeconds": 60,   // a position older than this when TM first sees it: hedges only, no mirror

@@ -7,7 +7,7 @@
 | Owner | Zeeshan |
 | Document version | **v1.22** (living document — every change is recorded in [Section 11](#11-change-log) and in Git history) |
 | Date | 17 October 2026 |
-| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
+| Status | Plan agreed in principle; **Phase 0 complete (16-Oct-2026)** — `check-env.sh`: no failures, 0 warnings; Open API app approved and tokens issued for both demo accounts; IC Markets (Broker A) and Pepperstone (Broker B) demos Hedging; setup record in [docs/setup.md](../setup.md). **TM (Trade Manually) specified as the first trading bot (v1.18, [Section 10.9](#109-tm--trade-manually-bot-v118))**; **Phase 1 complete (v1.16, 19-Oct-2026):** step 1 (connect and list accounts) done 16-Oct-2026; step 2 (stay connected) done 17-Oct-2026; framework made reusable for many bots ([Section 5.3](#53-one-framework-many-bots-v110)) 17-Oct-2026; steps 3 (price feed to disk), 4 (instance registry) and 5 (probe orders) done 18-Oct-2026; step 6 (daily report) done 19-Oct-2026; **Phase 2 audit run started 18-Oct-2026 before step 6** (owner's decision; the daily report is built later from the collected CSVs); order ownership rule added ([Section 5.3](#53-one-framework-many-bots-v110)); steps in [Section 8.1](#81-phase-1-steps-v18). Audit Bot symbols, probe windows and log format fixed ([Section 6](#6-first-bot-the-audit-bot)). Exit logic: Scenario 1 defined; position structure, scale-out and pyramiding defined ([Section 10.8](#108-position-structure-scale-out-and-pyramiding)). Scenarios 2–5 pending. |
 
 ## Contents
 
@@ -123,7 +123,7 @@ YOU ──► TradingView (browser) : read trend, decide, (later) send alerts
 
 ### 5.3 One framework, many bots *(v1.10)*
 
-The owner may run up to ~10 bots at the same time. The functions of Section 5.2 are therefore written **once**, in the shared library `src/Trader.Core`, and every bot uses it; bots never copy that code. Usage guide: [`src/Trader.Core/README.md`](../src/Trader.Core/README.md).
+The owner may run up to ~10 bots at the same time. The functions of Section 5.2 are therefore written **once**, in the shared library `src/Trader.Core`, and every bot uses it; bots never copy that code. Usage guide: [`src/Trader.Core/README.md`](../../src/Trader.Core/README.md).
 
 - **One project per bot:** `src/Trader.<BotName>/`, referencing `Trader.Core`. A new bot starts as a copy of `src/Trader.SampleBot` (the smallest complete bot, ~30 lines); the steps are in the usage guide.
 - **`BotRunner`** gives every bot the same start-up and shut-down: common options (`--account`, `--verbose`, `--test-drop-after`, `--help`), logging, secrets (demo only), clean stop on Ctrl+C / SIGTERM, exit codes (0 normal, 1 fatal, 2 bad options, 3 bug).
@@ -141,12 +141,12 @@ The owner may run up to ~10 bots at the same time. The functions of Section 5.2 
   - This works because the accounts are **Hedging** (decision 8): every order is its own position, so a manual trade and a bot trade on the same pair and side never merge. Other clients of the same broker are other accounts, which the bot cannot see at all.
   - **Exception — TM** *(v1.18, owner's decision)*: TM takes over unlabelled positions on the symbols listed in its config (the owner's manual trades meant for TM): it removes or copies their stop-loss and take-profit, and closes one only under its 3R loss limit (10.9.5). Unlisted symbols and other bots' positions stay foreign to TM.
   - Limit: the label is plain text, so someone with access to the account could type a bot-style label on a manual order. The recorded `positionId`s catch this during a run; if manual labels are ever used, the post-restart rule becomes "label matches **and** `positionId` is in the bot's saved list".
-- **Bot pages** *(v1.19)*: every bot has its own details page in [`docs/bots/`](bots/README.md) — status, links to its plan sections, code, config, how to run it, history — and a row in the README's Bots table. Pages summarise; this plan stays authoritative for the rules. Pages so far: [Audit Bot](bots/audit-bot.md), [TM](bots/tm.md).
+- **Bot pages** *(v1.19)*: every bot has its own details page in [`docs/bots/`](../bots/README.md) — status, links to its plan sections, code, config, how to run it, history — and a row in the README's Bots table. Pages summarise; this plan stays authoritative for the rules. Pages so far: [Audit Bot](../bots/audit-bot.md), [TM](../bots/tm.md).
 - **Outside this repo:** pack `Trader.Core` as a versioned NuGet package in `~/tradebot/packages` and reference a fixed version, rather than copying the folder.
 
 ## 6. First bot: the Audit Bot
 
-*Details page: [docs/bots/audit-bot.md](bots/audit-bot.md) (v1.19).*
+*Details page: [docs/bots/audit-bot.md](../bots/audit-bot.md) (v1.19).*
 
 ### 6.1 Goal
 
@@ -360,7 +360,7 @@ Each instance must know how many copies of the Audit Bot are running and behave 
 
 | Phase | Name | Deliverable | Target |
 |---|---|---|---|
-| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](setup.md). *Complete 16-Oct-2026: Git repo, IC Markets demo (Broker A), Pepperstone demo (Broker B), Ubuntu toolchain, Open API app approved, tokens in secrets file; `check-env.sh` 0 warnings.* | Week 1 |
+| 0 | Setup | Demo accounts at 2 brokers, cTID linked, Open API app, .NET + VS Code on Ubuntu, Git repo. Checklist: [docs/setup.md](../setup.md). *Complete 16-Oct-2026: Git repo, IC Markets demo (Broker A), Pepperstone demo (Broker B), Ubuntu toolchain, Open API app approved, tokens in secrets file; `check-env.sh` 0 warnings.* | Week 1 |
 | 1 | Framework + Audit Bot | Connect/auth/reconnect, spot & candle feed, probe orders, per-broker logs, instance registry. *Complete 19-Oct-2026 (v1.16): all 6 steps of Section 8.1.* | Weeks 2–3 |
 | 2 | Audit run | 2 brokers × 2 weeks on demo; daily reports; choose broker. *Started 18-Oct-2026 (v1.14), before Phase 1 step 6, by the owner's decision; covers the UK and US clock changes (25-Oct, 1-Nov) and the NFP (6-Nov) and CPI (10-Nov) releases if run to mid-November.* | Weeks 4–5 |
 | 3 | Backtesting | Strategy and exit rules (incl. Section 10 scenarios and 10.8 scale-out/pyramid rules) written as a spec; backtest with broker data incl. costs; hedge version vs net-position version compared | Weeks 6–8 |
@@ -422,7 +422,7 @@ Each step is built only when the owner says so.
 
 Market path: price rises through H, makes a spike (wick) higher, then reverses and falls back below H and on toward the short's target. Only one whipsaw against the main position.
 
-![Figure 1 — AUD/JPY daily chart](images/audjpy-scenario1.png)
+![Figure 1 — AUD/JPY daily chart](../images/audjpy-scenario1.png)
 
 *Figure 1 — AUD/JPY daily (OANDA, TradingView). Blue line = short entry E ≈ 114.62 (July high retested in September). The early-September wick to ≈ 114.97 is the single whipsaw; price then fell to ≈ 109.7 in mid-September.*
 
@@ -542,7 +542,7 @@ Effect: the position pyramids by half a trade per add. Older runners sit on stop
 
 ### 10.9 TM — Trade Manually bot *(v1.18)*
 
-*Details page: [docs/bots/tm.md](bots/tm.md) (v1.19).*
+*Details page: [docs/bots/tm.md](../bots/tm.md) (v1.19).*
 
 *Agreed with the owner on 19-Oct-2026 (20 questions, one at a time). TM is the **first trading bot**. The Audit Bot (Section 6) is unchanged and keeps running.*
 

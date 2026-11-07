@@ -1,5 +1,5 @@
-/* Shared classes from the design pack's screens (docs/design/screens, <helmet> blocks), styled only with tokens.
-   tokens.css is an exact copy of docs/design/tokens.css (a test checks it); only the font names are pointed at the self-hosted fonts here. */
+/* Shared classes from the design pack's screens (docs/dashboard/design/screens, <helmet> blocks), styled only with tokens.
+   tokens.css is an exact copy of docs/dashboard/design/tokens.css (a test checks it); only the font names are pointed at the self-hosted fonts here. */
 :root {
   --font-sans: var(--font-inter), Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;

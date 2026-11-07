@@ -1,6 +1,6 @@
 {
     "name": "trader/dashboard-api",
-    "description": "Trader Dashboard API: sign-in, roles, data and controls (docs/dashboard.md §4.1, §5)",
+    "description": "Trader Dashboard API: sign-in, roles, data and controls (docs/dashboard/dashboard.md §4.1, §5)",
     "type": "project",
     "license": "proprietary",
     "require": {

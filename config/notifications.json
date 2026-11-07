@@ -8,7 +8,7 @@
   "repeatSeconds": 60,   // the same notification again within 60 s is logged, not popped up again
   "channels": [
     { "type": "desktop", "minLevel": "Warning" },
-    // Scout's orders placed and Watch-mode setups pop up too (docs/bots/scout.md §3)
+    // Scout's orders placed and Watch-mode setups pop up too (docs/bots/scout/scout.md §3)
     { "type": "desktop", "minLevel": "Info", "bots": ["Scout"], "events": ["OrderPlaced", "Setup"] }
     // later, e.g.: { "type": "telegram", "minLevel": "Critical" }
   ]

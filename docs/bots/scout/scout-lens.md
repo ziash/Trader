@@ -5,9 +5,9 @@
 | Item | Value |
 |---|---|
 | Status | **Proposal — waiting for the owner's choice** (07-Nov-2026) |
-| Document version | v1.0 (07-Nov-2026) |
+| Document version | v1.1 (07-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository |
-| Charts | [`docs/images/scout-lens/`](../images/scout-lens) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
+| Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
 ## 1. Why a layer
 
@@ -52,7 +52,7 @@ Each candidate becomes one row of numbers. Most are already in `setups.csv` (§3
 
 | A score for every step of the staircase | Why the fourth setup scored −0.30R |
 |---|---|
-| ![Uptrend with four pauses, each scored](../images/scout-lens/1a-staircase-scores.svg) | ![Score breakdown, input by input](../images/scout-lens/1b-score-breakdown.svg) |
+| ![Uptrend with four pauses, each scored](images/1a-staircase-scores.svg) | ![Score breakdown, input by input](images/1b-score-breakdown.svg) |
 | The rules see four valid pauses. The scorer rates the fourth low: the move before it is long, it is the fourth step, and the pause is deep. Skipping it avoids the loss when the trend rolls over. | Each bar is one input's push on the score, starting from the average setup (+0.22R). This breakdown is logged with every decision, so the model's reasoning can be checked. |
 
 ## 3. Option 2 — Learn your eye
@@ -78,7 +78,7 @@ Scout's candidates, live or from replayed history, appear on a small labelling s
 
 | The labelling screen (mockup) | Same numbers, different call |
 |---|---|
-| ![Buy stop just under an earlier high, labelled Skip](../images/scout-lens/2a-labelling-screen.svg) | ![Two setups with the same numbers](../images/scout-lens/2b-same-numbers.svg) |
+| ![Buy stop just under an earlier high, labelled Skip](images/2a-labelling-screen.svg) | ![Two setups with the same numbers](images/2b-same-numbers.svg) |
 | The buy stop sits just under an earlier high, so the owner skips it and tags the reason "under prior high" (other reasons offered: move too stretched, messy pause, news soon). Each tap is one training example. | Both: pause 3 candles · height 0.4 ATR · move 3.2 ATR. To the rules they are identical. The owner takes the left and skips the right because of the old high just above. The model can learn that only if it sees "distance to prior high", as a number or in the picture. |
 
 ## 4. Option 3 — Claude chart reviewer
@@ -106,7 +106,7 @@ On each `NewStop` or `NewReversal`, Scout sends the order picture it already dra
 
 | Veto: selling into support | Approve: first pause off a turn |
 |---|---|
-| ![Sell stop just above a support zone](../images/scout-lens/3a-veto-support.svg) | ![First pause after a bottom](../images/scout-lens/3b-approve-turn.svg) |
+| ![Sell stop just above a support zone](images/3a-veto-support.svg) | ![First pause after a bottom](images/3b-approve-turn.svg) |
 | The rules see a clean downtrend pause. Claude sees the zone that bounced price twice. Here the order would have filled and reversed for a full loss. | One of the setups the owner's markups show as wanted: the first small pause right after a bottom. Claude approves it and says why. |
 
 Claude's replies for these two:
@@ -147,7 +147,7 @@ An optimiser tries thousands of setting combinations against replayed history an
 
 | Total R by setting, 2019–2024 | Tuned settings after tuning stops |
 |---|---|
-| ![Heatmap of total R by setting](../images/scout-lens/4a-settings-heatmap.svg) | ![Equity of tuned vs default settings](../images/scout-lens/4b-tuned-vs-default.svg) |
+| ![Heatmap of total R by setting](images/4a-settings-heatmap.svg) | ![Equity of tuned vs default settings](images/4b-tuned-vs-default.svg) |
 | The single best cell (+41R) is surrounded by weak neighbours, so it is luck. Settings inside the dashed plateau are all good, which makes them a safer pick. | Tuned on 2019–2024, the best-looking settings beat the defaults by a wide margin. On data they never saw (2025–26) they fall back while the defaults keep going. |
 
 ## 6. Option 5 — End-to-end deep learning
@@ -172,7 +172,7 @@ The network replaces the detector instead of helping it. It needs huge amounts o
 
 | Signals with no story | Accuracy while training |
 |---|---|
-| ![Model buy and sell signals on raw candles](../images/scout-lens/5a-signals-no-story.svg) | ![Training vs unseen-data accuracy](../images/scout-lens/5b-train-vs-unseen.svg) |
+| ![Model buy and sell signals on raw candles](images/5a-signals-no-story.svg) | ![Training vs unseen-data accuracy](images/5b-train-vs-unseen.svg) |
 | The network fires buys and sells wherever its output crosses a line. None are tied to a pause, and none come with a reason that can be checked. | Training accuracy climbs toward 90 %. On data it hasn't seen it stays near a coin flip: it is memorising the past. |
 
 ## 7. Side by side
@@ -214,3 +214,4 @@ Whatever is chosen, nothing changes in the running bots until the owner approves
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 07 Nov 2026 | First issue: five options with pros, cons and two example charts each; recommendation (options 1 + 3, shadow mode first). Proposal only |
+| v1.1 | 07 Nov 2026 | Documents reorganised (owner, [shared](../../shared.md) v1.13): moved to `docs/bots/scout/`, charts to `docs/bots/scout/images/` |

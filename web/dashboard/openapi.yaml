@@ -3,7 +3,7 @@ info:
   title: Trader Dashboard API
   version: 0.1.0
   description: |
-    The one API the dashboard's screens and machines (M2M) use (docs/dashboard.md §4.1, §5).
+    The one API the dashboard's screens and machines (M2M) use (docs/dashboard/dashboard.md §4.1, §5).
     People sign in with Google and are kept in by the session cookie `__Host-tdash`; a change made with the cookie
     must send the session's `csrf` value (from `GET /api/me`) in the `X-CSRF-Token` header.
     Machines get a 1-hour access token from `POST /api/auth/token` and send it as `Authorization: Bearer <token>`.
