@@ -150,6 +150,9 @@ internal abstract record TmAction(TradeState? Trade, string Role)
 
     /// <summary>Called when the server refused it.</summary>
     public Action<string>? Failed { get; init; }
+
+    /// <summary>Only gives an older order or stop TM's trigger method (tm.md §5.2): tried once per order or position, not again if refused.</summary>
+    public bool TriggerOnly { get; init; }
 }
 
 internal sealed record OpenMirror(TradeState Trade, int Dir, long Volume, double StopLoss) : TmAction(Trade, TmLabel.Mirror);

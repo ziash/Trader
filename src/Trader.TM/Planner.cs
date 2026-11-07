@@ -640,7 +640,7 @@ internal static class Planner
                 else if (!Same(hOrd.Price, t.H))
                     actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, t.H));
                 else if (hOrd.Trigger is { } have && have != env.Config.TriggerMethod)
-                    actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, hOrd.Price)); // an older hedge order gets TM's trigger (§5.2)
+                    actions.Add(new MoveOrder(t, hedgeRole, hOrd.Id, hOrd.Price) { TriggerOnly = true }); // an older hedge order gets TM's trigger (§5.2)
             }
             else
             {
@@ -715,7 +715,8 @@ internal static class Planner
             }
             if (!_touched.Add(p.Id))
                 return false;
-            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit, trailing, tmStop) { Done = done is null ? null : _ => done() });
+            var triggerOnly = otherTrigger && Same(p.StopLoss, stopLoss) && Same(p.TakeProfit, takeProfit) && p.Trailing == trailing;
+            actions.Add(new SetProtection(t, role, p.Id, stopLoss, takeProfit, trailing, tmStop) { Done = done is null ? null : _ => done(), TriggerOnly = triggerOnly });
             return true;
         }
 

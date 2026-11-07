@@ -91,6 +91,7 @@ public sealed class SpreadGuardTests
 
         Assert.Equal(2, actions.OfType<MoveOrder>().Count(m => Math.Abs(m.Price - 1.34634) < 1e-9));
         Assert.Equal(2, actions.OfType<SetProtection>().Count(s => s.TmStop && s.StopLoss is not null));
+        Assert.All(actions.OfType<MoveOrder>().Concat<TmAction>(actions.OfType<SetProtection>()), a => Assert.True(a.TriggerOnly)); // tried once, not retried if refused
         Assert.All(b.Orders, o => Assert.Equal(ProtoOAOrderTriggerMethod.DoubleOpposite, o.Trigger));
         Assert.DoesNotContain(b.Run(), a => a is not Notify);
     }

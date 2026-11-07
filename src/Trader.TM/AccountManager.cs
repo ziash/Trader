@@ -55,6 +55,7 @@ internal sealed class AccountManager(
     private readonly Dictionary<string, DateTime> _failedAlerts = [];
     private AccountStatus? _status;
     private readonly SpreadGuard _guard = new(config);
+    private readonly HashSet<long> _triggerRefused = [];   // orders / positions whose trigger change the broker refused (tm.md §5.2)
     private bool _statusDue = true;
     private DateTime _statusLogged = DateTime.MinValue, _marginAlerted = DateTime.MinValue, _lastRescue = DateTime.MinValue, _statusFailed = DateTime.MinValue;
 
@@ -227,6 +228,10 @@ internal sealed class AccountManager(
                 return false;
         }
 
+        var triggerTarget = action switch { MoveOrder mv => mv.OrderId, SetProtection st => st.PositionId, _ => 0L };
+        if (action.TriggerOnly && _triggerRefused.Contains(triggerTarget))
+            return false; // refused once: not sent again every second
+
         var t = action.Trade!;
         var s = symbols[t.SymbolId];
         var sent = DateTime.UtcNow;
@@ -289,6 +294,8 @@ internal sealed class AccountManager(
         {
             Row(sent, t, s, action.Role, kind, side, lots, requested, null, ex.ErrorCode, $"{Target(action)} {ex.Message}".Trim());
             action.Failed?.Invoke(ex.ErrorCode);
+            if (action.TriggerOnly)
+                _triggerRefused.Add(triggerTarget);
             if (ex.ErrorCode == Planner.NotEnoughMoney)
                 _statusDue = true;
             // Every refusal is a row in actions.csv; the same one pops up (and is an events.csv line) once per 10 minutes.
