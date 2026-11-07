@@ -4,7 +4,7 @@ Each bot is a **project of its own**: its document holds its goal, rules, decisi
 
 | Bot | Documents |
 |---|---|
-| **Scout** | [`scout/`](scout/README.md): [scout.md](scout/scout.md) (the bot) · [Scout Lens](scout/scout-lens.md) (AI layer proposal, waiting for the owner's choice) · [setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) (Scout repository) |
+| **Scout** | [`scout/`](scout/README.md): [scout.md](scout/scout.md) (the bot) · [Scout Lens](scout/scout-lens.md) (AI layer: options 1 + 3 chosen, planning) · [setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) (Scout repository) |
 | **TM** (Trade Manually) | [tm.md](tm.md) |
 | **Audit Bot** | [audit-bot.md](audit-bot.md) |
 | **Auto Bot** | [auto-bot.md](auto-bot.md) |

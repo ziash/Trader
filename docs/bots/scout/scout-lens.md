@@ -1,12 +1,12 @@
 # Scout Lens — an AI layer for Scout
 
-**A proposal: a layer after Scout's detector that decides, for each setup the rules find, whether to take it, skip it or trade it smaller.** Five ways to build it, each with its pros and cons and two example charts. Nothing here is decided or built; the owner chooses a starting point (§8). Part of [Scout](scout.md).
+**A layer after Scout's detector that decides, for each setup the rules find, whether to take it, skip it or trade it smaller.** Five ways to build it, each with its pros and cons and two example charts. **Decided (owner, 07-Nov-2026): options 1 and 3 together (choice A, §8); option 3 in two phases — tuning on the laptop, then API calls from Scout (§4.1).** Nothing is built yet. Part of [Scout](scout.md).
 
 | Item | Value |
 |---|---|
-| Status | **Proposal — waiting for the owner's choice** (07-Nov-2026) |
-| Document version | v1.1 (07-Nov-2026) |
-| Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository |
+| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9), waiting for the owner's OK to build |
+| Document version | v1.2 (07-Nov-2026) |
+| Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
 ## 1. Why a layer
@@ -125,6 +125,26 @@ reason   First pause after a clear turn with a higher low. About 2.4 ATR
          of room up to the old breakdown level.
 ```
 
+### 4.1 Two phases (owner, 07-Nov-2026)
+
+Claude itself is never retrained. What gets "trained" is **what we give it**: the caveat list, the prompt and the reply shape. They are tuned on past setups whose outcome is known, then frozen and used on new setups.
+
+| | **a · Training** — tune the caveats on the laptop | **b · Inference** — API calls from Scout |
+|---|---|---|
+| What it is | Run the reviewer over replayed setups, compare its vetoes with what really happened, improve the caveat list, run again | Use the frozen prompt and caveats to judge setups: first one full check over history, then on new setups as they fire |
+| Runs on | Claude Code (`claude -p`, headless) on the Ubuntu laptop, at night when the laptop is free; the owner's Claude subscription | The Claude API: the **Batch API** for the full check over history; a direct call from `Trader.Scout` (C#) for live setups |
+| Model | Opus 5.5 at effort **medium**; **high** for comparison runs | The model and effort chosen in phase a, pinned |
+| Data per run | Samples of 200–500 replayed setups (one night) | Batch: all replayed setups (10,000+). Live: each `NewStop` / `NewReversal` |
+| Cost | Within the subscription; its usage limits set the sample size | Batch ≈ half price: estimate $120–240 per 10,000 setups on Sonnet or Opus. Live: a few dollars a month (estimates, to be measured) |
+| Result | `caveats.md`, the prompt, the reply schema, and a measured effect: R of vetoed vs kept setups | Verdicts in `ai.csv` (§8 step 5): shadow mode first, then switched on |
+| Plan | §9 | Planned after phase a |
+
+**Terms:** *inference* — using a finished prompt (or model) to judge new cases; *headless* — Claude Code run from a script, one question in, one answer out, no chat window; *Batch API* — Anthropic's way to send many requests at once at half price, with answers within 24 hours.
+
+**The same in both phases:** the caveat file, the prompt, the reply shape (a JSON schema) and the model and effort. Only the caller changes, so what phase a measures is what phase b runs.
+
+**Why live verdicts don't run on the laptop setup:** the subscription's limits are shared with the owner's own Claude use, it depends on a desktop session, and a Claude Code run is less controlled than one API call. The API gives a pinned model, a log of every prompt and reply, a timeout and the fallback to the rules alone (§4).
+
 ## 5. Option 4 — Auto-tune the thresholds
 
 *Search for the rule settings (pause length, maximum pause height, minimum move) that made the most R in the past.* **Side tool only.**
@@ -185,33 +205,113 @@ The network replaces the detector instead of helping it. It needs huge amounts o
 | 4 · Auto-tune | Replayed history | Config only | Yes | No | Yes, overfits | Low | Side tool |
 | 5 · Deep learning | Huge | Yes, ONNX | No | Maybe | Yes, overfits | High | No |
 
-## 8. Recommendation and the owner's choice
+## 8. Decision and steps
 
-**Options 1 and 3 together, in shadow mode first.** The scorer handles what can be measured; the reviewer handles what can only be described. Each time "the rules miss X", X becomes either a new scorer input (if it can be measured) or a new line in the reviewer's caveat list (if it can't).
+**Decided (owner, 07-Nov-2026): options 1 and 3 together, in shadow mode first** (choice A below). The scorer handles what can be measured; the reviewer handles what can only be described. Each time "the rules miss X", X becomes either a new scorer input (if it can be measured) or a new line in the reviewer's caveat list (if it can't).
 
 1. **Build the dataset.** Add an outcome simulator to `--replay` (§5 of [scout.md](scout.md)) that plays every historical setup forward with Scout's real order rules: stop entry, stop-loss at the far side of the pause, trailing, 16-candle expiry, cancel when the setup ends. Run it on several years of 1H candles across 20+ symbols. Each setup gets its result in R.
 2. **Baseline.** Before any machine learning, slice the results by the existing fields: with or against 4H, pause height, staircase step, session. One plain filter is often most of the gain. The trial review (≈ 10-Nov-2026) feeds straight into this.
 3. **Train the scorer.** Walk-forward (train on older years, test on the next, step forward), with a gap between training and test periods so overlapping staircase setups don't leak. Judge it by total R and R per trade, not win rate.
-4. **Add the reviewer.** Write the caveat list; wire the Claude call with the fixed reply shape, veto-only rights and a fallback.
+4. **Add the reviewer, in two phases (§4.1).**
+   - **a · Training on the laptop (§9):** write the caveat list, the prompt and the reply schema; tune them on samples of replayed setups with Claude Code at night. Can start as soon as step 1 gives setups with outcomes, alongside steps 2–3.
+   - **b · Inference through the API:** once the caveats settle, one full check over the replayed history through the Batch API; then wire the Claude call into `Trader.Scout` with the fixed reply shape, veto-only rights, a timeout and the fallback to the rules alone.
 5. **Shadow mode, 2–4 weeks.** Both write their score or verdict to a new `ai.csv`, linked by order id, but change nothing. Afterwards compare the setups they would have skipped with what really happened.
 6. **Switch on** — only if the skipped setups really did worse, and total R goes up, not just win rate.
 
 Two warnings. **Filtering changes the strategy:** the owner takes every pause on purpose and accepts the losers, so a filter that cuts losers will also cut some big staircase winners. **Every input must be known when the candle closes:** the 4H trend tag and the pause edges are where future data most often slips in.
 
-**Starting points to choose from**
+**Starting points** (the choice made)
 
 | Choice | What happens first |
 |---|---|
-| **A · Options 1 + 3** (recommended) | Replay dataset, then the scorer, then the reviewer — all in shadow mode |
+| **A · Options 1 + 3** — **chosen** (owner, 07-Nov-2026) | Replay dataset, then the scorer, then the reviewer (phases a and b, §4.1) — all in shadow mode |
 | B · Option 3 first | Fastest to see something: Claude reviewer in shadow mode next week; the dataset after |
 | C · Option 1 only | Measurable inputs only, no outside service |
 | D · Wait for the trial review | Decide after the ≈ 10-Nov numbers are in |
 
-Whatever is chosen, nothing changes in the running bots until the owner approves a plan; a rule change still starts in the Scout spec.
+Nothing changes in the running bots until the owner approves a plan; a rule change still starts in the Scout spec.
 
-## 9. History
+## 9. Plan — phase a: the laptop loop
+
+**Status: plan, waiting for the owner's OK to build.** The reviewer of option 3, tuned on replayed setups with Claude Code on the Ubuntu laptop at night (§4.1). Nothing here touches the running bots or places orders.
+
+### 9.1 What it needs first
+
+Step 1 of §8: replayed setups **with their outcome in R**. Without outcomes there is nothing to check the vetoes against.
+
+### 9.2 Files
+
+| Where | What |
+|---|---|
+| `config/scout-lens/caveats.md` (repo; copy in `~/tradebot/config/scout-lens/`) | The caveat list in plain English, one numbered caveat each, with a short example. The one place caveats live: phase a, phase b and the skill all read it |
+| `config/scout-lens/prompt.md` | The reviewer's instructions: its job, veto-only rights, how to read the inputs |
+| `config/scout-lens/reply.schema.json` | The reply shape: `verdict` (approve · smaller · veto), `caveat` (number or none), `reason` (one or two sentences) |
+| `~/tradebot/lens/<set>/inbox/<setupId>/` | One folder per setup: `setup.json` (the setups.csv row), `candles-h1.csv` and `candles-h4.csv` (last 100 each), `chart.png` (the order picture) |
+| `~/tradebot/lens/<set>/outcomes.csv` | Each setup's result in R — **kept outside the inbox**, never shown to Claude |
+| `~/tradebot/lens/<set>/outbox/<setupId>.json` | Claude's reply, plus model, effort, time and token counts |
+| `~/tradebot/lens/<set>/run.log` | One line per call: setup, verdict or error, seconds taken |
+
+A *set* is one sample, e.g. `2024-mixed-300`, so runs on different caveat versions can be compared on the same setups.
+
+### 9.3 One review = one call
+
+For each setup without an outbox file, the loop runs, from inside that setup's folder:
+
+```
+claude -p "Review this setup." --model claude-opus-5-5 --effort medium \
+  --system-prompt "$(cat prompt.md caveats.md)" --tools Read \
+  --json-schema "$(cat reply.schema.json)" --output-format json --no-session-persistence
+```
+
+- **One setup per call**, so earlier setups don't colour later verdicts.
+- `--system-prompt` *replaces* Claude Code's own instructions with ours, and `--tools Read` lets it only open the setup's files — so the call looks close to the API call of phase b.
+- `--json-schema` makes the reply follow the schema; a reply that still fails the check is retried once, then logged as an error.
+- Not `--bare`: that mode needs an API key; phase a runs on the subscription.
+- Run from the setup's folder, not the repo, so the repo's `CLAUDE.md` is not loaded into the review.
+
+### 9.4 Keeping the test honest
+
+- **No future data:** candles and the chart stop at the close of the candle where the order was placed; the 4H tag is the one known then (the warning in §8).
+- **Outcomes hidden:** `outcomes.csv` is outside the setup folder and never named in the prompt.
+- **No memory of the market:** Claude has read about past prices in its training. Inputs show no symbol name and no dates (`Symbol A`, candle 1…100; prices kept, since round numbers matter). The final judgement uses only setups **after the model's knowledge cutoff** (mid-2026 for Opus 5.5); earlier setups are for tuning only.
+
+### 9.5 Running at night
+
+- `scripts/lens-run.sh <set> [--effort medium|high] [--limit N]` — goes through the set in order, one call at a time, and picks up where it stopped. Started by hand before bed, or by a systemd user timer at e.g. 23:00 that stops by 07:00.
+- **Usage limits:** on a limit error it stops and logs where; the next night carries on. A sample of 200–500 setups is about one night (estimate: 15–40 s per call; to be measured on the first run).
+- **Effort:** set per run with `--effort`, independent of the owner's interactive Claude setting. Medium by default; a high run on the same set shows whether high is worth its time.
+
+### 9.6 Reading the results
+
+`scripts/lens-report.py <set>` joins the outbox with `outcomes.csv`:
+
+| Measure | Why |
+|---|---|
+| Total R and R per trade: all setups vs approved only | The real test (§8 step 6) |
+| R of vetoed setups, and of the "smaller" ones | Vetoes should be losers on average |
+| Big winners vetoed | The cost of filtering (§8 warning) |
+| Per caveat: times used, average R of the setups it vetoed | Which caveats earn their place |
+| Same setup, two runs: verdicts that changed | How consistent Claude is |
+
+Each caveat change gets a new run on the **same** set, and the report is compared with the last one. A caveat stays only if it helps on setups it wasn't written from.
+
+### 9.7 Build steps (each on the owner's OK)
+
+| # | Step | Kind |
+|---|---|---|
+| 1 | Export: `Trader.Scout --replay` writes the per-setup folders and `outcomes.csv` of §9.2 (after §8 step 1); the chart as PNG | C# |
+| 2 | First `caveats.md`, `prompt.md`, `reply.schema.json`, from the owner's markups and the examples in §4 | Documents, with the owner |
+| 3 | `scripts/lens-run.sh` — the loop of §9.3 and §9.5 | Script |
+| 4 | `scripts/lens-report.py` — the report of §9.6 | Script |
+| 5 | A `scout-lens` skill in the repo (`.claude/skills/`), reading the same files, for looking at single verdicts by hand ("why was this one vetoed?") | Skill |
+| 6 | First night: one set of ≈ 200 setups at medium; measure time per call, limit hits, and the report | Run |
+
+**Open items:** SVG to PNG — `rsvg-convert` (package `librsvg2-bin`, not installed yet) or a converter inside `Trader.Scout`; the size of the first set; whether the laptop may be busy at night with other jobs.
+
+## 10. History
 
 | Version | Date | Change |
 |---|---|---|
 | v1.0 | 07 Nov 2026 | First issue: five options with pros, cons and two example charts each; recommendation (options 1 + 3, shadow mode first). Proposal only |
 | v1.1 | 07 Nov 2026 | Documents reorganised (owner, [shared](../../shared.md) v1.13): moved to `docs/bots/scout/`, charts to `docs/bots/scout/images/` |
+| v1.2 | 07 Nov 2026 | **Decided (owner): options 1 + 3** (choice A, §8). Option 3 in two phases (§4.1): **a · training** — the caveat list tuned on replayed setups with Claude Code on the laptop at night; **b · inference** — Batch API check over history, then API calls from `Trader.Scout`. Plan for phase a's laptop loop (§9), waiting for the owner's OK to build. History moved to §10 |

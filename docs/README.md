@@ -6,7 +6,7 @@ Every document in this repository, by project. The [README](../README.md) on the
 
 | Bot | Documents |
 |---|---|
-| **Scout** — [`bots/scout/`](bots/scout/README.md) | [scout.md](bots/scout/scout.md) — the bot: rules, logs, run and operate, decisions, history<br>[scout-lens.md](bots/scout/scout-lens.md) — **Scout Lens**, the AI layer proposal (5 options, 10 example charts in [`images/`](bots/scout/images))<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — what Scout looks for, in the Scout repository |
+| **Scout** — [`bots/scout/`](bots/scout/README.md) | [scout.md](bots/scout/scout.md) — the bot: rules, logs, run and operate, decisions, history<br>[scout-lens.md](bots/scout/scout-lens.md) — **Scout Lens**, the AI layer: 5 options, options 1 + 3 chosen, plan for the Claude reviewer (10 example charts in [`images/`](bots/scout/images))<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — what Scout looks for, in the Scout repository |
 | **TM** (Trade Manually) | [tm.md](bots/tm.md) |
 | **Audit Bot** | [audit-bot.md](bots/audit-bot.md) |
 | **Auto Bot** | [auto-bot.md](bots/auto-bot.md) |
