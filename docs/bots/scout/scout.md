@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.19 (07-Nov-2026) — history in §8 |
+| Document version | v1.20 (07-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -31,7 +31,7 @@ Per chart (symbol × timeframe) in `scout.json`: `"watch"` sends an alert for ea
 ### 2.2 Candles and the detector
 
 - Every chart's **closed** candles come from the broker (`ProtoOAGetTrendbarsReq`), asked for once a candle should have closed; a candle that does not come (market closed) is asked for every 30 s for 10 minutes, then once per candle length. At start, 30 days of candles rebuild the state (their events are not acted on).
-- The detector runs Scout_Pine's rules (Scout spec §3.1, §3.2) unchanged; the next timeframe up (1H ← 4H) runs its own detector for the tag *with / against / unknown* (Scout spec §4.4 I1). The tag is logged and shown, never used to skip.
+- The detector runs Scout_Pine's rules (Scout spec §3.1, §3.2) unchanged — from 07-Nov-2026 Scout_Pine is closed for development (owner): new rules go only into this C# detector; the next timeframe up (1H ← 4H) runs its own detector for the tag *with / against / unknown* (Scout spec §4.4 I1). The tag is logged and shown, never used to skip.
 
 ### 2.3 Orders (Trade mode; Scout spec §4.2, §4.4)
 
@@ -182,3 +182,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.17 | 07 Nov 2026 | **Daily first** decided (owner, §7; Scout spec v1.5 §4.7, [Scout Lens](scout-lens.md) v1.5 §1.2). No change to the bot yet |
 | v1.18 | 07 Nov 2026 | Daily first completed (owner, §7; Scout spec v1.6): entry ladder from the daily chart down to the set chart; 0.382–0.5 retracement = half size. No change to the bot yet |
 | v1.19 | 07 Nov 2026 | Lower-timeframe confirmation decided (owner, §7; Scout spec v1.7 §4.8); 15M ladder includes 15M. No change to the bot yet |
+| v1.20 | 07 Nov 2026 | Owner: **Scout_Pine closed for development** (Scout spec v1.8 §3): rule changes go from the Scout spec straight into `Detector.cs`; lower-timeframe check uses 5M at the lowest (no 1M). Trader CLAUDE.md updated. No change to the bot |
