@@ -8,15 +8,17 @@ public sealed class ScoutTests
     private static readonly DateTime T0 = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void Repo_config_loads_trade_mode_on_H1_for_IC_Markets_with_sizes_per_symbol()
+    public void Repo_config_loads_trade_mode_on_H1_for_Pepperstone_with_sizes_per_symbol()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "config", ScoutConfig.FileName);
         var c = ScoutConfig.Load(path);
-        Assert.Equal([49123893L], c.Accounts.Select(a => a.AccountId));
+        Assert.Equal([49124666L], c.Accounts.Select(a => a.AccountId));
         Assert.Equal(18, c.Accounts[0].Charts.Count);
+        Assert.Equal(("SpotCrude", "NAS100", "GER40", "EURUSD"),
+            (c.Accounts[0].BrokerSymbolNames["XTIUSD"], c.Accounts[0].BrokerSymbolNames["USTEC"], c.Accounts[0].BrokerSymbolNames["DE40"], c.Accounts[0].BrokerSymbolNames["EURUSD"]));
         Assert.All(c.Accounts.SelectMany(a => a.Charts), ch => Assert.Equal(("H1", ScoutMode.Trade), (ch.Timeframe, ch.Mode)));
         Assert.Equal((0.1, 16, LevelMode.Smart), (c.Lots, c.ExpiryCandles, c.SetupSettings.Level));
-        Assert.Equal((0.1, 0.01, 20.0), (c.LotsFor("EURUSD"), c.LotsFor("XAUUSD"), c.LotsFor("SOLUSD")));
+        Assert.Equal((0.1, 0.01, 20.0, 0.01, 0.06), (c.LotsFor("EURUSD"), c.LotsFor("XAUUSD"), c.LotsFor("SOLUSD"), c.LotsFor("XAGUSD"), c.LotsFor("XNGUSD")));
     }
 
     [Fact]

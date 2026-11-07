@@ -7,7 +7,13 @@
       "EURUSD", "GBPUSD", "USDJPY", "GBPJPY", "EURJPY", "AUDJPY", "EURGBP",
       "XAUUSD", "XAGUSD", "XPTUSD", "US500", "USTEC", "DE40", "XTIUSD", "XBRUSD", "XNGUSD",
       "BTCUSD", "ETHUSD", "SOLUSD"] },
-    { "broker": "brokerB", "accountId": 49124666, "symbols": ["AUDJPY", "EURGBP", "EURUSD", "GBPJPY", "BTCUSD", "ETHUSD"] }
+    // brokerB: Scout's 18 symbols from 07-Nov-2026 (Scout moved to Pepperstone, scout.md §7) plus EURGBP; brokerA's list
+    // stays so TM keeps managing the open IC Markets trades. Our names; symbolNames maps Pepperstone's.
+    { "broker": "brokerB", "accountId": 49124666, "symbols": [
+      "EURUSD", "GBPUSD", "USDJPY", "GBPJPY", "EURJPY", "AUDJPY", "EURGBP",
+      "XAUUSD", "XAGUSD", "XPTUSD", "US500", "USTEC", "DE40", "XTIUSD", "XBRUSD", "XNGUSD",
+      "BTCUSD", "ETHUSD", "SOLUSD"],
+      "symbolNames": { "XTIUSD": "SpotCrude", "XBRUSD": "SpotBrent", "XNGUSD": "NatGas", "USTEC": "NAS100", "DE40": "GER40" } }
   ],
 
   // Hedge level when your order has no stop-loss: this % of the average daily range of the last N days,
