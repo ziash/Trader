@@ -224,6 +224,29 @@ public sealed class OrderChartTests
         }
     }
 
+    /// <summary>An order left on an account Scout no longer watched: no expiry row, but its expiry time tells (Pepperstone, 04→07-Nov-2026).</summary>
+    [Fact]
+    public void An_order_past_its_expiry_time_shows_as_expired_even_without_an_expiry_row()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"scout-history-{Guid.NewGuid():N}");
+        try
+        {
+            Write(root, "Scout-bbbbbb", "2026-11-04", "orders.csv",
+                "2026-11-04 18:00:10,AUDJPY,H1,2026-11-04 16:00:00,M,place,Buy,0.10,111.300,111.100,2026-11-05 10:00:10,5,,,,,,ok,x,\n");
+            var from = new DateTime(2026, 11, 4, 0, 0, 0, DateTimeKind.Utc);
+
+            var before = Assert.Single(OrderLog.ReadHistory(root, "AUDJPY", "H1", from, new DateTime(2026, 11, 5, 9, 0, 0, DateTimeKind.Utc)));
+            var after = Assert.Single(OrderLog.ReadHistory(root, "AUDJPY", "H1", from, new DateTime(2026, 11, 7, 17, 27, 0, DateTimeKind.Utc)));
+
+            Assert.Equal(("waiting", OutcomeTone.Info, (DateTime?)null), (before.Outcome, before.Tone, before.EndUtc));
+            Assert.Equal(("expired", OutcomeTone.Muted, (DateTime?)new DateTime(2026, 11, 5, 10, 0, 10, DateTimeKind.Utc)), (after.Outcome, after.Tone, after.EndUtc));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void Picture_marks_the_other_setups_in_view_at_most_six_and_not_the_order_itself()
     {

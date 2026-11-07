@@ -70,7 +70,7 @@ public static class OrderLog
                 (dir, level) = (first["side"] == "Buy" ? 1 : -1, first.Num("price_req")!.Value);
             if (dir == 0 || level == 0)
                 continue;
-            var (outcome, tone, end, closed) = Outcome(list);
+            var (outcome, tone, end, closed) = Outcome(list, untilUtc);
             history.Add(new PastSetup(pauseStart, parts[3] == "R", dir, level, list.FirstOrDefault(r => r["action"] == "filled")?.Time("time_utc"),
                 end, outcome, tone, closed));
         }
@@ -78,8 +78,9 @@ public static class OrderLog
     }
 
     // The latest thing that happened to one setup role, from its orders.csv rows (oldest first); a close outranks
-    // a fill, a fill outranks the order's earlier states.
-    private static (string Outcome, OutcomeTone Tone, DateTime? End, bool Closed) Outcome(List<CsvRow> rows)
+    // a fill, a fill outranks the order's earlier states. An order whose expiry time had passed by untilUtc with nothing
+    // else logged expired on the server while no Scout watched the account (e.g. after Scout left it), so it is no longer waiting.
+    private static (string Outcome, OutcomeTone Tone, DateTime? End, bool Closed) Outcome(List<CsvRow> rows, DateTime untilUtc)
     {
         CsvRow? Last(string action, string? result = null) => rows.LastOrDefault(r => r["action"] == action && (result is null || r["result"] == result));
         var closes = rows.Where(r => r["action"] == "closed").ToList();
@@ -101,8 +102,10 @@ public static class OrderLog
             return ($"cancelled: {cancel["detail"]}", OutcomeTone.Muted, cancel.Time("time_utc"), false);
         if (Last("cancelled") is { } cancelled)
             return ("cancelled by owner or TM", OutcomeTone.Muted, cancelled.Time("time_utc"), false);
-        if (Last("place", "ok") is not null)
-            return ("waiting", OutcomeTone.Info, null, false);
+        if (Last("place", "ok") is { } placed)
+            return placed.Time("expires_utc") is { } expires && expires <= untilUtc
+                ? ("expired", OutcomeTone.Muted, expires, false)
+                : ("waiting", OutcomeTone.Info, null, false);
         if (Last("place", "refused") is { } refused)
             return ($"place refused: {Plain(refused["detail"].Split(':')[0])}", OutcomeTone.Warning, refused.Time("time_utc"), false);
         if (Last("place", "dry run") is not null)
