@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 584 304" width="584" height="304" role="img"><title>Option 4: tuned settings after tuning stops</title><style>svg{
+  --bg:#f4f6f9; --surface:#ffffff; --ink:#12151a; --ink-2:#47505e; --muted:#7a8291; --rule:#dce1e8;
+  --accent:#1c4f95; --accent-soft:#e7eef8;
+  --up:#2a78d6; --down:#eb6834; --pause:#2a78d61c; --zone:#eb683424;
+  --good:#16794a; --good-bg:#e3f3e9; --bad:#b8382a; --bad-bg:#fbe8e4; --warn:#9a6300; --warn-bg:#fbf0d9;}
+@media (prefers-color-scheme: dark){svg{
+  --bg:#0e1116; --surface:#161a21; --ink:#e9ecf1; --ink-2:#b3bac6; --muted:#8a92a1; --rule:#2a303b;
+  --accent:#86b6ef; --accent-soft:#1a2738;
+  --up:#3987e5; --down:#d95926; --pause:#3987e529; --zone:#d9592633;
+  --good:#52c483; --good-bg:#13301f; --bad:#f07b6c; --bad-bg:#3a1b17; --warn:#e3ab3c; --warn-bg:#33270f;
+  color-scheme:dark}}
+/* chart marks */
+.c-up{fill:var(--up);stroke:var(--up)} .c-dn{fill:var(--down);stroke:var(--down)}
+.wick-up{stroke:var(--up);stroke-width:1} .wick-dn{stroke:var(--down);stroke-width:1}
+.grid{stroke:var(--rule);stroke-width:1}
+.pbox{fill:var(--pause);stroke:var(--up);stroke-width:1;stroke-dasharray:2 2}
+.lvl{stroke:var(--ink);stroke-width:2}
+.sl{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3}
+.hl{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:6 4}
+.zone{fill:var(--zone)}
+.fill-dot{fill:var(--surface);stroke:var(--ink);stroke-width:2}
+.t{fill:var(--ink);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+.t2{fill:var(--ink-2);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px}
+.tm{fill:var(--muted);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10px}
+.chip-good{fill:var(--good-bg);stroke:var(--good)} .chip-bad{fill:var(--bad-bg);stroke:var(--bad)} .chip-warn{fill:var(--warn-bg);stroke:var(--warn)} .chip-n{fill:var(--surface);stroke:var(--ink-2)}
+.i-good{fill:var(--good)} .i-bad{fill:var(--bad)} .i-warn{fill:var(--warn)}
+.s1{stroke:var(--up);stroke-width:2;fill:none} .s2{stroke:var(--down);stroke-width:2;fill:none}
+.d1{fill:var(--up)} .d2{fill:var(--down)}
+.cross{stroke:var(--muted);stroke-width:1}
+.tip-bg{fill:var(--surface);stroke:var(--rule)}
+
+</style><rect width="100%" height="100%" rx="6" style="fill:var(--surface)"/><svg x="12" y="10" width="560" height="284" viewBox="0 0 560 284" overflow="visible"><line x1="46" x2="474" y1="230.58823529411765" y2="230.58823529411765" class="grid"></line><text x="40" y="234.58823529411765" class="tm" text-anchor="end">0R</text><line x1="46" x2="474" y1="176.94117647058823" y2="176.94117647058823" class="grid"></line><text x="40" y="180.94117647058823" class="tm" text-anchor="end">+20R</text><line x1="46" x2="474" y1="123.29411764705883" y2="123.29411764705883" class="grid"></line><text x="40" y="127.29411764705883" class="tm" text-anchor="end">+40R</text><line x1="46" x2="474" y1="69.64705882352942" y2="69.64705882352942" class="grid"></line><text x="40" y="73.64705882352942" class="tm" text-anchor="end">+60R</text><text x="46" y="262" class="tm" text-anchor="middle">2019</text><text x="156.4516129032258" y="262" class="tm" text-anchor="middle">2021</text><text x="266.9032258064516" y="262" class="tm" text-anchor="middle">2023</text><text x="377.35483870967744" y="262" class="tm" text-anchor="middle">2025</text><text x="474" y="262" class="tm" text-anchor="middle">Oct 26</text><line x1="377.35483870967744" x2="377.35483870967744" y1="16" y2="244" class="lvl" stroke-dasharray="3 3"></line><text x="382.35483870967744" y="26" class="t2">tuning stops</text><path d="M46.0 230.3L50.6 228.4L55.2 226.0L59.8 224.2L64.4 223.6L69.0 219.6L73.6 216.4L78.2 213.4L82.8 209.7L87.4 205.9L92.0 201.6L96.6 200.5L101.2 199.2L105.8 195.4L110.4 191.4L115.0 190.4L119.6 189.8L124.2 186.1L128.8 183.4L133.4 180.2L138.0 177.2L142.6 175.3L147.2 174.3L151.8 171.6L156.5 169.7L161.1 166.2L165.7 164.3L170.3 163.8L174.9 163.3L179.5 162.2L184.1 161.9L188.7 161.9L193.3 159.2L197.9 157.9L202.5 156.3L207.1 153.9L211.7 151.2L216.3 149.3L220.9 148.2L225.5 145.6L230.1 142.6L234.7 140.5L239.3 136.4L243.9 132.7L248.5 128.4L253.1 127.3L257.7 123.3L262.3 121.7L266.9 118.2L271.5 116.6L276.1 113.6L280.7 109.6L285.3 106.4L289.9 102.4L294.5 100.0L299.1 97.0L303.7 96.2L308.3 94.3L312.9 90.0L317.5 89.2L322.1 85.7L326.7 85.2L331.3 81.4L335.9 80.9L340.5 78.2L345.1 76.1L349.7 73.1L354.3 68.8L358.9 66.4L363.5 65.6L368.2 64.0L372.8 62.9L377.4 63.7L382.0 65.1L386.6 64.0L391.2 65.4L395.8 63.5L400.4 61.9L405.0 60.3L409.6 62.1L414.2 61.9L418.8 65.1L423.4 63.5L428.0 65.9L432.6 67.5L437.2 70.7L441.8 69.4L446.4 71.8L451.0 70.5L455.6 72.3L460.2 71.3L464.8 74.2L469.4 76.9L474.0 80.1" class="s1"></path><circle cx="474" cy="80.10823529411763" r="4" class="d1" stroke="var(--surface)" stroke-width="2"></circle><text x="482" y="84.10823529411763" class="t">tuned</text><path d="M46.0 231.4L50.6 231.7L55.2 229.0L59.8 230.1L64.4 226.6L69.0 227.1L73.6 228.2L78.2 227.1L82.8 227.4L87.4 228.2L92.0 227.9L96.6 225.0L101.2 224.7L105.8 224.7L110.4 222.3L115.0 220.4L119.6 219.3L124.2 219.6L128.8 218.8L133.4 218.2L138.0 217.4L142.6 216.9L147.2 216.9L151.8 216.1L156.5 214.5L161.1 211.8L165.7 210.7L170.3 211.0L174.9 208.3L179.5 205.1L184.1 203.2L188.7 200.3L193.3 200.0L197.9 197.3L202.5 197.1L207.1 193.8L211.7 193.6L216.3 192.8L220.9 191.4L225.5 188.2L230.1 185.3L234.7 184.7L239.3 183.4L243.9 182.3L248.5 181.0L253.1 179.6L257.7 176.4L262.3 176.7L266.9 177.5L271.5 174.5L276.1 173.2L280.7 171.8L285.3 169.4L289.9 170.8L294.5 169.7L299.1 170.0L303.7 168.1L308.3 168.9L312.9 167.3L317.5 168.1L322.1 167.0L326.7 164.1L331.3 165.1L335.9 164.3L340.5 161.4L345.1 161.7L349.7 162.2L354.3 163.5L358.9 161.9L363.5 161.9L368.2 160.3L372.8 158.7L377.4 156.6L382.0 155.2L386.6 155.8L391.2 153.1L395.8 153.3L400.4 152.3L405.0 152.5L409.6 149.3L414.2 146.9L418.8 146.6L423.4 143.1L428.0 142.6L432.6 140.2L437.2 139.4L441.8 140.2L446.4 139.9L451.0 140.2L455.6 141.0L460.2 142.1L464.8 138.9L469.4 137.0L474.0 137.2" class="s2"></path><circle cx="474" cy="137.24235294117648" r="4" class="d2" stroke="var(--surface)" stroke-width="2"></circle><text x="482" y="141.24235294117648" class="t">default</text><text x="8" y="283" class="tm">cumulative R, monthly · example values</text></svg></svg>

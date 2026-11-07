@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 584 310" width="584" height="310" role="img"><title>Option 1: why the fourth setup scored -0.30R</title><style>svg{
+  --bg:#f4f6f9; --surface:#ffffff; --ink:#12151a; --ink-2:#47505e; --muted:#7a8291; --rule:#dce1e8;
+  --accent:#1c4f95; --accent-soft:#e7eef8;
+  --up:#2a78d6; --down:#eb6834; --pause:#2a78d61c; --zone:#eb683424;
+  --good:#16794a; --good-bg:#e3f3e9; --bad:#b8382a; --bad-bg:#fbe8e4; --warn:#9a6300; --warn-bg:#fbf0d9;}
+@media (prefers-color-scheme: dark){svg{
+  --bg:#0e1116; --surface:#161a21; --ink:#e9ecf1; --ink-2:#b3bac6; --muted:#8a92a1; --rule:#2a303b;
+  --accent:#86b6ef; --accent-soft:#1a2738;
+  --up:#3987e5; --down:#d95926; --pause:#3987e529; --zone:#d9592633;
+  --good:#52c483; --good-bg:#13301f; --bad:#f07b6c; --bad-bg:#3a1b17; --warn:#e3ab3c; --warn-bg:#33270f;
+  color-scheme:dark}}
+/* chart marks */
+.c-up{fill:var(--up);stroke:var(--up)} .c-dn{fill:var(--down);stroke:var(--down)}
+.wick-up{stroke:var(--up);stroke-width:1} .wick-dn{stroke:var(--down);stroke-width:1}
+.grid{stroke:var(--rule);stroke-width:1}
+.pbox{fill:var(--pause);stroke:var(--up);stroke-width:1;stroke-dasharray:2 2}
+.lvl{stroke:var(--ink);stroke-width:2}
+.sl{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3}
+.hl{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:6 4}
+.zone{fill:var(--zone)}
+.fill-dot{fill:var(--surface);stroke:var(--ink);stroke-width:2}
+.t{fill:var(--ink);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+.t2{fill:var(--ink-2);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px}
+.tm{fill:var(--muted);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10px}
+.chip-good{fill:var(--good-bg);stroke:var(--good)} .chip-bad{fill:var(--bad-bg);stroke:var(--bad)} .chip-warn{fill:var(--warn-bg);stroke:var(--warn)} .chip-n{fill:var(--surface);stroke:var(--ink-2)}
+.i-good{fill:var(--good)} .i-bad{fill:var(--bad)} .i-warn{fill:var(--warn)}
+.s1{stroke:var(--up);stroke-width:2;fill:none} .s2{stroke:var(--down);stroke-width:2;fill:none}
+.d1{fill:var(--up)} .d2{fill:var(--down)}
+.cross{stroke:var(--muted);stroke-width:1}
+.tip-bg{fill:var(--surface);stroke:var(--rule)}
+
+</style><rect width="100%" height="100%" rx="6" style="fill:var(--surface)"/><svg x="12" y="10" width="560" height="290" viewBox="0 0 560 290" overflow="visible"><line x1="206.44444444444443" x2="206.44444444444443" y1="16" y2="232" class="grid"></line><text x="206.44444444444443" y="246" class="tm" text-anchor="middle">−0.4R</text><line x1="279.3333333333333" x2="279.3333333333333" y1="16" y2="232" class="grid"></line><text x="279.3333333333333" y="246" class="tm" text-anchor="middle">−0.2R</text><line x1="352.22222222222223" x2="352.22222222222223" y1="16" y2="232" class="grid"></line><text x="352.22222222222223" y="246" class="tm" text-anchor="middle">0.0R</text><line x1="425.1111111111111" x2="425.1111111111111" y1="16" y2="232" class="grid"></line><text x="425.1111111111111" y="246" class="tm" text-anchor="middle">+0.2R</text><line x1="498" x2="498" y1="16" y2="232" class="grid"></line><text x="498" y="246" class="tm" text-anchor="middle">+0.4R</text><line x1="352.22222222222223" x2="352.22222222222223" y1="12" y2="232" class="lvl"></line><text x="356.22222222222223" y="12" class="t2">skip below 0</text><rect x="352.22222222222223" y="27" width="80.17777777777775" height="20" rx="3" class="d1"></rect><text x="162" y="41" class="t" text-anchor="end">Average setup</text><text x="437.4" y="41" class="t" text-anchor="start">+0.22</text><rect x="319.4222222222222" y="57" width="112.97777777777776" height="20" rx="3" class="d2"></rect><text x="162" y="71" class="t2" text-anchor="end">Move before pause 5.6 ATR</text><text x="314.4222222222222" y="71" class="t" text-anchor="end">−0.31</text><rect x="257.4666666666667" y="87" width="61.95555555555552" height="20" rx="3" class="d2"></rect><text x="162" y="101" class="t2" text-anchor="end">4th step of staircase</text><text x="252.4666666666667" y="101" class="t" text-anchor="end">−0.17</text><rect x="228.3111111111111" y="117" width="29.155555555555594" height="20" rx="3" class="d2"></rect><text x="162" y="131" class="t2" text-anchor="end">Pause height 1.4 ATR</text><text x="223.3111111111111" y="131" class="t" text-anchor="end">−0.08</text><rect x="228.3111111111111" y="147" width="21.866666666666646" height="20" rx="3" class="d1"></rect><text x="162" y="161" class="t2" text-anchor="end">With 4H trend</text><text x="255.17777777777775" y="161" class="t" text-anchor="start">+0.06</text><rect x="242.88888888888886" y="177" width="7.288888888888891" height="20" rx="3" class="d2"></rect><text x="162" y="191" class="t2" text-anchor="end">Spread 0.3 ATR</text><text x="237.88888888888886" y="191" class="t" text-anchor="end">−0.02</text><rect x="242.8888888888889" y="207" width="109.33333333333331" height="20" rx="3" class="chip-bad"></rect><text x="162" y="221" class="t" text-anchor="end">Predicted</text><text x="237.8888888888889" y="221" class="t" text-anchor="end">−0.30</text><text x="8" y="284" class="tm">Blue raises the score, orange lowers it · example values</text></svg></svg>

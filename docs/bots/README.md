@@ -9,6 +9,8 @@ Each bot is a **project of its own**: its document holds its goal, rules, decisi
 | **Scout** | Finds the owner's pause-then-stop setup on many charts and places the first stop order; TM manages it | Trial on demo from 03-Nov-2026 (`trader-scout`) | [scout.md](scout.md) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open | [auto-bot.md](auto-bot.md) |
 
+**Proposals:** [Scout Lens](scout-lens.md) — an AI layer for Scout that takes, skips or shrinks the setups its rules find; five options with example charts, waiting for the owner's choice.
+
 **Tools** (not bots): [`Trader.ListAccounts`](../../src/Trader.ListAccounts) lists the accounts a token can reach; [`Trader.AuditReport`](../../src/Trader.AuditReport) builds the Audit Bot's reports; [`Trader.SampleBot`](../../src/Trader.SampleBot) is the template a new bot starts from.
 
 ## Adding a bot

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 584 304" width="584" height="304" role="img"><title>Option 5: accuracy while training</title><style>svg{
+  --bg:#f4f6f9; --surface:#ffffff; --ink:#12151a; --ink-2:#47505e; --muted:#7a8291; --rule:#dce1e8;
+  --accent:#1c4f95; --accent-soft:#e7eef8;
+  --up:#2a78d6; --down:#eb6834; --pause:#2a78d61c; --zone:#eb683424;
+  --good:#16794a; --good-bg:#e3f3e9; --bad:#b8382a; --bad-bg:#fbe8e4; --warn:#9a6300; --warn-bg:#fbf0d9;}
+@media (prefers-color-scheme: dark){svg{
+  --bg:#0e1116; --surface:#161a21; --ink:#e9ecf1; --ink-2:#b3bac6; --muted:#8a92a1; --rule:#2a303b;
+  --accent:#86b6ef; --accent-soft:#1a2738;
+  --up:#3987e5; --down:#d95926; --pause:#3987e529; --zone:#d9592633;
+  --good:#52c483; --good-bg:#13301f; --bad:#f07b6c; --bad-bg:#3a1b17; --warn:#e3ab3c; --warn-bg:#33270f;
+  color-scheme:dark}}
+/* chart marks */
+.c-up{fill:var(--up);stroke:var(--up)} .c-dn{fill:var(--down);stroke:var(--down)}
+.wick-up{stroke:var(--up);stroke-width:1} .wick-dn{stroke:var(--down);stroke-width:1}
+.grid{stroke:var(--rule);stroke-width:1}
+.pbox{fill:var(--pause);stroke:var(--up);stroke-width:1;stroke-dasharray:2 2}
+.lvl{stroke:var(--ink);stroke-width:2}
+.sl{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3}
+.hl{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:6 4}
+.zone{fill:var(--zone)}
+.fill-dot{fill:var(--surface);stroke:var(--ink);stroke-width:2}
+.t{fill:var(--ink);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:11px}
+.t2{fill:var(--ink-2);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10.5px}
+.tm{fill:var(--muted);font-family:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;font-size:10px}
+.chip-good{fill:var(--good-bg);stroke:var(--good)} .chip-bad{fill:var(--bad-bg);stroke:var(--bad)} .chip-warn{fill:var(--warn-bg);stroke:var(--warn)} .chip-n{fill:var(--surface);stroke:var(--ink-2)}
+.i-good{fill:var(--good)} .i-bad{fill:var(--bad)} .i-warn{fill:var(--warn)}
+.s1{stroke:var(--up);stroke-width:2;fill:none} .s2{stroke:var(--down);stroke-width:2;fill:none}
+.d1{fill:var(--up)} .d2{fill:var(--down)}
+.cross{stroke:var(--muted);stroke-width:1}
+.tip-bg{fill:var(--surface);stroke:var(--rule)}
+
+</style><rect width="100%" height="100%" rx="6" style="fill:var(--surface)"/><svg x="12" y="10" width="560" height="284" viewBox="0 0 560 284" overflow="visible"><line x1="46" x2="474" y1="244" y2="244" class="grid"></line><text x="40" y="248" class="tm" text-anchor="end">40%</text><line x1="46" x2="474" y1="206" y2="206" class="grid"></line><text x="40" y="210" class="tm" text-anchor="end">50%</text><line x1="46" x2="474" y1="168.00000000000003" y2="168.00000000000003" class="grid"></line><text x="40" y="172.00000000000003" class="tm" text-anchor="end">60%</text><line x1="46" x2="474" y1="130.00000000000003" y2="130.00000000000003" class="grid"></line><text x="40" y="134.00000000000003" class="tm" text-anchor="end">70%</text><line x1="46" x2="474" y1="91.99999999999999" y2="91.99999999999999" class="grid"></line><text x="40" y="95.99999999999999" class="tm" text-anchor="end">80%</text><line x1="46" x2="474" y1="53.99999999999999" y2="53.99999999999999" class="grid"></line><text x="40" y="57.99999999999999" class="tm" text-anchor="end">90%</text><line x1="46" x2="474" y1="16" y2="16" class="grid"></line><text x="40" y="20" class="tm" text-anchor="end">100%</text><text x="46" y="262" class="tm" text-anchor="middle">1</text><text x="124.61224489795919" y="262" class="tm" text-anchor="middle">10</text><text x="211.95918367346937" y="262" class="tm" text-anchor="middle">20</text><text x="299.3061224489796" y="262" class="tm" text-anchor="middle">30</text><text x="386.6530612244898" y="262" class="tm" text-anchor="middle">40</text><text x="474" y="262" class="tm" text-anchor="middle">50</text><line x1="46" x2="474" y1="206" y2="206" class="hl"></line><text x="50" y="220" class="t2">coin flip</text><path d="M46.0 200.7L54.7 185.5L63.5 176.0L72.2 166.5L80.9 158.1L89.7 150.5L98.4 146.0L107.1 138.4L115.9 130.4L124.6 123.5L133.3 120.5L142.1 115.2L150.8 108.0L159.6 103.0L168.3 101.9L177.0 96.9L185.8 91.2L194.5 90.5L203.2 83.6L212.0 82.1L220.7 81.7L229.4 76.8L238.2 74.1L246.9 71.1L255.6 72.2L264.4 69.2L273.1 65.8L281.8 64.3L290.6 61.6L299.3 63.1L308.0 62.7L316.8 61.2L325.5 58.6L334.2 55.5L343.0 54.8L351.7 55.1L360.4 55.1L369.2 52.9L377.9 52.5L386.7 53.6L395.4 49.4L404.1 50.2L412.9 49.8L421.6 51.3L430.3 47.2L439.1 48.7L447.8 49.1L456.5 49.1L465.3 46.0L474.0 49.4" class="s1"></path><circle cx="474" cy="49.43999999999999" r="4" class="d1" stroke="var(--surface)" stroke-width="2"></circle><text x="482" y="53.43999999999999" class="t">training</text><path d="M46.0 198.4L54.7 195.4L63.5 193.5L72.2 192.7L80.9 194.2L89.7 193.1L98.4 191.2L107.1 188.9L115.9 191.2L124.6 189.3L133.3 193.5L142.1 194.6L150.8 193.8L159.6 194.6L168.3 196.5L177.0 200.7L185.8 198.0L194.5 201.4L203.2 204.9L212.0 199.9L220.7 204.1L229.4 201.4L238.2 201.1L246.9 204.9L255.6 201.8L264.4 203.7L273.1 205.6L281.8 202.6L290.6 203.0L299.3 204.9L308.0 203.7L316.8 207.1L325.5 206.4L334.2 204.1L343.0 207.9L351.7 204.5L360.4 206.0L369.2 208.3L377.9 208.3L386.7 206.0L395.4 208.3L404.1 207.9L412.9 204.9L421.6 205.6L430.3 207.5L439.1 206.8L447.8 209.8L456.5 206.4L465.3 207.5L474.0 210.2" class="s2"></path><circle cx="474" cy="210.18" r="4" class="d2" stroke="var(--surface)" stroke-width="2"></circle><text x="482" y="214.18" class="t">unseen</text><text x="8" y="283" class="tm">accuracy by training epoch · example values</text></svg></svg>
