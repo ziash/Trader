@@ -135,8 +135,10 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
     var s = config.SetupSettings;
     bot.Log.Information("Setup (Scout spec §3.2): strong {Push}×ATR, move {Move}×ATR, pause {Min}–{Max} candles, ≤ {H}×ATR, pull-back ≤ {R}, reversal after {Rev}, turn {Flip}×ATR / {Ch} candles, level {Level}",
         s.PushBody, s.MinMove, s.MinPause, s.MaxPause, s.MaxPauseHeight, s.MaxRetrace, s.ReversalAfter, s.FlipAtr, s.Channel, s.Level);
-    bot.Log.Information("Orders: {Lots} lot ({Own} symbol(s) with their own size, listed after connecting), stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
-        config.Lots, config.LotsBySymbol?.Count ?? 0, config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
+    var sizing = config.SizingInForce;
+    bot.Log.Information("Orders: size {Size}, stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
+        sizing.Enabled ? $"from the money at risk: {sizing.RiskPercent} % of equity per trade, {sizing.Legs} legs (scout.md §2.8)" : $"{config.Lots} lot ({config.LotsBySymbol?.Count ?? 0} symbol(s) with their own size, listed after connecting)",
+        config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
 
     var feed = new PriceFeed(); // live prices: an order whose level has already passed is not sent (scout.md §2.3)
     bot.Connection.MessageReceived += m =>
@@ -161,7 +163,8 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
                 await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(x => x.SymbolId).Concat(conversions.Values.Select(c => c.SymbolId)).Distinct());
             scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, feed, symbols, conversions);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
-            LogOrderSizes(log, a.Broker, config, symbols);
+            if (!config.SizingInForce.Enabled)
+                LogOrderSizes(log, a.Broker, config, symbols);
         }
     };
 

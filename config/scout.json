@@ -62,8 +62,8 @@
   "marginFactor": 4,
   // Losses that stop new entries, in % of equity (scout.md §2.7). TM keeps managing open positions. Starting values, to calibrate on replay.
   "limits": { "dailyLossPercent": 3, "weeklyLossPercent": 6, "peakDrawdownPercent": 15 },
-  // Size from the money at risk instead of the lots above (scout.md §2.8). Off until the owner turns it on; preview with --sizes.
-  "sizing": { "enabled": false, "riskPercent": 0.5, "legs": 2, "slippageSpreads": 1, "minStopSpreads": 2, "limitR": 3, "maxLossPercent": 2 },
+  // Size from the money at risk instead of the lots above (scout.md §2.8). On since 08-Nov-2026 (owner); preview with --sizes.
+  "sizing": { "enabled": true, "riskPercent": 0.5, "legs": 2, "slippageSpreads": 1, "minStopSpreads": 2, "limitR": 3, "maxLossPercent": 2 },
   "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
   "historyDays": 30,      // past candles read at start to rebuild the state
 
