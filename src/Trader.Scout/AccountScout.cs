@@ -31,7 +31,8 @@ internal sealed class AccountScout(
     string logFolder,
     bool dryRun,
     Func<DateTime>? utcNow = null,
-    string? controlDir = null)
+    string? controlDir = null,
+    Func<DateTime?>? tmHealthyUtc = null)
 {
     public static readonly string[] SetupsHeader =
     [
@@ -73,6 +74,9 @@ internal sealed class AccountScout(
     private bool _recoverDue = true;
     private DateTime _lastRecover = DateTime.MinValue, _cancelRetryDue = DateTime.MaxValue;
     private string? _haltAnnounced;
+    private static readonly TimeSpan TmGrace = TimeSpan.FromSeconds(60);            // a TM restart inside this does not stop new entries
+    private readonly Func<DateTime?> _tmHealthyUtc = tmHealthyUtc ?? (() => registry.HealthyUtc(ScoutConfig.TmBotName, account.AccountId));
+    private DateTime _tmLastHealthy = DateTime.MinValue;
     private readonly HashSet<string> _marginSkipped = [];             // setups logged as waiting for margin (logged once each)
     private DateTime _marginAlerted = DateTime.MinValue, _statusFailed = DateTime.MinValue;
     private readonly SemaphoreSlim _wake = new(0);
@@ -793,6 +797,19 @@ internal sealed class AccountScout(
         }
     }
 
+    /// <summary>
+    /// TM mirrors, hedges and protects what Scout places, so without it a fill is not the trade that was meant (scout.md §2.7). Its last report counts for
+    /// <see cref="TmGrace"/>, so a restart passes unnoticed. Until TM has been seen once, it counts as down.
+    /// </summary>
+    private bool TmDown(DateTime now)
+    {
+        if (!config.RequireTm)
+            return false;
+        if (_tmHealthyUtc() is { } healthy && healthy > _tmLastHealthy)
+            _tmLastHealthy = healthy;
+        return now - _tmLastHealthy > TmGrace;
+    }
+
     // ── Stopping new entries (scout.md §2.7): loss limits and the owner's control files. TM is never affected ──────────────
     private string? UpdateHalt(AccountStatus? status, DateTime now)
     {
@@ -822,6 +839,7 @@ internal sealed class AccountScout(
         var owner = File.Exists(Path.Combine(_controlDir, "scout-halt")) || File.Exists(Path.Combine(_controlDir, $"scout-halt-{account.Broker}-{account.AccountId}"));
         var reason = owner ? "stopped by the owner (control file)"
             : state.Equity is { Halt: not LossHalt.None } m ? m.HaltReason
+            : TmDown(now) ? "TM is not working on this account"
             : null;
         if (reason != _haltAnnounced)
         {

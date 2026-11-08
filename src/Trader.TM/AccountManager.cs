@@ -156,6 +156,7 @@ internal sealed class AccountManager(
             _dirty = true;
         book.Save();
         _openTrades = Describe(book, account);
+        registry.ReportHealthy(account.AccountId); // Scout places new orders only while TM is really working (scout.md §2.7)
     }
 
     /// <summary>

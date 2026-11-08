@@ -37,6 +37,57 @@ public sealed class InstanceRegistryTests : IDisposable
         Assert.Equal(0, a.Check().Single().Slot);
     }
 
+    private InstanceRegistry MakeBot(string bot, string id, long account)
+    {
+        var reg = new InstanceRegistry(_dir, new BotIdentity(bot, id), _log, () => _now, pid: 1000, isProcessAlive: pid => !_deadPids.Contains(pid));
+        reg.Register("brokerA", account, ["EURUSD"]);
+        return reg;
+    }
+
+    [Fact]
+    public void Another_bot_sees_when_a_Primary_last_finished_a_working_cycle()
+    {
+        using var tm = MakeBot("TM", "TM-aaaaaa", 1);
+        using var scout = MakeBot("Scout", "Scout-bbbbbb", 1);
+        tm.Check();
+        _now = _now.AddSeconds(5);
+        tm.ReportHealthy(1);
+        var reported = _now;
+        _now = _now.AddSeconds(10);
+        tm.Check(); // the heartbeat carries it
+        scout.Check();
+
+        Assert.Equal(reported, scout.HealthyUtc("TM", 1));
+        Assert.Null(scout.HealthyUtc("TM", 2));
+        Assert.Null(scout.HealthyUtc("AuditBot", 1));
+    }
+
+    [Fact]
+    public void A_copy_built_before_the_report_counts_by_its_heartbeat()
+    {
+        using var tm = MakeBot("TM", "TM-aaaaaa", 1);
+        using var scout = MakeBot("Scout", "Scout-bbbbbb", 1);
+        tm.Check();
+        scout.Check();
+        Assert.Equal(_now, scout.HealthyUtc("TM", 1));
+    }
+
+    [Fact]
+    public void A_Passive_copy_or_a_dead_one_does_not_count_as_healthy()
+    {
+        var tm = MakeBot("TM", "TM-aaaaaa", 1);
+        using var scout = MakeBot("Scout", "Scout-bbbbbb", 1);
+        using var passive = MakeBot("TM", "TM-cccccc", 1);
+        tm.Check();
+        passive.Check();
+        scout.Check();
+        Assert.Equal("TM-aaaaaa", passive.View(1)!.Siblings.First(s => s.Role == InstanceRole.Primary).InstanceId);
+
+        tm.Dispose();
+        scout.Check();
+        Assert.Null(scout.HealthyUtc("TM", 1)); // the Passive copy has not taken over yet
+    }
+
     [Fact]
     public void Passive_takes_over_as_soon_as_the_Primary_stops()
     {

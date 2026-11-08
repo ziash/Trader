@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by Scout, TM, the Audit Bot and the Dashboard export (`Trader.DashboardExport`) |
-| Document version | v1.16 (08-Nov-2026) — history in §10 |
+| Document version | v1.17 (08-Nov-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -134,3 +134,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.14 | 08 Nov 2026 | Optional trigger method on `PlaceStopOrderAsync`, `AmendStopOrderAsync` and `AmendPositionProtectionAsync` (TM v1.13, §5.2); default unchanged for other bots |
 | v1.15 | 08 Nov 2026 | `SymbolInfo.VolumeNotAbove`: a size rounded down to the step and never raised to the broker's minimum (null instead), for orders whose size is a risk decision ([Scout review](bots/scout/reviews/2026-11-08-v1.0-independent-review.md) F-03). `VolumeForLots` unchanged for other bots. `RequestPacer` times the next request from the real send, so a late wake-up cannot shorten the gap |
 | v1.16 | 08 Nov 2026 | `SymbolInfo.MaxVolume` and `SymbolInfo.Commission` (`CommissionRule`: a lot's commission opened and closed, in USD), moved from the dashboard export so Scout's sizing and the export share one formula |
+| v1.17 | 08 Nov 2026 | `InstanceRegistry.ReportHealthy` and `HealthyUtc`: a bot reports each finished working cycle in its status file, and another bot can read when the Primary on an account last did |

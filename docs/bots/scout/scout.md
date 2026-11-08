@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.28 (08-Nov-2026) — history in §8 |
+| Document version | v1.29 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -103,6 +103,9 @@ From the independent review (F-02, P-04). A halt **only stops new entries**: Sco
 | Weekly loss, from the first equity of the week (Monday UTC) | `weeklyLossPercent` 6 | Owner's reset |
 | Fall from the peak equity | `peakDrawdownPercent` 15 | Owner's reset |
 | Owner's command | The file below exists | The file is removed |
+| **TM not working on the account** (`requireTm`, default true; review F-14) | No finished TM management cycle for 60 s, or no TM seen since Scout started | TM reports again |
+
+**TM's health:** TM reports each finished management cycle (read the account, plan, act) through the instance registry, so a TM that is running but cannot work counts as down. A restart inside 60 s passes unnoticed. While TM is down a fill would have no mirror or hedges, so this acts like any halt, and setups still valid are placed again when TM returns.
 
 The values are starting points to calibrate on replay. Halts survive restarts (`Equity` in the memory file); a recovery of the equity does not end one. Setups cancelled by a halt are placed again afterwards if still valid and young enough.
 
@@ -245,6 +248,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.29 | 08 Nov 2026 | **TM health check** (§2.7, review F-14, P-04): no new entries, and pending orders cancelled, while TM has not finished a cycle for 60 s (`requireTm`). Tests: 102 (5 new). Not deployed |
 | v1.28 | 08 Nov 2026 | **Sizing turned on** (owner, §2.8): 0.5 % of equity per trade on the Pepperstone demo; `lots` and `lotsBySymbol` no longer used while it is on. At today's equity a median stop refuses XAUUSD, XAGUSD, XPTUSD, USTEC and DE40 (broker minimum above the budget) and SOLUSD (stop too near against its Sunday spread). Start-up log states the sizing in force |
 | v1.27 | 08 Nov 2026 | **PositionSizer built, off** (§2.8, review P-02, owner): size from the money at risk, never raised to the broker's minimum; `--sizes` preview; an order with no valid stop-loss is not sent. Commission rule moved to Trader.Core and shared with the dashboard export. Tests: 97 (16 new). Not deployed |
 | v1.26 | 08 Nov 2026 | **Review Phase 1 live** on the Pepperstone demo, 13:33 UTC (owner's OK; build `Scout-667ede8`, instance `Scout-c1ced9`). The memory file was converted and its 23 roles checked against the broker's history; no order placed or cancelled by the start. Old records cancelled by Scout show as `CancelledExternally`, because the old memory did not record who cancelled. A first new order through the live-price check is still to be watched |

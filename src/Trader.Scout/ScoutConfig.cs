@@ -20,10 +20,12 @@ public sealed record ScoutConfig(
     double MarginUsePercent = 50,   // Scout places an order only while the margin in use, with its own orders filled, stays within this % of equity (scout.md §2.5)
     double MarginFactor = 4,        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
     RiskLimits? Limits = null,      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
-    SizingSettings? Sizing = null)  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
+    SizingSettings? Sizing = null,  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
+    bool RequireTm = true)          // no new entries unless TM is working on the account (scout.md §2.7)
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
+    public const string TmBotName = "TM";
     public const double MaxLots = 100;
 
     /// <summary>Lots asked for on <paramref name="symbol"/>; the broker's minimum and step may change it (SymbolInfo.VolumeForLots).</summary>

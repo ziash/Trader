@@ -25,6 +25,8 @@ public sealed class OrderLifecycleTests : IDisposable
     private DateTime _now = T0.AddHours(21).AddSeconds(10); // just after the 2nd pause candle closed
     private AccountScout _scout = null!;
     private ScoutState _state = null!;
+    private DateTime? _tmHealthy = T0.AddHours(21);        // when TM last reported a finished cycle; null = no TM running
+    private bool _tmFollowsClock = true;                   // a working TM reports all the time
 
     private sealed class Sink(List<LogEvent> logs) : ILogEventSink
     {
@@ -68,7 +70,7 @@ public sealed class OrderLifecycleTests : IDisposable
         }
         _state = ScoutState.Load(Path.Combine(_dir, "state.json"));
         _scout = new AccountScout(account, config, id, log, new Notifier(log, "Scout", new NotificationConfig(60, [])), registry, _state,
-            Csv("setups.csv", AccountScout.SetupsHeader), Csv("orders.csv", AccountScout.OrdersHeader), Path.Combine(_dir, "logs", "day"), false, () => _now, Path.Combine(_dir, "control"));
+            Csv("setups.csv", AccountScout.SetupsHeader), Csv("orders.csv", AccountScout.OrdersHeader), Path.Combine(_dir, "logs", "day"), false, () => _now, Path.Combine(_dir, "control"), () => _tmFollowsClock ? _now : _tmHealthy);
         _scout.UseGateway(_broker, symbols);
     }
 
@@ -584,6 +586,79 @@ public sealed class OrderLifecycleTests : IDisposable
         Assert.Equal(RoleState.Unknown, s.Roles["C|H1|202611031400|M"].State);
         Assert.Equal(RoleState.Refused, s.Roles["D|H1|202611031400|R"].State);
         Assert.Equal(RoleState.Held, s.Roles["E|H1|202611031400|R"].State);
+    }
+
+    // ── TM's health (scout.md §2.7) ─────────────────────────────────────────────────────────────────────────────────
+    private void TmStops(DateTime? lastReport)
+    {
+        _tmFollowsClock = false;
+        _tmHealthy = lastReport;
+    }
+
+    [Fact]
+    public async Task With_TM_never_seen_no_order_is_placed()
+    {
+        TmStops(null);
+        await Run();
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Contains("TM is not working", Assert.Single(Rows("skip"))["detail"]);
+    }
+
+    [Fact]
+    public async Task When_TM_stops_new_entries_stop_and_pending_orders_are_cancelled_but_positions_stay()
+    {
+        var filled = _broker.AddOrder(2, ProtoOATradeSide.Sell, 1_000_000, 100, 110, "Scout-abcdef-H1-202610010000-M");
+        var open = _broker.Fill(filled, 99);
+        await Run();
+        Assert.Single(_broker.Orders);
+
+        TmStops(_now);
+        await Cycle(61);
+        Assert.Empty(_broker.Orders);
+        Assert.Equal(RoleState.Held, Role.State);
+        Assert.Contains(open, _broker.Positions);
+        Assert.True(Logged("TM is not working on this account"));
+    }
+
+    [Fact]
+    public async Task A_TM_restart_inside_the_grace_period_changes_nothing()
+    {
+        await Run();
+        TmStops(_now);
+        await Cycle(30);
+        await Cycle(25); // 55 s without a report
+        Assert.Single(_broker.Orders);
+        Assert.False(Logged("new entries stopped"));
+
+        _tmFollowsClock = true;
+        await Cycle(30);
+        Assert.Single(_broker.Orders);
+        Assert.Equal(0, _broker.CancelCalls);
+    }
+
+    [Fact]
+    public async Task When_TM_comes_back_a_setup_still_valid_is_placed_again()
+    {
+        await Run();
+        TmStops(_now);
+        await Cycle(61);
+        Assert.Empty(_broker.Orders);
+
+        _tmFollowsClock = true;
+        await Cycle();
+        Assert.Single(_broker.Orders);
+        Assert.Equal(2, _broker.PlaceCalls);
+        Assert.True(Logged("new entries allowed again"));
+    }
+
+    [Fact]
+    public async Task The_check_can_be_switched_off_for_an_account_without_TM()
+    {
+        TmStops(null);
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        Restart(new ScoutConfig([account], RequireTm: false));
+        await Run();
+        Assert.Single(_broker.Orders);
     }
 
     // ── Halts (scout.md §2.7) ───────────────────────────────────────────────────────────────────────────────────────

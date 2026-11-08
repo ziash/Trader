@@ -25,7 +25,8 @@ public sealed record InstanceRecord(
     IReadOnlyList<string> Symbols,
     InstanceRole Role,
     DateTime StartedUtc,
-    DateTime LastSeenUtc);
+    DateTime LastSeenUtc,
+    DateTime? HealthyUtc = null);
 
 /// <summary>How this instance sees one account at one moment.</summary>
 /// <param name="Siblings">Live instances of the same bot on the same account, this one included, oldest first.</param>
@@ -67,6 +68,7 @@ public sealed class InstanceRegistry : IDisposable
     private readonly int _pid;
     private readonly Lock _gate = new();
     private readonly List<Registration> _registrations = [];
+    private List<InstanceRecord> _live = [];
 
     private sealed class Registration(string broker, long accountId, IReadOnlyList<string> symbols)
     {
@@ -75,6 +77,7 @@ public sealed class InstanceRegistry : IDisposable
         public IReadOnlyList<string> Symbols { get; } = symbols;
         public FileStream? PrimaryLock { get; set; }
         public DateTime LastHeartbeat { get; set; } = DateTime.MinValue;
+        public DateTime? HealthyUtc { get; set; }
         public DateTime LastStatusLog { get; set; } = DateTime.MinValue;
         public string? LastSiblingKey { get; set; }
         public AccountView? View { get; set; }
@@ -109,6 +112,24 @@ public sealed class InstanceRegistry : IDisposable
     {
         lock (_gate)
             return _registrations.FirstOrDefault(r => r.AccountId == accountId)?.View;
+    }
+
+    /// <summary>The bot finished a full working cycle on the account just now; goes out with the next heartbeat so other bots can see it is really working.</summary>
+    public void ReportHealthy(long accountId)
+    {
+        lock (_gate)
+            if (_registrations.FirstOrDefault(r => r.AccountId == accountId) is { } r)
+                r.HealthyUtc = _utcNow();
+    }
+
+    /// <summary>
+    /// When the Primary copy of another bot on this account last reported a finished working cycle, as of the last check; null when no such copy is running.
+    /// A copy built before this report existed counts by its heartbeat.
+    /// </summary>
+    public DateTime? HealthyUtc(string botName, long accountId)
+    {
+        lock (_gate)
+            return _live.FirstOrDefault(x => x.BotName == botName && x.AccountId == accountId && x.Role == InstanceRole.Primary) is { } x ? x.HealthyUtc ?? x.LastSeenUtc : null;
     }
 
     /// <summary>Current role on an account (Passive until the first check has run).</summary>
@@ -151,6 +172,7 @@ public sealed class InstanceRegistry : IDisposable
             }
 
             var live = ReadLive(now);
+            _live = live;
             var views = new List<AccountView>();
             foreach (var r in _registrations)
             {
@@ -214,7 +236,7 @@ public sealed class InstanceRegistry : IDisposable
 
     private void WriteStatus(Registration r, DateTime now)
     {
-        var record = new InstanceRecord(_identity.InstanceId, _identity.BotName, _pid, r.Broker, r.AccountId, r.Symbols, r.Role, _startedUtc, now);
+        var record = new InstanceRecord(_identity.InstanceId, _identity.BotName, _pid, r.Broker, r.AccountId, r.Symbols, r.Role, _startedUtc, now, r.HealthyUtc);
         var path = StatusPath(r);
         var tmp = path + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(record, Json));
