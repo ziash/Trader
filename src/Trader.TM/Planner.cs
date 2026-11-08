@@ -54,6 +54,7 @@ internal static class Planner
     internal const string NotEnoughMoney = "NOT_ENOUGH_MONEY";
     private static readonly TimeSpan NoMoneyWait = TimeSpan.FromSeconds(60);    // a refused stop hedge is sent again after this
     private static readonly TimeSpan NoMoneyClose = TimeSpan.FromMinutes(5);    // a refusal this recent: past H the leg is closed, not hedged
+    private static readonly TimeSpan UnprotectedAlertAfter = TimeSpan.FromSeconds(10); // a new leg is bare only for a moment
 
     public static List<TmAction> Plan(TradeBook book, Snapshot snap, PlanEnv env)
     {
@@ -531,6 +532,7 @@ internal static class Planner
 
             leg.Entry = pos.Entry;
             leg.Volume = pos.Volume;
+            RecordProtection(leg, pos, hOrd, hPos, role, name);
             var hd = HedgeDir;
             var legExit = t.Dir > 0 ? _q.Bid : _q.Ask;   // price the leg would close at
             var hedgeExit = hd > 0 ? _q.Bid : _q.Ask;    // price the hedge would close at
@@ -698,6 +700,31 @@ internal static class Planner
             }
             else
                 Protect(pos, role, pos.StopLoss, tp, trailing: pos.Trailing);
+        }
+
+        /// <summary>
+        /// Labels the leg from what the broker shows (tm.md §5.1). A waiting hedge order is never counted as more than a promise: the risk that counts is the
+        /// stop behind it. A leg with nothing on the server for <see cref="UnprotectedAlertAfter"/> is reported once.
+        /// </summary>
+        private void RecordProtection(LegState leg, Pos pos, Ord? hOrd, Pos? hPos, string role, string name)
+        {
+            leg.Protection = hPos is not null ? LegProtection.HedgeFilled
+                : hOrd is not null ? LegProtection.HedgePending
+                : pos.StopLoss is not null ? LegProtection.StopOnServer
+                : LegProtection.Unprotected;
+            leg.StopRiskR = pos.StopLoss is { } sl && leg.R > 0 ? Math.Round(Math.Max(0, t.Dir * (pos.Entry - sl) / leg.R), 2) : null;
+
+            if (leg.Protection != LegProtection.Unprotected)
+            {
+                (leg.UnprotectedSinceUtc, leg.UnprotectedAlerted) = (null, false);
+                return;
+            }
+            leg.UnprotectedSinceUtc ??= env.Now;
+            if (leg.UnprotectedAlerted || env.Now - leg.UnprotectedSinceUtc < UnprotectedAlertAfter)
+                return;
+            leg.UnprotectedAlerted = true;
+            actions.Add(new Notify(t, role, NotificationLevel.Critical, "LegUnprotected", $"{t.Symbol} {name}: no protection on the server",
+                $"Position {pos.Id} has no stop-loss, no hedge order and no filled hedge. TM keeps trying to protect it."));
         }
 
         /// <summary>Plans a stop-loss / take-profit change if the position differs; false if nothing to do or already planned.</summary>

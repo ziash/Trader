@@ -60,10 +60,17 @@ internal sealed class FakeGateway(Func<DateTime> clock) : IBrokerGateway
     }
 
     public Task<AccountStatus> GetAccountStatusAsync(long accountId, ProtoOAReconcileRes reconcile) =>
-        Task.FromResult(new AccountStatus(accountId, clock(), Equity, Equity, UsedMargin, Positions.Count, Orders.Count));
+        Task.FromResult(new AccountStatus(accountId, clock(), Equity, Equity, UsedMargin, Positions.Count, Orders.Count, MarginMode));
 
     public Task<IReadOnlyList<ExpectedMargin>> GetExpectedMarginAsync(long accountId, long symbolId, IEnumerable<long> volumes) =>
-        Task.FromResult<IReadOnlyList<ExpectedMargin>>(volumes.Select(v => new ExpectedMargin(v, MarginPerOrder, MarginPerOrder)).ToList());
+        Task.FromResult<IReadOnlyList<ExpectedMargin>>(volumes.Select(v => new ExpectedMargin(v, MarginOf(v), MarginOf(v))).ToList());
+
+    /// <summary><see cref="MarginPerOrder"/> is the margin of 0.1 lot; above <see cref="TierVolume"/> it costs <see cref="TierMultiple"/> times as much.</summary>
+    private double MarginOf(long volume) => MarginPerOrder * volume / 1_000_000.0 * (volume > TierVolume ? TierMultiple : 1);
+
+    public long TierVolume { get; set; } = long.MaxValue;
+    public double TierMultiple { get; set; } = 1;
+    public ProtoOATotalMarginCalculationType MarginMode { get; set; } = ProtoOATotalMarginCalculationType.Sum;
 
     public ProtoOAOrder AddOrder(long symbolId, ProtoOATradeSide side, long volume, double price, double? stopLoss, string label, DateTime? expiresUtc = null)
     {

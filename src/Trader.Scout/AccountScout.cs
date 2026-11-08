@@ -74,6 +74,8 @@ internal sealed class AccountScout(
     private bool _recoverDue = true;
     private DateTime _lastRecover = DateTime.MinValue, _cancelRetryDue = DateTime.MaxValue;
     private string? _haltAnnounced;
+    private static readonly TimeSpan StressCheckEvery = TimeSpan.FromMinutes(5);
+    private DateTime _nextStressCheck = DateTime.MinValue, _stressAlerted = DateTime.MinValue;
     private static readonly TimeSpan TmGrace = TimeSpan.FromSeconds(60);            // a TM restart inside this does not stop new entries
     private readonly Func<DateTime?> _tmHealthyUtc = tmHealthyUtc ?? (() => registry.HealthyUtc(ScoutConfig.TmBotName, account.AccountId));
     private DateTime _tmLastHealthy = DateTime.MinValue;
@@ -458,8 +460,8 @@ internal sealed class AccountScout(
             }
         }
 
-        MarginBudget? budget = null;
         var margins = new Dictionary<(long, long), ExpectedMargin>();
+        var budget = await StressCheckAsync(session, status, rec, margins, now);
         foreach (var want in wants.Values)
         {
             if (halt is not null)
@@ -496,7 +498,7 @@ internal sealed class AccountScout(
             }
             if (ReadyToPlace(session, want, status, now) is not { } volume)
                 continue;
-            budget ??= await BudgetAsync(session, status, ourOrders.Values, margins);
+            budget ??= await BudgetAsync(session, status, rec, margins);
             if (!await MarginFitsAsync(session, budget, want, volume, margins, now))
                 continue; // not remembered: tried again at the next sync, while the setup lasts
             await PlaceAsync(session, want, volume, now);
@@ -780,6 +782,21 @@ internal sealed class AccountScout(
         }
     }
 
+    /// <summary>Every few minutes, new order or not: margin and leverage change while orders wait (review F-24). Warns; it never closes or cancels anything.</summary>
+    private async Task<MarginBudget?> StressCheckAsync(IBrokerGateway session, AccountStatus? status, ProtoOAReconcileRes rec, Dictionary<(long, long), ExpectedMargin> margins, DateTime now)
+    {
+        if (status is null || now < _nextStressCheck)
+            return null;
+        _nextStressCheck = now + StressCheckEvery;
+        var budget = await BudgetAsync(session, status, rec, margins);
+        if (budget is { StressBreached: true } && now - _stressAlerted >= TimeSpan.FromHours(1))
+        {
+            _stressAlerted = now;
+            notify.Warning("ScoutMarginStress", $"Scout {account.Broker}: the account would not carry its orders under stress", $"{budget.Describe()}. New orders wait until it would.", account.AccountId);
+        }
+        return budget;
+    }
+
     /// <summary>The account's money, read before anything that adds exposure; null when the broker did not answer a moment ago.</summary>
     private async Task<AccountStatus?> StatusAsync(IBrokerGateway session, ProtoOAReconcileRes rec)
     {
@@ -853,25 +870,45 @@ internal sealed class AccountScout(
     }
 
     // ── Margin (scout.md §2.5, issue-log.md #1): no new order the account could not carry once filled, mirrored and hedged ──
-    private async Task<MarginBudget?> BudgetAsync(IBrokerGateway session, AccountStatus? status, IEnumerable<ProtoOAOrder> waiting,
-        Dictionary<(long, long), ExpectedMargin> margins)
+    private async Task<MarginBudget?> BudgetAsync(IBrokerGateway session, AccountStatus? status, ProtoOAReconcileRes rec, Dictionary<(long, long), ExpectedMargin> margins)
     {
         if (status is null)
             return null;
         try
         {
-            var held = 0.0;
-            foreach (var o in waiting)
-                held += (await MarginAsync(session, o.TradeData.SymbolId, o.TradeData.Volume, margins)).For(o.TradeData.TradeSide == ProtoOATradeSide.Buy ? 1 : -1);
-            return new MarginBudget(status, config, held);
+            var stress = config.StressInForce;
+            var legs = config.SizingInForce.Legs;
+            var budget = new MarginBudget(status.MarginMode, status.Equity, config.MarginUsePercent, stress, id => _symbols.TryGetValue(id, out var s) && stress.Applies(s.Name));
+            foreach (var p in rec.Position)
+            {
+                budget.AddPosition(p.TradeData.SymbolId, DirOf(p.TradeData.TradeSide), AccountStatus.MarginOf(p));
+                if (_symbols.TryGetValue(p.TradeData.SymbolId, out var s) && session.LastQuote(account.AccountId, s.SymbolId) is { } q && session.UsdPer(account.AccountId, s.QuoteAsset) is { } rate)
+                    budget.AddStressLoss((stress.SpreadMultiple - 1) * q.Spread * (p.TradeData.Volume / 100.0) * rate);
+            }
+            foreach (var o in rec.Order)
+            {
+                var (id, dir, volume, label) = (o.TradeData.SymbolId, DirOf(o.TradeData.TradeSide), o.TradeData.Volume, o.TradeData.Label ?? "");
+                if (KeyOf(label, id) is { } key)
+                    budget.AddTrade(GroupOf(key), id, dir, (await MarginAsync(session, id, volume * legs, margins)).For(dir));
+                else if (label.EndsWith("-HMAIN", StringComparison.Ordinal) || label.EndsWith("-HMIR", StringComparison.Ordinal))
+                    budget.AddHedgeOrder(id, dir, (await MarginAsync(session, id, volume, margins)).For(dir));
+                else if (!label.EndsWith("-MIR", StringComparison.Ordinal)) // a mirror order is part of its Scout or manual trade
+                    budget.AddTrade($"order {o.OrderId}", id, dir, (await MarginAsync(session, id, volume * legs, margins)).For(dir));
+            }
+            return budget;
         }
         catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
         {
-            _statusFailed = _utcNow();
+            _statusFailed = Now;
             _log.Event("ScoutNoAccountStatus").Warning("{Broker}: account status not available ({Message}); no new orders until it is", account.Broker, ex.Message);
             return null;
         }
     }
+
+    private static int DirOf(ProtoOATradeSide side) => side == ProtoOATradeSide.Buy ? 1 : -1;
+
+    // The two orders of one pause share a group: only one can fill.
+    private static string GroupOf(string key) => key[..^2];
 
     private async Task<ExpectedMargin> MarginAsync(IBrokerGateway session, long symbolId, long volume, Dictionary<(long, long), ExpectedMargin> margins)
     {
@@ -890,19 +927,19 @@ internal sealed class AccountScout(
             double margin;
             try
             {
-                margin = (await MarginAsync(session, w.Sym.SymbolId, volume, margins)).For(w.Dir);
+                margin = (await MarginAsync(session, w.Sym.SymbolId, volume * config.SizingInForce.Legs, margins)).For(w.Dir); // asked for the whole trade: leverage tiers fall as size grows
             }
             catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
             {
                 margin = double.PositiveInfinity;
                 _log.Warning("{Broker} {Symbol}: expected margin not available ({Message})", account.Broker, w.Sym.Name, ex.Message);
             }
-            if (budget.TryTake(margin))
+            if (budget.TryTake(GroupOf(w.Key), w.Sym.SymbolId, w.Dir, margin))
             {
                 _marginSkipped.Remove(w.Key);
                 return true;
             }
-            why = double.IsPositiveInfinity(margin) ? "expected margin not available" : budget.Explain(margin);
+            why = double.IsPositiveInfinity(margin) ? "expected margin not available" : budget.Explain(GroupOf(w.Key), w.Sym.SymbolId, w.Dir, margin);
         }
 
         if (_marginSkipped.Add(w.Key))

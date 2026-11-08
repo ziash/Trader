@@ -17,11 +17,11 @@ public sealed record ScoutConfig(
     int HistoryDays = 30,           // candles read at start to rebuild the detectors' state
     DetectorSettings? Setup = null,
     IReadOnlyDictionary<string, double>? LotsBySymbol = null, // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
-    double MarginUsePercent = 50,   // Scout places an order only while the margin in use, with its own orders filled, stays within this % of equity (scout.md §2.5)
-    double MarginFactor = 4,        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
+    double MarginUsePercent = 50,   // Scout places an order only while the margin the account could come to hold stays within this % of equity (scout.md §2.5)
     RiskLimits? Limits = null,      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
     SizingSettings? Sizing = null,  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
-    bool RequireTm = true)          // no new entries unless TM is working on the account (scout.md §2.7)
+    bool RequireTm = true,          // no new entries unless TM is working on the account (scout.md §2.7)
+    MarginStress? Stress = null)    // the stress a new trade must survive (scout.md §2.5); left out = the defaults of MarginStress
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -36,6 +36,8 @@ public sealed record ScoutConfig(
     public RiskLimits RiskLimitsInForce => Limits ?? new RiskLimits();
 
     public SizingSettings SizingInForce => Sizing ?? new SizingSettings();
+
+    public MarginStress StressInForce => Stress ?? new MarginStress();
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -89,8 +91,10 @@ public sealed record ScoutConfig(
             if (!Accounts.Any(a => a.Charts.Any(c => c.Symbol == symbol)))
                 throw new ScoutConfigException($"{FileName}: \"lotsBySymbol\" {symbol} is not on any chart");
         }
-        if (MarginUsePercent is <= 0 or > 100 || MarginFactor < 1)
-            throw new ScoutConfigException($"{FileName}: \"marginUsePercent\" above 0 and at most 100, \"marginFactor\" at least 1");
+        if (MarginUsePercent is <= 0 or > 100)
+            throw new ScoutConfigException($"{FileName}: \"marginUsePercent\" above 0 and at most 100");
+        if (StressInForce is { MarginMultiple: < 1 } or { EquityFallPercent: < 0 or >= 100 } or { SpreadMultiple: < 1 })
+            throw new ScoutConfigException($"{FileName}: \"stress\": marginMultiple and spreadMultiple at least 1, equityFallPercent from 0 to under 100");
         if (RiskLimitsInForce is { DailyLossPercent: <= 0 or > 100 } or { WeeklyLossPercent: <= 0 or > 100 } or { PeakDrawdownPercent: <= 0 or > 100 })
             throw new ScoutConfigException($"{FileName}: \"limits\" percentages must be above 0 and at most 100");
         if (SizingInForce is { RiskPercent: <= 0 or > 5 } or { Legs: < 1 or > 2 } or { SlippageSpreads: < 0 } or { MinStopSpreads: < 0 } or { LimitR: < 1 } or { MaxLossPercent: <= 0 or > 100 })

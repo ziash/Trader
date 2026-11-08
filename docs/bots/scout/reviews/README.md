@@ -23,6 +23,7 @@ Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 
 | F-20 old setups | Built |
 | F-01, F-19, F-25 sizing from the money at risk (Phase 2, P-02) | Built and **on** at 0.5 % on the Pepperstone demo (Scout v1.28). Limits across trades, symbols and groups (P-03) still to come |
 | F-14 TM health check (Phase 2) | Built and live on the demos (Scout v1.30, TM v1.16) |
+| F-08, F-09, F-24 margin by scenario, stress test, protection label (Phase 2, P-05) | Built (Scout v1.31, TM v1.17), not deployed. The label is used for risk by the Portfolio Risk Manager, still to come |
 | F-13 remote dead-man alarm | **Open:** needs the owner's choice of an off-machine channel |
 | Rest of Phase 2; Phases 3–6 | Not started |
 

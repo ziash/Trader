@@ -369,6 +369,54 @@ public sealed class OrderLifecycleTests : IDisposable
         Assert.Contains("converts", Assert.Single(Rows("skip"))["detail"]);
     }
 
+    [Fact]
+    public async Task A_trade_is_refused_when_the_account_could_not_carry_it_under_stress()
+    {
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        Restart(new ScoutConfig([account], Stress: new MarginStress(Symbols: ["EURUSD"])));
+        _broker.Equity = 100;
+        _broker.MarginPerOrder = 12; // order and mirror $24, with hedges $48: inside $50; doubled, $96 against $90 of stressed equity
+        await Run();
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Contains("under stress $96.00", Assert.Single(Rows("skip"))["detail"]);
+    }
+
+    [Fact]
+    public async Task On_larger_side_margin_hedges_need_no_extra_room()
+    {
+        _broker.MarginMode = ProtoOATotalMarginCalculationType.Max;
+        _broker.Equity = 100;
+        _broker.MarginPerOrder = 20; // order and mirror $40: the hedges share that margin. By the sum rule it would be $80, over the $50 limit
+        await Run();
+        Assert.Single(_broker.Orders);
+    }
+
+    [Fact]
+    public async Task The_margin_is_asked_for_the_whole_trade_so_a_leverage_tier_counts()
+    {
+        _broker.TierVolume = 1_000_000;      // above 0.1 lot the margin triples: the trade is 0.2 lot with its mirror
+        _broker.TierMultiple = 3;
+        _broker.Equity = 300;
+        _broker.MarginPerOrder = 15;         // without the tier: order and mirror $30, with hedges $60. With it: $180, over the $150 limit
+        await Run();
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Contains("projected margin $180.00", Assert.Single(Rows("skip"))["detail"]);
+    }
+
+    [Fact]
+    public async Task An_account_already_too_full_for_the_stress_warns_even_with_no_new_order()
+    {
+        _broker.Candles.Remove(Eur);
+        var filled = _broker.AddOrder(Eur, ProtoOATradeSide.Buy, 1_000_000, 100, 90, "Scout-abcdef-H1-202610010000-M");
+        var p = _broker.Fill(filled, 100);
+        p.UsedMargin = 50_000;
+        p.MoneyDigits = 2;
+        _broker.Equity = 400; // $500 of margin against $360 of stressed equity
+        await Run();
+        Assert.True(Logged("would not carry its orders under stress"));
+        Assert.Contains(p, _broker.Positions);
+    }
+
     // ── Cancelling ──────────────────────────────────────────────────────────────────────────────────────────────────
     private async Task<ProtoOAOrder> Placed()
     {

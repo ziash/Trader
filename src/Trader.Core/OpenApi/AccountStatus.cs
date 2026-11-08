@@ -7,7 +7,8 @@ namespace Trader.Core.OpenApi;
 /// unrealized result), the margin the open positions hold, and what is left. In the account currency (USD on our demos).
 /// The bots read it before they add exposure, so they see a full account coming instead of finding out from refusals.
 /// </summary>
-public sealed record AccountStatus(long AccountId, DateTime TimeUtc, double Balance, double Equity, double UsedMargin, int Positions, int Orders)
+public sealed record AccountStatus(long AccountId, DateTime TimeUtc, double Balance, double Equity, double UsedMargin, int Positions, int Orders,
+    ProtoOATotalMarginCalculationType MarginMode = ProtoOATotalMarginCalculationType.Sum)
 {
     /// <summary>Equity not held as margin: what new positions (and hedges) can use.</summary>
     public double FreeMargin => Equity - UsedMargin;
@@ -39,17 +40,22 @@ public sealed record AccountStatus(long AccountId, DateTime TimeUtc, double Bala
             .GroupBy(p => p.TradeData.SymbolId)
             .Sum(g =>
             {
-                double Side(ProtoOATradeSide side) => g.Where(p => p.TradeData.TradeSide == side).Sum(p => Scale((long)p.UsedMargin, p.HasMoneyDigits ? p.MoneyDigits : 2));
-                var (buy, sell) = (Side(ProtoOATradeSide.Buy), Side(ProtoOATradeSide.Sell));
-                return how switch
-                {
-                    ProtoOATotalMarginCalculationType.Max => Math.Max(buy, sell),
-                    ProtoOATotalMarginCalculationType.Net => Math.Abs(buy - sell),
-                    _ => buy + sell,
-                };
+                double Side(ProtoOATradeSide side) => g.Where(p => p.TradeData.TradeSide == side).Sum(MarginOf);
+                return Combine(how, Side(ProtoOATradeSide.Buy), Side(ProtoOATradeSide.Sell));
             });
-        return new AccountStatus(trader.CtidTraderAccountId, nowUtc, balance, balance + unrealized, used, reconcile.Position.Count, reconcile.Order.Count);
+        return new AccountStatus(trader.CtidTraderAccountId, nowUtc, balance, balance + unrealized, used, reconcile.Position.Count, reconcile.Order.Count, how);
     }
+
+    /// <summary>The margin one open position holds, in the account currency.</summary>
+    public static double MarginOf(ProtoOAPosition p) => Scale((long)p.UsedMargin, p.HasMoneyDigits ? p.MoneyDigits : 2);
+
+    /// <summary>The margin of one symbol's buys and sells together, by the broker's rule: SUM counts both, MAX the larger side, NET the difference.</summary>
+    public static double Combine(ProtoOATotalMarginCalculationType how, double buy, double sell) => how switch
+    {
+        ProtoOATotalMarginCalculationType.Max => Math.Max(buy, sell),
+        ProtoOATotalMarginCalculationType.Net => Math.Abs(buy - sell),
+        _ => buy + sell,
+    };
 
     internal static double Scale(long value, uint digits) => value / Math.Pow(10, digits);
 }

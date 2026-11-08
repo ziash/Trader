@@ -37,6 +37,84 @@ public sealed class MarginTests
     }
 
     [Fact]
+    public void A_waiting_hedge_is_labelled_a_promise_with_the_backstop_as_the_risk_that_counts()
+    {
+        var b = new FakeBroker();
+        b.OpenManual(-1, Half, stopLoss: 1.16100);
+        b.Run();
+        Assert.All(b.Book.Trades[0].Legs(), l =>
+        {
+            Assert.Equal(LegProtection.HedgePending, l.Leg.Protection);
+            Assert.Equal(3, l.Leg.StopRiskR!.Value, 2);
+        });
+    }
+
+    [Fact]
+    public void A_refused_hedge_leaves_the_stop_on_the_server_as_the_label()
+    {
+        var b = new FakeBroker();
+        b.OpenManual(-1, Half, stopLoss: 1.16100);
+        b.Run();
+        b.Orders.Clear();                     // the broker refused the hedges when they triggered
+        b.Refuse.Add(nameof(PlaceHedge));
+        b.RefuseCode = Planner.NotEnoughMoney;
+        b.MoveTo(1.16050);
+        Assert.All(b.Book.Trades[0].Legs(), l =>
+        {
+            Assert.Equal(LegProtection.StopOnServer, l.Leg.Protection);
+            Assert.Equal(3, l.Leg.StopRiskR!.Value, 2);
+        });
+        Assert.All(b.Positions, p => Assert.NotNull(p.StopLoss)); // issue #1: no leg without a stop on the server
+    }
+
+    [Fact]
+    public void A_filled_hedge_and_break_even_are_labelled_from_the_broker()
+    {
+        var b = new FakeBroker();
+        b.OpenManual(-1, Half, stopLoss: 1.16100);
+        b.Run();
+        b.MoveTo(1.16110);                    // both hedges fill
+        Assert.All(b.Book.Trades[0].Legs(), l => Assert.Equal(LegProtection.HedgeFilled, l.Leg.Protection));
+
+        var c = new FakeBroker();
+        c.OpenManual(-1, Half, stopLoss: 1.16100);
+        c.Run();
+        c.MoveTo(1.15880);                    // 1R in profit: stops at break-even, hedges removed
+        c.Run();
+        Assert.All(c.Book.Trades[0].Legs(), l =>
+        {
+            Assert.Equal(LegProtection.StopOnServer, l.Leg.Protection);
+            Assert.Equal(0, l.Leg.StopRiskR!.Value, 2);
+        });
+    }
+
+    [Fact]
+    public void A_leg_with_nothing_on_the_server_is_reported_once_after_ten_seconds()
+    {
+        var b = new FakeBroker();
+        var main = b.OpenManual(-1, Half, stopLoss: 1.16100);
+        b.Run();
+        var leg = b.Book.Trades[0].Main;
+        b.Refuse.Add(nameof(PlaceHedge));
+        b.Refuse.Add(nameof(SetProtection));
+        b.Orders.RemoveAll(o => o.Label.EndsWith("-" + TmLabel.HedgeMain));
+        b.SetStopLoss(main.Id, null);
+
+        Assert.DoesNotContain("LegUnprotected", Events(b.Run()));
+        Assert.Equal(LegProtection.Unprotected, leg.Protection);
+        b.Now = b.Now.AddSeconds(11);
+        Assert.Contains("LegUnprotected", Events(b.Run()));
+        b.Now = b.Now.AddSeconds(11);
+        Assert.DoesNotContain("LegUnprotected", Events(b.Run()));
+
+        b.Refuse.Clear();
+        b.Now = b.Now.AddSeconds(61);
+        b.Run();
+        Assert.NotEqual(LegProtection.Unprotected, leg.Protection);
+        Assert.Null(leg.UnprotectedSinceUtc);
+    }
+
+    [Fact]
     public void A_stop_hedge_refused_for_money_waits_a_minute_with_the_backstop_in_place()
     {
         var b = new FakeBroker();

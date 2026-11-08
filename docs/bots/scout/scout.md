@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.30 (08-Nov-2026) — history in §8 |
+| Document version | v1.31 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -70,12 +70,13 @@ TM takes over orders whose label starts with `"Scout-"` (`takeOver` in `tm.json`
 
 After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)), Scout checks the account before each new order. It reads the balance, equity and margin in use (read-only, [Open Code Pieces](../../open-code-pieces.md) v1.9) and the margin the order would hold once filled (`ProtoOAExpectedMarginReq`):
 
-- An order of Scout's holds no margin while it waits, but once filled TM mirrors it and hedges both legs: up to **`marginFactor` = 4 ×** its own margin.
-- Scout places the order only if **margin in use + 4 × (its waiting orders + this one) ≤ `marginUsePercent` = 50 % of equity**.
+- **What is counted (v1.31, review P-05):** the margin the account could come to hold, worked out per symbol by the broker's own rule (`TotalMarginCalculationType`: SUM both sides, MAX the larger, NET the difference). Open positions count at the margin they hold. Each waiting trade counts as Scout's order and TM's mirror together, asked from the broker for that combined size so a leverage tier counts, with hedges of the same size implied; TM's waiting hedge orders count too. Each symbol is worked out with everything filled but unhedged, and again with the hedges filled, and the larger counts. The two orders of one pause count once.
+- Scout places a trade only if that total stays within **`marginUsePercent` = 50 % of equity**, and the account could still carry it **under stress**: margin × 2 on metals and crypto, equity −10 %, every open position losing 4 more spreads (`stress` in `scout.json`).
+- Every 5 minutes, new order or not, the stress is checked again; if the account would not carry what is on it, a `ScoutMarginStress` pop-up at most once an hour. New trades wait. Nothing is closed or cancelled for this.
 - Otherwise: one `skip` row in `orders.csv` (result `no margin`, the numbers in `detail`), a `ScoutNoMargin` line in `events.csv`, and a pop-up at most once an hour. The setup is tried again at each check (every minute) while it lasts.
 - No account status (the broker did not answer): no new orders, and Scout asks again after 5 minutes.
 
-On IC Markets at 14:47Z on 06-Nov-2026 (equity $2,491.85, margin in use $2,707.70), the budget was −$1,461: Scout would have placed nothing.
+On IC Markets at 14:47Z on 06-Nov-2026 (equity $2,491.85, margin in use $2,707.70, larger-side margin) the limit was $1,245.92: Scout would have placed nothing.
 
 ### 2.6 Controls from the dashboard (v1.8, owner 06-Nov-2026)
 
@@ -248,6 +249,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.31 | 08 Nov 2026 | **Margin by scenario** (§2.5, review F-09, F-24, P-05): `marginFactor` removed; margin by the broker's rule for each stage of a trade, leverage tier from the trade's full size, a stress test before a new trade and every 5 minutes. Tests: 113 (11 new). Not deployed; the live `scout.json` must lose `marginFactor` at deploy |
 | v1.30 | 08 Nov 2026 | **TM health check live** on the demo, 15:35 UTC (owner's OK; build `Scout-8408d9a`). A clean start: TM seen working, no halt, no order placed or cancelled |
 | v1.29 | 08 Nov 2026 | **TM health check** (§2.7, review F-14, P-04): no new entries, and pending orders cancelled, while TM has not finished a cycle for 60 s (`requireTm`). Tests: 102 (5 new). Not deployed |
 | v1.28 | 08 Nov 2026 | **Sizing turned on** (owner, §2.8): 0.5 % of equity per trade on the Pepperstone demo; `lots` and `lotsBySymbol` no longer used while it is on. At today's equity a median stop refuses XAUUSD, XAGUSD, XPTUSD, USTEC and DE40 (broker minimum above the budget) and SOLUSD (stop too near against its Sunday spread). Start-up log states the sizing in force |

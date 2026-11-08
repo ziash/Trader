@@ -63,6 +63,17 @@ internal sealed class TradeState
     public bool Done => Main.Done && (Mirror?.Done ?? true) && (NoMirror || Mirror is not null || !MirrorRequested);
 }
 
+/// <summary>What protects a leg right now, as the broker's own positions and orders show it (tm.md §5.1, review P-05).</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<LegProtection>))]
+internal enum LegProtection
+{
+    NotChecked,
+    StopOnServer,   // a stop-loss on the position, no hedge order waiting
+    HedgePending,   // a hedge order waits: it can still be refused when it triggers, so the risk counted is that of the stop behind it
+    HedgeFilled,    // the loss is frozen by a filled hedge
+    Unprotected,    // nothing on the server
+}
+
 /// <summary>One short or long leg (the main or the mirror) and its hedge.</summary>
 internal sealed class LegState
 {
@@ -103,6 +114,17 @@ internal sealed class LegState
     public bool Raised { get; set; }
 
     public bool Done { get; set; }
+
+    /// <summary>What the broker shows protecting this leg, at the last plan.</summary>
+    public LegProtection Protection { get; set; }
+
+    /// <summary>Loss at the stop-loss on the server, in R (0 = break-even or better; 3 = the backstop); null with no stop-loss.</summary>
+    public double? StopRiskR { get; set; }
+
+    /// <summary>Since when nothing on the server has protected this leg; null while something does.</summary>
+    public DateTime? UnprotectedSinceUtc { get; set; }
+
+    public bool UnprotectedAlerted { get; set; }
 }
 
 /// <summary>All trades of one account, kept in a JSON file.</summary>
