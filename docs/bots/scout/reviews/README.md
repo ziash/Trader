@@ -10,7 +10,7 @@ The brief given to the reviewer: [audit-prompt.md](audit-prompt.md).
 
 ## Implementation status of review v1.0
 
-Phase 1 is built and tested but **not deployed** (Scout v1.25, 08-Nov-2026).
+Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 13:33 UTC (Scout v1.26, build `Scout-667ede8`).
 
 | Finding | Status |
 |---|---|

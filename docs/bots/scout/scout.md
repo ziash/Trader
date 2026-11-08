@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.25 (08-Nov-2026) — history in §8 |
+| Document version | v1.26 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -225,5 +225,6 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.26 | 08 Nov 2026 | **Review Phase 1 live** on the Pepperstone demo, 13:33 UTC (owner's OK; build `Scout-667ede8`, instance `Scout-c1ced9`). The memory file was converted and its 23 roles checked against the broker's history; no order placed or cancelled by the start. Old records cancelled by Scout show as `CancelledExternally`, because the old memory did not record who cancelled. A first new order through the live-price check is still to be watched |
 | v1.25 | 08 Nov 2026 | **Review Phase 1** (owner: implement the audit, [report](reviews/2026-11-08-v1.0-independent-review.md)): order states confirmed by the broker, retries and backoff (§2.3), recovery from the broker's history, checks before sending (no raising to the broker's minimum, stale candles, setup age, live price), expiry counted from the level's candle (Scout spec v1.10), account halt and loss limits (§2.7), `IBrokerGateway` and a fault-injecting fake broker. Tests: 81 (35 new). Not deployed |
 | v1.24 | 08 Nov 2026 | **Independent review v1.0** published ([report](reviews/2026-11-08-v1.0-independent-review.md), reviewed at `0a50a52`), with the audit prompt so it can be run again ([reviews/README.md](reviews/README.md)). Recommendations wait for the owner's approval. No change to the bot |
