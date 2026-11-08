@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1). **Building: §8 step 1 started 08-Nov-2026** — the replay dataset with outcomes in R runs on Rewind (§8.1); first results on 6 symbols; download of the other 12 running. Planned: the §1.2 tags, near-miss rows (§1.1), phase a's laptop loop (§9) |
-| Document version | v1.9 (08-Nov-2026) |
+| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1). **Building: §8 step 1 started 08-Nov-2026** — the replay dataset with outcomes in R runs on Rewind (§8.1); first full run on all 18 symbols done (08-Nov-2026): −0.14R per trade, no asset group clearly positive. Planned: the §1.2 tags, near-miss rows (§1.1), phase a's laptop loop (§9) |
+| Document version | v1.10 (08-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -269,7 +269,7 @@ rewind-lab candles  →  <SYMBOL>-H1/H4/D1.csv  →  Trader.Scout --replay … -
 
 | Piece | Where | What |
 |---|---|---|
-| History | Rewind `rewind-download` | 19 symbols (Scout's 18 + EURGBP for currency conversion), 1-Oct-2024 → yesterday. Six were on disk; the other 13 started downloading 08-Nov-2026 (user service `rewind-download`, log in `~/rewind/logs/`, about 5–11 h) |
+| History | Rewind `rewind-download` | 19 symbols (Scout's 18 + EURGBP for currency conversion), 1-Oct-2024 → yesterday. Downloaded 08-Nov-2026. Dukascopy has no SOLUSD after 22-Aug-2026, so that symbol ends there |
 | Candles | Rewind `rewind-lab candles` | 1H, 4H, daily candles built from the 5-minute history as cTrader draws them (4H / daily from 17:00 New York), in Scout's candle-file format → `~/rewind/lab/candles/` |
 | Orders | Trader `Trader.Scout --replay … --orders` (`ReplayOrders.cs`) | Scout's detector and the 4H tag on those candles; after each candle, Trade mode's rules (scout.md §2.3): each setup role placed once at its level, stop-loss at the far side, expiry 16 candles, cancelled when the setup ends. Settings from `scout.json` → `~/tradebot/lens/orders/<SYMBOL>-H1.orders.csv` |
 | Outcomes | Rewind `rewind-lab outcomes` | The orders on Rewind's simulated broker, 4 price steps per 5-minute candle: fills on the ask / bid, slippage after gaps, trailing stop, one cancels the other, expiry, refusals → `~/rewind/lab/outcomes.csv`, one row per order with `result` and `r`, `best_r`, `worst_r`, `hours_held` |
@@ -278,6 +278,18 @@ rewind-lab candles  →  <SYMBOL>-H1/H4/D1.csv  →  Trader.Scout --replay … -
 **R is that of Scout's own order** (stop-loss + trailing, as placed); TM's mirror, hedges and break-even are not simulated. Dukascopy's prices and spreads are close to, not the same as, Pepperstone's.
 
 **First run (08-Nov-2026), 6 symbols, Oct 2024 → Oct 2026:** 11,460 orders, 6,076 traded: **−0.20R per trade, 29 % won** (EURUSD −0.05R, BTCUSD and ETHUSD −0.13R, AUDJPY −0.24R, GBPJPY −0.32R, EURGBP −0.42R). 96 % of trades end on the trailing stop, whose distance is the whole initial risk: 26 % of trades reach +1R and 9 % +2R at some point, but the median trade lasts 1.6 hours and gives most of it back. With / against the 4H trend: −0.19R / −0.21R. A first result, not yet the baseline of step 2: next, all 18 symbols once the download is done; then the §1.2 tags. Open: whether to also play the orders with TM's management (break-even at 1R), closer to the real account (owner's call).
+
+**Full run (08-Nov-2026), Scout's 18 symbols, Oct 2024 → Nov 2026:** 33,591 orders → 17,431 traded: **−0.14R per trade, −2,500R in total, 31 % won.** Of the 33,591: 12,386 cancelled before a fill (by Scout, or because the other order of the pair filled), 2,207 refused by the simulated broker (1,810 price already past the level or stop-loss when placed, 397 market closed), 878 not placed because the other order of the pair had already filled, 682 expired.
+
+| Group | Trades | R per trade | Won | Reach +1R | Reach +2R |
+|---|---:|---:|---:|---:|---:|
+| Indices (US500, USTEC, DE40) | 2,684 | −0.01 | 37 % | 35 % | 12 % |
+| Metals (XAUUSD, XAGUSD, XPTUSD) | 2,659 | −0.15 | 30 % | 26 % | 9 % |
+| Crypto (BTCUSD, ETHUSD, SOLUSD) | 3,706 | −0.16 | 29 % | 25 % | 8 % |
+| Forex (6 pairs) | 5,814 | −0.17 | 30 % | 29 % | 10 % |
+| Energy (XTIUSD, XBRUSD, XNGUSD) | 2,568 | −0.18 | 29 % | 25 % | 8 % |
+
+By symbol: XAUUSD +0.02, DE40 +0.02, USTEC −0.01, EURUSD −0.04, US500 −0.04, USDJPY −0.06, XBRUSD −0.09, BTCUSD −0.13, XTIUSD −0.13, ETHUSD −0.14, GBPUSD −0.16, XAGUSD −0.20, EURJPY −0.23, SOLUSD −0.23, AUDJPY −0.25, XPTUSD −0.29, GBPJPY −0.33, XNGUSD −0.33 (R per trade). Only DE40 and XAUUSD are above zero in both halves of the period (to / from Nov-2025), and only just. Main orders −0.16R, reversal orders −0.11R. With / against the 4H trend: −0.14R / −0.14R, no difference. Buy −0.15R, sell −0.14R. 98 % of trades end on the trailing stop (median 1.75 hours). First half −0.13R, second half −0.16R. Still only Scout's own order (no TM) and Dukascopy's spreads; not yet the baseline of step 2.
 
 **Starting points** (the choice made)
 
@@ -381,3 +393,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.7 | 07 Nov 2026 | §1.2, §8 step 1 (owner): lower-timeframe confirmation (Scout spec v1.7 §4.8, L1–L2) as replay tags and scorer/reviewer inputs; a 15M Scout also enters on 15M |
 | v1.8 | 07 Nov 2026 | Owner: Scout_Pine closed for development — rule changes go from the Scout spec straight into `Detector.cs` (§1, §1.1); 5M is the lowest chart for the lower-timeframe check |
 | v1.9 | 08 Nov 2026 | **Step 1 started on Rewind** (owner, §8.1): Rewind's `rewind-lab` exports candles and plays Scout's orders out in R; Scout's `--replay … --orders` (scout.md v1.23) writes the orders; `scripts/lens-replay.sh` runs the chain. First run on 6 symbols: −0.20R per trade, 29 % won (Scout's order alone). Download of the other 12 symbols started |
+| v1.10 | 08 Nov 2026 | §8.1: step 1's first full run on Scout's 18 symbols (−0.14R per trade; by group and symbol). Rewind v0.13: all history downloaded, XNGUSD and SOLUSD price factors corrected, SOLUSD ends 22-Aug-2026 |
