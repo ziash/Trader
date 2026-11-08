@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout/scout.md)'s orders (`takeOver`, decision 12); from v1.9 reads the account's margin and acts on it (§5.1, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) |
-| Document version | v1.15 (08-Nov-2026) — history in §13 |
+| Document version | v1.16 (08-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -319,3 +319,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.13 | 08 Nov 2026 | **§5.2 built** (owner's OK): hedges and TM's stops trigger `DoubleOpposite`; spread guard (5× the usual spread, at most 15 min) on the loss limit and warning, closing a hedge whose stop was passed, re-hedging and new mirrors; rollover window from the broker's hours. 12 new tests (TM 69). Not deployed yet |
 | v1.14 | 08 Nov 2026 | **§5.2 live** 07-Nov 19:39 UTC (`TM-03d420`): 34 one-time trigger changes on existing hedge orders and stops, all accepted; live `tm.json` has the new values. First real test: the Sunday reopening and Monday's 22:00 UTC rollover |
 | v1.15 | 08 Nov 2026 | TM reports each finished management cycle through the instance registry, so Scout can stop new entries when TM is not working ([scout.md §2.7](scout/scout.md#27-stopping-new-entries-v125-08-nov-2026)). No change to TM's rules |
+| v1.16 | 08 Nov 2026 | v1.15 live 15:34 UTC (`TM-8408d9a`, owner's OK): 12 remembered trades picked up on both demos, no action taken by the restart |
