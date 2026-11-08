@@ -18,10 +18,16 @@ internal interface IBrokerGateway
 
     /// <summary>The latest bid and ask of a symbol; null before the first price.</summary>
     Quote? LastQuote(long accountId, long symbolId);
+
+    /// <summary>USD for 1 unit of a currency, from the live price of the symbol that converts it; null when there is none yet.</summary>
+    double? UsdPer(long accountId, string currency);
 }
 
+/// <summary>The symbol that prices a currency in USD: multiply by its price, or divide when <paramref name="Invert"/> (JPY through USDJPY).</summary>
+internal sealed record UsdConversion(long SymbolId, bool Invert);
+
 /// <summary>The real broker: one Open API session and the price feed of that connection.</summary>
-internal sealed class SessionGateway(CTraderSession session, PriceFeed feed) : IBrokerGateway
+internal sealed class SessionGateway(CTraderSession session, PriceFeed feed, IReadOnlyDictionary<string, UsdConversion> conversions) : IBrokerGateway
 {
     public Task<ProtoOAReconcileRes> ReconcileAsync(long accountId) => session.ReconcileAsync(accountId);
 
@@ -45,4 +51,13 @@ internal sealed class SessionGateway(CTraderSession session, PriceFeed feed) : I
     public Task<IReadOnlyList<ProtoOADeal>> GetDealsAsync(long accountId, DateTime fromUtc, DateTime toUtc) => session.GetDealsAsync(accountId, fromUtc, toUtc);
 
     public Quote? LastQuote(long accountId, long symbolId) => feed.Last(accountId, symbolId);
+
+    public double? UsdPer(long accountId, string currency)
+    {
+        if (currency.Equals("USD", StringComparison.OrdinalIgnoreCase))
+            return 1;
+        if (!conversions.TryGetValue(currency, out var c) || feed.Last(accountId, c.SymbolId) is not { Mid: > 0 } q)
+            return null;
+        return c.Invert ? 1 / q.Mid : q.Mid;
+    }
 }

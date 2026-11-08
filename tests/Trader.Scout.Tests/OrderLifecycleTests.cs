@@ -327,6 +327,46 @@ public sealed class OrderLifecycleTests : IDisposable
         Assert.Equal(2, Rows("skip").Count(r => r["result"] == "no margin"));
     }
 
+    [Fact]
+    public async Task An_order_without_a_valid_stop_loss_is_not_sent()
+    {
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        (_broker.Bid, _broker.Ask) = (130, 130.1); // the offset puts the far side above a Buy Stop's level
+        Restart(new ScoutConfig([account], Setup: new DetectorSettings { Offset = -20 }));
+        await Run();
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Equal("no valid stop-loss", Assert.Single(Rows("skip"))["result"]);
+    }
+
+    [Fact]
+    public async Task With_sizing_on_the_order_size_comes_from_the_money_at_risk()
+    {
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        Restart(new ScoutConfig([account], Sizing: new SizingSettings(true)));
+        await Run();
+        // $25 budget ÷ 2 legs ÷ ((163 − 154 + 0.1 spread) × 100,000 units) is far below the 0.01 lot minimum: refused, not raised
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Contains("below the broker's minimum", Assert.Single(Rows("skip"), r => r["result"] == "size refused")["detail"]);
+
+        _broker.Equity = 5_000_000;
+        await Cycle();
+        var o = Assert.Single(_broker.Orders);
+        Assert.Equal(100_000, o.TradeData.Volume); // $25,000 ÷ 2 ÷ $910,000 per lot = 0.0137 lot → rounded down to the 0.01-lot step
+        Assert.True(Logged("at the stop, all legs"));
+    }
+
+    [Fact]
+    public async Task With_sizing_on_a_currency_with_no_price_places_nothing()
+    {
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        Restart(new ScoutConfig([account], Sizing: new SizingSettings(true)));
+        _broker.Equity = 5_000_000;
+        _broker.UsdRate = null;
+        await Run();
+        Assert.Equal(0, _broker.PlaceCalls);
+        Assert.Contains("converts", Assert.Single(Rows("skip"))["detail"]);
+    }
+
     // ── Cancelling ──────────────────────────────────────────────────────────────────────────────────────────────────
     private async Task<ProtoOAOrder> Placed()
     {

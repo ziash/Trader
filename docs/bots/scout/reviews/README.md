@@ -21,8 +21,9 @@ Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 
 | F-10 live-price check | Built. Rewind already refuses a passed level. Broker behaviour on such an order not tested separately |
 | F-15 test harness; CI (P-12) | Built. Scout-side tests for TM health wait for its gate (Phase 2). Abnormal spread is covered in TM's tests; a Scout entry guard waits for its experiment (Phase 4) |
 | F-20 old setups | Built |
+| F-01, F-19, F-25 sizing from the money at risk (Phase 2, P-02) | Built, **off** until the owner turns it on (Scout v1.27). Limits across trades, symbols and groups (P-03) still to come |
 | F-13 remote dead-man alarm | **Open:** needs the owner's choice of an off-machine channel |
-| Phases 2–6 | Not started |
+| Rest of Phase 2; Phases 3–6 | Not started |
 
 ## Rules
 

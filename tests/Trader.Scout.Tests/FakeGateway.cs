@@ -171,4 +171,8 @@ internal sealed class FakeGateway(Func<DateTime> clock) : IBrokerGateway
     }
 
     public Quote? LastQuote(long accountId, long symbolId) => HasQuote ? new Quote(accountId, symbolId, Bid, Ask, clock()) : null;
+
+    public double? UsdRate { get; set; } = 1;
+
+    public double? UsdPer(long accountId, string currency) => UsdRate;
 }

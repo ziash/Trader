@@ -8,7 +8,8 @@
 //
 // Options: --config-dir <dir> (default ~/tradebot/config); --dry-run (no orders: logs what it would do);
 // --test-order (places one far-away EURUSD Buy Stop with stop-loss, trailing and expiry on the first account,
-// reads it back, cancels it and exits); --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
+// reads it back, cancels it and exits); --sizes (prints the size the money-at-risk sizing would give on each symbol of the first account, and exits; read-only);
+// --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
 // closed candles to a file and exits; read-only); --replay <file.csv> (runs the detector on such a file and prints
 // its events; no connection; with --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1] it writes the
 // orders Scout would place and cancel instead, for Scout Lens, scout-lens.md §8 step 1); plus the common ones (--help, --test-notification).
@@ -32,6 +33,7 @@ if (Array.IndexOf(args, "--config-dir") is var dirIndex and >= 0)
 }
 var dryRun = args.Contains("--dry-run");
 var testOrder = args.Contains("--test-order");
+var sizes = args.Contains("--sizes");
 var candlesAt = Array.IndexOf(args, "--candles");
 if (candlesAt >= 0 && candlesAt + 4 >= args.Length)
 {
@@ -103,6 +105,11 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         await TestOrderAsync(bot, config.Accounts[0], ct);
         return;
     }
+    if (sizes)
+    {
+        await SizeReport.RunAsync(bot, config, config.Accounts[0], ct);
+        return;
+    }
 
     string Folder(ScoutAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
     string DayFile(ScoutAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
@@ -149,9 +156,10 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
             var symbols = await catalog.GetDetailsAsync(session, a.BrokerSymbolNames);
             foreach (var missing in a.BrokerSymbolNames.Where(n => symbols.All(x => x.Name != n.Key)))
                 log.Event("SymbolMissing").Warning("{Broker}: symbol {Symbol} not found; its charts are skipped", a.Broker, missing.Key);
+            var conversions = SizeReport.Conversions(catalog, symbols);
             if (symbols.Count > 0)
-                await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(x => x.SymbolId));
-            scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, feed, symbols);
+                await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(x => x.SymbolId).Concat(conversions.Values.Select(c => c.SymbolId)).Distinct());
+            scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, feed, symbols, conversions);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
             LogOrderSizes(log, a.Broker, config, symbols);
         }
@@ -179,7 +187,7 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         foreach (var w in writers)
             w.Dispose();
     }
-}, new BotOptions { AccountIds = testOrder || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
+}, new BotOptions { AccountIds = testOrder || sizes || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
 
 // One far-away EURUSD Buy Stop (0.01 lot, 3 % above the price) with stop-loss, trailing switch and a 1-hour expiry:
 // checks that the server accepts and keeps all three (scout.md §5), then cancels it.

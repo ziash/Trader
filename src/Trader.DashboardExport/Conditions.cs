@@ -68,17 +68,7 @@ public static class ConditionsMath
         double? spreadUsd = quote is { } q2 ? (q2.Ask - q2.Bid) * units * usdPerQuote : null;
 
         var rate = f.HasPreciseTradingCommissionRate ? f.PreciseTradingCommissionRate : 0L;
-        double? side = f.CommissionType switch
-        {
-            ProtoOACommissionType.UsdPerMillionUsd => notional * rate / Rate / 1e6,
-            ProtoOACommissionType.UsdPerLot => rate / Rate,
-            ProtoOACommissionType.PercentageOfValue => notional * rate / PercentRate / 100,
-            ProtoOACommissionType.QuoteCcyPerLot => usdPerQuote * rate / Rate,
-            _ => null,
-        };
-        var minSide = (f.HasPreciseMinCommission ? f.PreciseMinCommission : 0L) / Rate
-            * (f.MinCommissionType == ProtoOAMinCommissionType.QuoteCurrency ? usdPerQuote ?? 0 : 1);
-        double? commission = side is { } c ? 2 * Math.Max(c, minSide) : null;
+        var commission = CommissionRule.From(f).RoundTripPerLotUsd(notional, usdPerQuote);
 
         double? Swap(double v) => f.SwapCalculationType switch
         {

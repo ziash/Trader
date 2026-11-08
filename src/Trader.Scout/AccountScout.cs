@@ -68,6 +68,7 @@ internal sealed class AccountScout(
     private readonly string _controlDir = controlDir ?? Path.Combine(TradebotPaths.Root, "control");
     private readonly HashSet<string> _skipLogged = [];                // setup role + reason already logged as a skip
     private readonly HashSet<long> _duplicatesAlerted = [];
+    private readonly Dictionary<string, string> _sizing = [];         // the size worked out for a setup role, for its log line
     private volatile IBrokerGateway? _gateway;
     private bool _recoverDue = true;
     private DateTime _lastRecover = DateTime.MinValue, _cancelRetryDue = DateTime.MaxValue;
@@ -97,10 +98,10 @@ internal sealed class AccountScout(
     private DateTime Now => _utcNow();
 
     /// <summary>After every (re)connect, once the symbols are resolved.</summary>
-    public void SetSession(CTraderSession session, PriceFeed feed, IReadOnlyList<SymbolInfo> symbols)
+    public void SetSession(CTraderSession session, PriceFeed feed, IReadOnlyList<SymbolInfo> symbols, IReadOnlyDictionary<string, UsdConversion> conversions)
     {
         _session = session;
-        UseGateway(new SessionGateway(session, feed), symbols);
+        UseGateway(new SessionGateway(session, feed, conversions), symbols);
     }
 
     internal void UseGateway(IBrokerGateway gateway, IReadOnlyList<SymbolInfo> symbols)
@@ -489,7 +490,7 @@ internal sealed class AccountScout(
                 Persist();
                 continue;
             }
-            if (ReadyToPlace(session, want, now) is not { } volume)
+            if (ReadyToPlace(session, want, status, now) is not { } volume)
                 continue;
             budget ??= await BudgetAsync(session, status, ourOrders.Values, margins);
             if (!await MarginFitsAsync(session, budget, want, volume, margins, now))
@@ -507,7 +508,7 @@ internal sealed class AccountScout(
     /// <summary>One skip row and one log line for this setup role and reason; the role is not remembered, so it is tried again while the setup lasts.</summary>
     private void SkipOnce(DateTime now, Want w, string result, string logEvent, string why, long? volume = null)
     {
-        if (!_skipLogged.Add($"{result}|{why}|{w.Key}"))
+        if (!_skipLogged.Add($"{result}|{w.Key}"))
             return;
         OrderRow(now, w, "skip", 0, StopLoss(w), null, null, result, why, volume);
         _log.Event(logEvent).Information("{Broker} {Symbol} {Tf}: {Side} Stop {Price} not placed: {Why}",
@@ -522,13 +523,12 @@ internal sealed class AccountScout(
     /// up to date, a setup still young enough, and a live price that has not already passed the level.
     /// </summary>
     /// <returns>The volume to send, or null when the order is not sent now.</returns>
-    private long? ReadyToPlace(IBrokerGateway session, Want w, DateTime now)
+    private long? ReadyToPlace(IBrokerGateway session, Want w, AccountStatus? status, DateTime now)
     {
         var s = w.Sym;
-        if (s.VolumeNotAbove(config.LotsFor(s.Name)) is not { } volume)
+        if (StopLoss(w) is null)
         {
-            SkipOnce(now, w, "size below minimum", "ScoutSizeRefused",
-                $"{config.LotsFor(s.Name).ToString("0.###", CultureInfo.InvariantCulture)} lot is below the broker's minimum {Lots(s, s.MinVolume)} lot, which would raise the risk");
+            SkipOnce(now, w, "no valid stop-loss", "ScoutNoStop", "the far side of the pause is not on the losing side of the level");
             return null;
         }
         if (w.Chart.Main.LastCandleUtc is { } last && now >= CandleDue(last, w.Chart.Length, s.Schedule, Offset(w.Chart)) + w.Chart.Length)
@@ -550,13 +550,41 @@ internal sealed class AccountScout(
         if (w.Dir == 1 ? q.Ask >= price : q.Bid <= price)
         {
             var seen = w.Dir == 1 ? $"ask {Num(q.Ask, s)}" : $"bid {Num(q.Bid, s)}";
-            OrderRow(now, w, "place", 0, StopLoss(w), null, null, "refused", $"LEVEL_PASSED: {seen} is already past the level", volume);
+            OrderRow(now, w, "place", 0, StopLoss(w), null, null, "refused", $"LEVEL_PASSED: {seen} is already past the level");
             _log.Event("ScoutLevelPassed").Information("{Broker} {Symbol}: {Side} Stop {Price} not placed: {Seen} is already past it", account.Broker, s.Name, Side(w.Dir), Num(price, s), seen);
             state.Roles[w.Key] = new RoleRecord { FirstSeenUtc = now, State = RoleState.Refused, Result = "refused: level passed" };
             Persist();
             return null;
         }
-        return volume;
+        return VolumeFor(session, w, q, status, now);
+    }
+
+    /// <summary>The order's size: fixed lots, or from the money at risk when sizing is on (scout.md §2.8). Never raised to the broker's minimum.</summary>
+    private long? VolumeFor(IBrokerGateway session, Want w, Quote q, AccountStatus? status, DateTime now)
+    {
+        var s = w.Sym;
+        var sizing = config.SizingInForce;
+        if (!sizing.Enabled)
+        {
+            if (s.VolumeNotAbove(config.LotsFor(s.Name)) is { } fixedVolume)
+                return fixedVolume;
+            SkipOnce(now, w, "size below minimum", "ScoutSizeRefused",
+                $"{config.LotsFor(s.Name).ToString("0.###", CultureInfo.InvariantCulture)} lot is below the broker's minimum {Lots(s, s.MinVolume)} lot, which would raise the risk");
+            return null;
+        }
+        if (status is null)
+        {
+            SkipOnce(now, w, "no account status", "ScoutSizeRefused", "the size needs the account's equity");
+            return null;
+        }
+        var d = PositionSizer.Decide(s, sizing, status.Equity, Math.Round(w.Level, s.Digits), StopLoss(w), q.Spread, session.UsdPer(account.AccountId, s.QuoteAsset));
+        if (d.Volume is { } volume)
+        {
+            _sizing[w.Key] = $"{Lots(s, volume)} lot, ${d.RiskCash.ToString("0.00", CultureInfo.InvariantCulture)} at the stop, all legs";
+            return volume;
+        }
+        SkipOnce(now, w, "size refused", "ScoutSizeRefused", d.Refusal!);
+        return null;
     }
 
     // ── Broker state decides (review P-01): what the reconcile and the broker's history say about each role ─────────────
@@ -934,6 +962,8 @@ internal sealed class AccountScout(
             record.Chart = DrawChart(w.Chart, Picture(w, order.OrderId, price, sl, now, expires));
             OrderRow(now, w, "place", order.OrderId, sl, expires, null, "ok", label, volume, record.Chart);
             Persist();
+            if (_sizing.Remove(w.Key, out var sized))
+                _log.Event("ScoutSizing").Information("{Broker} {Symbol}: {Sizing}", account.Broker, s.Name, sized);
             _log.Event("ScoutOrder").Information("{Broker} {Symbol} {Tf}: placed {Side} Stop {Price} SL {Sl} {Lots} lot, expires {Expires:HH:mm}Z, order {OrderId} ({Label})",
                 account.Broker, s.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), Lots(s, volume), expires, order.OrderId, label);
             notify.Info("OrderPlaced", $"Scout: {s.Name} {w.Chart.Chart.Timeframe} {Side(w.Dir)} Stop {Num(price, s)}",

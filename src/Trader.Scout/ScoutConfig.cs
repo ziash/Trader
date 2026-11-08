@@ -19,7 +19,8 @@ public sealed record ScoutConfig(
     IReadOnlyDictionary<string, double>? LotsBySymbol = null, // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
     double MarginUsePercent = 50,   // Scout places an order only while the margin in use, with its own orders filled, stays within this % of equity (scout.md §2.5)
     double MarginFactor = 4,        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
-    RiskLimits? Limits = null)      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
+    RiskLimits? Limits = null,      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
+    SizingSettings? Sizing = null)  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -31,6 +32,8 @@ public sealed record ScoutConfig(
     public DetectorSettings SetupSettings => Setup ?? new DetectorSettings();
 
     public RiskLimits RiskLimitsInForce => Limits ?? new RiskLimits();
+
+    public SizingSettings SizingInForce => Sizing ?? new SizingSettings();
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -88,6 +91,8 @@ public sealed record ScoutConfig(
             throw new ScoutConfigException($"{FileName}: \"marginUsePercent\" above 0 and at most 100, \"marginFactor\" at least 1");
         if (RiskLimitsInForce is { DailyLossPercent: <= 0 or > 100 } or { WeeklyLossPercent: <= 0 or > 100 } or { PeakDrawdownPercent: <= 0 or > 100 })
             throw new ScoutConfigException($"{FileName}: \"limits\" percentages must be above 0 and at most 100");
+        if (SizingInForce is { RiskPercent: <= 0 or > 5 } or { Legs: < 1 or > 2 } or { SlippageSpreads: < 0 } or { MinStopSpreads: < 0 } or { LimitR: < 1 } or { MaxLossPercent: <= 0 or > 100 })
+            throw new ScoutConfigException($"{FileName}: \"sizing\": riskPercent above 0 and at most 5, legs 1 or 2, slippageSpreads and minStopSpreads not negative, limitR at least 1, maxLossPercent above 0 and at most 100");
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

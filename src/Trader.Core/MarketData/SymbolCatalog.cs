@@ -21,7 +21,9 @@ public sealed record SymbolInfo(
     ProtoOATradingMode TradingMode,
     TradingSchedule Schedule,
     long MinVolume = 1,
-    long StepVolume = 1)
+    long StepVolume = 1,
+    long MaxVolume = long.MaxValue,
+    CommissionRule? Commission = null)
 {
     /// <summary>1 pip as a price: 0.0001 for EURUSD, 0.01 for JPY pairs; for crypto the broker decides.</summary>
     public double PipSize => Math.Pow(10, -PipPosition);
@@ -63,6 +65,32 @@ public sealed record SymbolInfo(
 
     /// <summary>Open API prices are integers in units of 0.00001, whatever the symbol's digits.</summary>
     public static double PriceFromRaw(ulong raw) => raw / 100_000.0;
+}
+
+/// <summary>How a broker charges commission on a symbol (ProtoOASymbol): the rates as the API sends them.</summary>
+public sealed record CommissionRule(ProtoOACommissionType Type, long Rate, long Minimum, ProtoOAMinCommissionType MinimumType)
+{
+    private const double RateScale = 1e8, PercentScale = 1e5; // rates are integers × 10^8; a percentage of the value × 10^5
+
+    public static CommissionRule From(ProtoOASymbol f) => new(f.CommissionType,
+        f.HasPreciseTradingCommissionRate ? f.PreciseTradingCommissionRate : 0L, f.HasPreciseMinCommission ? f.PreciseMinCommission : 0L, f.MinCommissionType);
+
+    /// <summary>Commission of 1 lot, opened and closed, in USD; null when the broker's type is unknown or a needed price is missing.</summary>
+    /// <param name="notionalUsd">USD value of 1 lot.</param>
+    /// <param name="usdPerQuote">USD for 1 unit of the quote currency.</param>
+    public double? RoundTripPerLotUsd(double? notionalUsd, double? usdPerQuote)
+    {
+        double? side = Type switch
+        {
+            ProtoOACommissionType.UsdPerMillionUsd => notionalUsd * Rate / RateScale / 1e6,
+            ProtoOACommissionType.UsdPerLot => Rate / RateScale,
+            ProtoOACommissionType.PercentageOfValue => notionalUsd * Rate / PercentScale / 100,
+            ProtoOACommissionType.QuoteCcyPerLot => usdPerQuote * Rate / RateScale,
+            _ => null,
+        };
+        var minSide = Minimum / RateScale * (MinimumType == ProtoOAMinCommissionType.QuoteCurrency ? usdPerQuote ?? 0 : 1);
+        return side is { } c ? 2 * Math.Max(c, minSide) : null;
+    }
 }
 
 /// <summary>A currency conversion: price of <see cref="Symbol"/> converts by multiplying, or dividing when <see cref="Invert"/>.</summary>
@@ -142,7 +170,7 @@ public sealed class SymbolCatalog
                 var l = x.Light!;
                 var f = full[l.SymbolId];
                 return new SymbolInfo(l.SymbolId, x.Name, l.SymbolName, AssetName(l.BaseAssetId), AssetName(l.QuoteAssetId),
-                    f.Digits, f.PipPosition, f.LotSize / 100, l.Enabled, f.TradingMode, TradingSchedule.From(f), f.MinVolume, f.StepVolume);
+                    f.Digits, f.PipPosition, f.LotSize / 100, l.Enabled, f.TradingMode, TradingSchedule.From(f), f.MinVolume, f.StepVolume, f.MaxVolume, CommissionRule.From(f));
             })
             .ToList();
     }

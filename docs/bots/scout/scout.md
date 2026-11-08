@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.26 (08-Nov-2026) — history in §8 |
+| Document version | v1.27 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -117,6 +117,25 @@ touch ~/tradebot/control/scout-reset-brokerB-49124666    # end a loss halt; the 
 
 Pop-ups: `ScoutHalted` (Critical), `ScoutResumed` (Warning). A dashboard switch is a later step (review P-10).
 
+### 2.8 Sizing from the money at risk (v1.27, built, **off**)
+
+From the independent review (F-01, F-19, F-25, P-02). With `"sizing": { "enabled": true }` in `scout.json`, each order's size comes from its stop distance and the account, replacing the fixed lots of `lots` and `lotsBySymbol`:
+
+**volume = equity × `riskPercent` ÷ (`legs` × the loss of one lot at the stop)**, rounded down to the broker's step. The loss of one lot counts the stop distance in USD (through the symbol that converts its quote currency), `slippageSpreads` spreads, and the broker's commission opened and closed.
+
+| Setting | Default | Means |
+|---|---|---|
+| `riskPercent` | 0.5 | Cash risk of the whole trade, all legs, in % of equity |
+| `legs` | 2 | Scout's order and TM's mirror |
+| `slippageSpreads` | 1 | Allowance for spread and slippage |
+| `minStopSpreads` | 2 | A nearer stop is refused |
+| `limitR` | 3 | TM's loss limit (`closeR` in `tm.json`) |
+| `maxLossPercent` | 2 | Refused if the whole trade at `limitR` would lose more than this |
+
+Refused, with a `skip` row (*size refused*) and tried again while the setup lasts: a size below the broker's minimum, no conversion price, no account status, a stop too near, or the cap above. The size is never raised. The margin budget (§2.5) still applies afterwards. Values are starting points to calibrate on replay. In either mode an order with no valid stop-loss is not sent (*no valid stop-loss*).
+
+Preview, read-only, without turning it on: `dotnet ~/tradebot/bin/Scout/Trader.Scout.dll --sizes`.
+
 ## 3. Logs and outputs
 
 `~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/`:
@@ -166,6 +185,7 @@ By hand (stop the service first, so only one Scout acts): `dotnet run --project 
 |---|---|
 | `--dry-run` | Runs normally but places and cancels nothing |
 | `--test-order` | One far-away EURUSD Buy Stop (0.01 lot, stop-loss, trailing, 1-hour expiry) on the first account, read back, cancelled. Run with TM stopped (TM would mirror it) |
+| `--sizes` | Prints, read-only, the size §2.8 would give on each symbol of the first account beside today's fixed lots, for a tight, median and wide stop |
 | `--candles <SYMBOL> <TF> <from> <file.csv>` | Writes the first account's closed candles to a file (read-only); used for the tests and the review |
 | `--replay <file.csv>` | Runs the detector on such a file and prints its events (no connection) |
 | `--replay <h1.csv> --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1]` | Writes the orders Trade mode would place and cancel on those candles (§2.3 rules, setup settings and expiry from `scout.json`; no margin budget or controls), for Scout Lens ([scout-lens.md](scout-lens.md) §8 step 1); `scripts/lens-replay.sh` runs it on Rewind's history and has Rewind play the orders out in R |
@@ -225,6 +245,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.27 | 08 Nov 2026 | **PositionSizer built, off** (§2.8, review P-02, owner): size from the money at risk, never raised to the broker's minimum; `--sizes` preview; an order with no valid stop-loss is not sent. Commission rule moved to Trader.Core and shared with the dashboard export. Tests: 97 (16 new). Not deployed |
 | v1.26 | 08 Nov 2026 | **Review Phase 1 live** on the Pepperstone demo, 13:33 UTC (owner's OK; build `Scout-667ede8`, instance `Scout-c1ced9`). The memory file was converted and its 23 roles checked against the broker's history; no order placed or cancelled by the start. Old records cancelled by Scout show as `CancelledExternally`, because the old memory did not record who cancelled. A first new order through the live-price check is still to be watched |
 | v1.25 | 08 Nov 2026 | **Review Phase 1** (owner: implement the audit, [report](reviews/2026-11-08-v1.0-independent-review.md)): order states confirmed by the broker, retries and backoff (§2.3), recovery from the broker's history, checks before sending (no raising to the broker's minimum, stale candles, setup age, live price), expiry counted from the level's candle (Scout spec v1.10), account halt and loss limits (§2.7), `IBrokerGateway` and a fault-injecting fake broker. Tests: 81 (35 new). Not deployed |
 | v1.24 | 08 Nov 2026 | **Independent review v1.0** published ([report](reviews/2026-11-08-v1.0-independent-review.md), reviewed at `0a50a52`), with the audit prompt so it can be run again ([reviews/README.md](reviews/README.md)). Recommendations wait for the owner's approval. No change to the bot |
