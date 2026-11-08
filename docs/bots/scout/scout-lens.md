@@ -1,11 +1,11 @@
 # Scout Lens — an AI layer for Scout
 
-**A layer after Scout's detector that decides, for each setup the rules find, whether to take it, skip it or trade it smaller.** Five ways to build it, each with its pros and cons and two example charts. **Decided (owner, 07-Nov-2026): options 1 and 3 together (choice A, §8); option 3 in two phases — tuning on the laptop, then API calls from Scout (§4.1).** Nothing is built yet. Part of [Scout](scout.md).
+**A layer after Scout's detector that decides, for each setup the rules find, whether to take it, skip it or trade it smaller.** Five ways to build it, each with its pros and cons and two example charts. **Decided (owner, 07-Nov-2026): options 1 and 3 together (choice A, §8); option 3 in two phases — tuning on the laptop, then API calls from Scout (§4.1).** Step 1 (the dataset) is being built (§8.1). Part of [Scout](scout.md).
 
 | Item | Value |
 |---|---|
-| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1); phase a's laptop loop planned (§9); setups the detector misses: missed-setup check and near-miss rows planned (§1.1); **daily first** — monthly and daily pictures for Claude (§1.2); waiting for the owner's OK to build |
-| Document version | v1.8 (07-Nov-2026) |
+| Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1). **Building: §8 step 1 started 08-Nov-2026** — the replay dataset with outcomes in R runs on Rewind (§8.1); first results on 6 symbols; download of the other 12 running. Planned: the §1.2 tags, near-miss rows (§1.1), phase a's laptop loop (§9) |
+| Document version | v1.9 (08-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -259,6 +259,26 @@ The network replaces the detector instead of helping it. It needs huge amounts o
 
 Two warnings. **Filtering changes the strategy:** the owner takes every pause on purpose and accepts the losers, so a filter that cuts losers will also cut some big staircase winners. **Every input must be known when the candle closes:** the 4H trend tag and the pause edges are where future data most often slips in.
 
+### 8.1 Step 1 on Rewind (owner, 08-Nov-2026)
+
+The owner chose to build the dataset on **Rewind** (`~/code/Rewind`, [github.com/ziash/Rewind](https://github.com/ziash/Rewind)), the bar-replay simulator already built for TM: it has two years of Dukascopy 1-minute and 5-minute history with bid and ask, and a simulated broker with stop orders, stop-losses, trailing stops and gaps (Rewind spec §4, §7). The projects only exchange CSV files (Rewind spec §7.1):
+
+```
+rewind-lab candles  →  <SYMBOL>-H1/H4/D1.csv  →  Trader.Scout --replay … --orders  →  orders.csv  →  rewind-lab outcomes  →  outcomes.csv
+```
+
+| Piece | Where | What |
+|---|---|---|
+| History | Rewind `rewind-download` | 19 symbols (Scout's 18 + EURGBP for currency conversion), 1-Oct-2024 → yesterday. Six were on disk; the other 13 started downloading 08-Nov-2026 (user service `rewind-download`, log in `~/rewind/logs/`, about 5–11 h) |
+| Candles | Rewind `rewind-lab candles` | 1H, 4H, daily candles built from the 5-minute history as cTrader draws them (4H / daily from 17:00 New York), in Scout's candle-file format → `~/rewind/lab/candles/` |
+| Orders | Trader `Trader.Scout --replay … --orders` (`ReplayOrders.cs`) | Scout's detector and the 4H tag on those candles; after each candle, Trade mode's rules (scout.md §2.3): each setup role placed once at its level, stop-loss at the far side, expiry 16 candles, cancelled when the setup ends. Settings from `scout.json` → `~/tradebot/lens/orders/<SYMBOL>-H1.orders.csv` |
+| Outcomes | Rewind `rewind-lab outcomes` | The orders on Rewind's simulated broker, 4 price steps per 5-minute candle: fills on the ask / bid, slippage after gaps, trailing stop, one cancels the other, expiry, refusals → `~/rewind/lab/outcomes.csv`, one row per order with `result` and `r`, `best_r`, `worst_r`, `hours_held` |
+| Run | Trader `scripts/lens-replay.sh [SYMBOLS]` | The three steps in a row (a few seconds per symbol) |
+
+**R is that of Scout's own order** (stop-loss + trailing, as placed); TM's mirror, hedges and break-even are not simulated. Dukascopy's prices and spreads are close to, not the same as, Pepperstone's.
+
+**First run (08-Nov-2026), 6 symbols, Oct 2024 → Oct 2026:** 11,460 orders, 6,076 traded: **−0.20R per trade, 29 % won** (EURUSD −0.05R, BTCUSD and ETHUSD −0.13R, AUDJPY −0.24R, GBPJPY −0.32R, EURGBP −0.42R). 96 % of trades end on the trailing stop, whose distance is the whole initial risk: 26 % of trades reach +1R and 9 % +2R at some point, but the median trade lasts 1.6 hours and gives most of it back. With / against the 4H trend: −0.19R / −0.21R. A first result, not yet the baseline of step 2: next, all 18 symbols once the download is done; then the §1.2 tags. Open: whether to also play the orders with TM's management (break-even at 1R), closer to the real account (owner's call).
+
 **Starting points** (the choice made)
 
 | Choice | What happens first |
@@ -360,3 +380,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.6 | 07 Nov 2026 | §1.2 (owner): Claude's pictures give direction and key levels only; **entries come from the pauses on the entry ladder** (daily down to the set chart, Scout spec v1.6 §4.7); 0.382–0.5 retracement = half size |
 | v1.7 | 07 Nov 2026 | §1.2, §8 step 1 (owner): lower-timeframe confirmation (Scout spec v1.7 §4.8, L1–L2) as replay tags and scorer/reviewer inputs; a 15M Scout also enters on 15M |
 | v1.8 | 07 Nov 2026 | Owner: Scout_Pine closed for development — rule changes go from the Scout spec straight into `Detector.cs` (§1, §1.1); 5M is the lowest chart for the lower-timeframe check |
+| v1.9 | 08 Nov 2026 | **Step 1 started on Rewind** (owner, §8.1): Rewind's `rewind-lab` exports candles and plays Scout's orders out in R; Scout's `--replay … --orders` (scout.md v1.23) writes the orders; `scripts/lens-replay.sh` runs the chain. First run on 6 symbols: −0.20R per trade, 29 % won (Scout's order alone). Download of the other 12 symbols started |

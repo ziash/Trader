@@ -10,7 +10,8 @@
 // --test-order (places one far-away EURUSD Buy Stop with stop-loss, trailing and expiry on the first account,
 // reads it back, cancels it and exits); --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
 // closed candles to a file and exits; read-only); --replay <file.csv> (runs the detector on such a file and prints
-// its events; no connection); plus the common ones (--help, --test-notification).
+// its events; no connection; with --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1] it writes the
+// orders Scout would place and cancel instead, for Scout Lens, scout-lens.md §8 step 1); plus the common ones (--help, --test-notification).
 
 using Trader.Core.Csv;
 using Trader.Core.Hosting;
@@ -44,6 +45,32 @@ if (Array.IndexOf(args, "--replay") is var replayAt and >= 0)
     {
         Console.Error.WriteLine("--replay needs <file.csv>");
         return BotRunner.ExitUsage;
+    }
+    string? Arg(string name) => Array.IndexOf(args, name) is var at and >= 0 && at + 1 < args.Length ? args[at + 1] : null;
+    if (Arg("--orders") is { } ordersPath)
+    {
+        // Orders Scout would place on past candles, for Scout Lens (scout-lens.md §8 step 1): the setup settings and the
+        // expiry come from scout.json when it is there (else Scout_Pine's defaults); the outcome is played out by Rewind.
+        if (Arg("--symbol") is not { } symbol)
+        {
+            Console.Error.WriteLine("--replay … --orders needs --symbol <SYMBOL> (and optionally --higher <file.csv>, --timeframe H1)");
+            return BotRunner.ExitUsage;
+        }
+        var tf = Arg("--timeframe") ?? "H1";
+        var settings = new DetectorSettings();
+        var expiry = 16;
+        var configPath = Path.Combine(configDir, ScoutConfig.FileName);
+        if (File.Exists(configPath))
+        {
+            var cfg = ScoutConfig.Load(configPath);
+            (settings, expiry) = (cfg.SetupSettings, cfg.ExpiryCandles);
+        }
+        var higher = Arg("--higher") is { } hp ? CandleFile.Read(hp) : [];
+        var orders = ReplayOrders.Run(symbol, tf, CandleFile.Read(args[replayAt + 1]), higher, settings, expiry);
+        ReplayOrders.Write(ordersPath, symbol, tf, orders);
+        Console.WriteLine($"{symbol} {tf}: {orders.Count(o => o.Action == "place")} orders placed, {orders.Count(o => o.Action == "cancel")} cancelled → {ordersPath}" +
+            $" (settings from {(File.Exists(configPath) ? configPath : "defaults")}, expiry {expiry} candles)");
+        return BotRunner.ExitOk;
     }
     var detector = new Detector();
     foreach (var c in CandleFile.Read(args[replayAt + 1]))
