@@ -21,6 +21,20 @@ public sealed class ScoutTests
         Assert.Equal((0.1, 0.01, 20.0, 0.01, 0.06), (c.LotsFor("EURUSD"), c.LotsFor("XAUUSD"), c.LotsFor("SOLUSD"), c.LotsFor("XAGUSD"), c.LotsFor("XNGUSD")));
     }
 
+    /// <summary>These have defaults, so losing one from the file would change trading without any error.</summary>
+    [Fact]
+    public void Repo_config_states_the_risk_settings_in_force()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(dir, "Trader.sln")))
+            dir = Path.GetDirectoryName(dir)!;
+        var c = ScoutConfig.Load(Path.Combine(dir, "config", ScoutConfig.FileName));
+        Assert.True(c.Sizing is { Enabled: true, RiskPercent: 0.5 });
+        Assert.Equal(new RiskLimits(3, 6, 15), c.Limits);
+        Assert.NotNull(c.Stress);
+        Assert.True(c.RequireTm);
+    }
+
     [Fact]
     public void Sizes_per_symbol_must_be_positive_and_on_a_chart()
     {
