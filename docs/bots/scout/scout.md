@@ -2,12 +2,12 @@
 
 **Watches the owner's charts for the "pause, then stop order" setup and places the first stop order of each one; TM manages everything after.** The setup rules, modes and decisions are in Scout's own spec ([github.com/ziash/Scout](https://github.com/ziash/Scout), `docs/spec.md` — the source of truth for *what* Scout looks for); this document covers how the bot runs here. A project of its own; it uses the [Open Code Pieces](../../open-code-pieces.md).
 
-**Related:** [Scout Lens](scout-lens.md) (AI layer) · [TM](../tm.md) (manages Scout's orders) · [Dashboard](../../dashboard/dashboard.md) (Scout page and controls) · [issue log](../../issue-log.md) · [all projects](../../../README.md#projects)
+**Related:** [Scout Lens](scout-lens.md) (AI layer) · [TM](../tm.md) (manages Scout's orders) · [Dashboard](../../dashboard/dashboard.md) (Scout page and controls) · [issue log](../../issue-log.md) · [independent review v1.0](reviews/2026-11-08-v1.0-independent-review.md) (08-Nov-2026) · [all projects](../../../README.md#projects)
 
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.23 (08-Nov-2026) — history in §8 |
+| Document version | v1.24 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -187,3 +187,4 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.24 | 08 Nov 2026 | **Independent review v1.0** published ([report](reviews/2026-11-08-v1.0-independent-review.md), reviewed at `0a50a52`), with the audit prompt so it can be run again ([reviews/README.md](reviews/README.md)). Recommendations wait for the owner's approval. No change to the bot |

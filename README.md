@@ -13,7 +13,7 @@ Trading bots for **cTrader** (C# / .NET 10, Ubuntu laptop). The owner reads the 
 
 | Bot | What it does | Status (07-Nov-2026) | Documents | Code |
 |---|---|---|---|---|
-| **Scout** | Watches the owner's charts for the "pause, then stop order" setup and places the first stop order; TM manages it after | Trial on demo since 03-Nov-2026 (`trader-scout`): Pepperstone from 07-Nov (IC Markets 04–07 Nov), 18 symbols, 1H | [**scout.md**](docs/bots/scout/scout.md) — the bot<br>[**Scout Lens**](docs/bots/scout/scout-lens.md) — AI layer: options 1 + 3 chosen (scorer + Claude reviewer), planning<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — in the Scout repository | [`src/Trader.Scout`](src/Trader.Scout) |
+| **Scout** | Watches the owner's charts for the "pause, then stop order" setup and places the first stop order; TM manages it after | Trial on demo since 03-Nov-2026 (`trader-scout`): Pepperstone from 07-Nov (IC Markets 04–07 Nov), 18 symbols, 1H | [**scout.md**](docs/bots/scout/scout.md) — the bot<br>[**Scout Lens**](docs/bots/scout/scout-lens.md) — AI layer: options 1 + 3 chosen (scorer + Claude reviewer), planning<br>[**Independent review v1.0**](docs/bots/scout/reviews/2026-11-08-v1.0-independent-review.md) — 08-Nov-2026 ([all reviews](docs/bots/scout/reviews/README.md))<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — in the Scout repository | [`src/Trader.Scout`](src/Trader.Scout) |
 | **TM** (Trade Manually) | You open positions in cTrader; TM mirrors and hedges them, protects each leg and manages the hedges | Built; runs on demo as a service (`trader-tm`); also manages Scout's orders | [**tm.md**](docs/bots/tm.md) | [`src/Trader.TM`](src/Trader.TM) |
 | **Audit Bot** | Compared two brokers' spreads, slippage, fill speed and reliability with tiny probe orders; daily report | **Finished.** Audit run 18-Oct → 04-Nov-2026, bot stopped and disabled. Result: IC Markets chosen | [**audit-bot.md**](docs/bots/audit-bot.md) | [`src/Trader.AuditBot`](src/Trader.AuditBot), [`src/Trader.AuditReport`](src/Trader.AuditReport) |
 | **Auto Bot** | Semi-automated trend trading: TradingView decisions, hedge-and-recover, 4 legs, pyramiding | Concept; many questions open; nothing built | [**auto-bot.md**](docs/bots/auto-bot.md) | — |
@@ -30,6 +30,7 @@ Trading bots for **cTrader** (C# / .NET 10, Ubuntu laptop). The owner reads the 
 | Proposal | For | Document |
 |---|---|---|
 | **Scout Lens** — an AI layer that takes, skips or shrinks the setups Scout's rules find | Scout | [scout-lens.md](docs/bots/scout/scout-lens.md) |
+| **Scout independent review v1.0** (08-Nov-2026) — findings, roadmap and issue backlog, each change waiting for the owner's approval | Scout, TM | [Report](docs/bots/scout/reviews/2026-11-08-v1.0-independent-review.md) · [all reviews](docs/bots/scout/reviews/README.md) |
 
 ## Shared reference
 

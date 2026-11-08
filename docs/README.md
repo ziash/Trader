@@ -6,7 +6,7 @@ Every document in this repository, by project. The [README](../README.md) on the
 
 | Bot | Documents |
 |---|---|
-| **Scout** — [`bots/scout/`](bots/scout/README.md) | [scout.md](bots/scout/scout.md) — the bot: rules, logs, run and operate, decisions, history<br>[scout-lens.md](bots/scout/scout-lens.md) — **Scout Lens**, the AI layer: 5 options, options 1 + 3 chosen, plan for the Claude reviewer (10 example charts in [`images/`](bots/scout/images))<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — what Scout looks for, in the Scout repository |
+| **Scout** — [`bots/scout/`](bots/scout/README.md) | [scout.md](bots/scout/scout.md) — the bot: rules, logs, run and operate, decisions, history<br>[scout-lens.md](bots/scout/scout-lens.md) — **Scout Lens**, the AI layer: 5 options, options 1 + 3 chosen, plan for the Claude reviewer (10 example charts in [`images/`](bots/scout/images))<br>[Setup rules](https://github.com/ziash/Scout/blob/main/docs/spec.md) — what Scout looks for, in the Scout repository<br>[Independent review v1.0](bots/scout/reviews/2026-11-08-v1.0-independent-review.md) — 08-Nov-2026; [all reviews and how to re-run](bots/scout/reviews/README.md) |
 | **TM** (Trade Manually) | [tm.md](bots/tm.md) |
 | **Audit Bot** | [audit-bot.md](bots/audit-bot.md) |
 | **Auto Bot** | [auto-bot.md](bots/auto-bot.md) |
