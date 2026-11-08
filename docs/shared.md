@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.13 (07-Nov-2026) — history in §10 |
+| Document version | v1.14 (08-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -66,7 +66,7 @@ Runtime data lives outside the repo:
     news-releases.json                                            Audit Bot, TM (US NFP/CPI dates)
     notifications.json                                            all bots (Open Code Pieces §7)
     scout-controls.json                                           Dashboard: options the web may set for Scout (dashboard.md §3.4)
-  control/                         Dashboard → Scout: <bot>-<broker>-<ctid>.json (your options, fetched every minute), .ack.json (Scout's reply)
+  control/                         Dashboard → Scout: <bot>-<broker>-<ctid>.json (your options, fetched every minute), .ack.json (Scout's reply); scout-halt, scout-reset-… (the owner's stop and reset, scout.md §2.7)
   dashboard/                       Dashboard: outbox/ (the next upload: allowlisted copies + status.json, sent every 30 min), push.lock (dashboard.md §3.1)
   run/instances/                   instance registry: <broker>-<ctid>-<instanceId>.json, <Bot>-<ctid>.primary.lock
   run/tm/<broker>-<ctid>.json      TM's remembered trades
@@ -207,3 +207,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.11 | 06 Nov 2026 | New [issue log](issue-log.md) (#1: IC Markets demo margin call); §4 protection rule: a hedge order alone is not enough (backstop), and a margin rule for bots that add exposure ([TM](bots/tm.md) v1.9, [Scout](bots/scout/scout.md) v1.7, [Open Code Pieces](open-code-pieces.md) v1.9); glossary: equity, margin, margin level (merged), backstop |
 | v1.12 | 06 Nov 2026 | §8: live broker chosen — IC Markets (owner, Audit Bot v1.7), the regulation note weighed in |
 | v1.13 | 07 Nov 2026 | Documents reorganised (owner): Scout's documents moved to `docs/bots/scout/` and the Dashboard's to `docs/dashboard/`; the projects table now kept only on the front page README (§1 points to it); new [documents map](README.md); §6 updated |
+| v1.14 | 08 Nov 2026 | §5: Scout's stop and reset files in `control/` ([scout.md §2.7](bots/scout/scout.md#27-stopping-new-entries-v125-08-nov-2026)) |

@@ -43,6 +43,8 @@ public sealed class DetectorTests
         Assert.Equal(T0.AddHours(19), stop.PauseStartUtc);
         Assert.Equal(1, d.Trend);
         Assert.Equal(163, d.MainLevel);
+        Assert.Equal(T0.AddHours(20), d.MainSinceUtc); // the 2nd pause candle gave the level
+        Assert.Null(d.ReversalSinceUtc);
     }
 
     [Fact]

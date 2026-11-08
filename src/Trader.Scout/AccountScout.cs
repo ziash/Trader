@@ -29,7 +29,9 @@ internal sealed class AccountScout(
     DailyCsvWriter setupsCsv,
     DailyCsvWriter ordersCsv,
     string logFolder,
-    bool dryRun)
+    bool dryRun,
+    Func<DateTime>? utcNow = null,
+    string? controlDir = null)
 {
     public static readonly string[] SetupsHeader =
     [
@@ -57,7 +59,19 @@ internal sealed class AccountScout(
     private readonly Dictionary<ChartTracker, int> _misses = [];      // fetches in a row that found a due candle missing
     private readonly ConcurrentQueue<ProtoOAExecutionEvent> _executions = new();
     private readonly Dictionary<string, string> _endReason = [];   // key → why its setup ended (from the last Cancelled event)
-    private readonly HashSet<long> _cancelling = [];
+    private static readonly TimeSpan UnknownGrace = TimeSpan.FromSeconds(30);       // a send without a reply is judged only after this, and two reconciles
+    private const int MaxSendAttempts = 2;
+    private static readonly TimeSpan[] CancelBackoff = [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(60), TimeSpan.FromMinutes(5)];
+    private static readonly TimeSpan QuoteMaxAge = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan RecoverEvery = TimeSpan.FromMinutes(5), RecoverInDoubtEvery = TimeSpan.FromSeconds(30), RecoverWindow = TimeSpan.FromDays(14);
+    private readonly Func<DateTime> _utcNow = utcNow ?? (() => DateTime.UtcNow);
+    private readonly string _controlDir = controlDir ?? Path.Combine(TradebotPaths.Root, "control");
+    private readonly HashSet<string> _skipLogged = [];                // setup role + reason already logged as a skip
+    private readonly HashSet<long> _duplicatesAlerted = [];
+    private volatile IBrokerGateway? _gateway;
+    private bool _recoverDue = true;
+    private DateTime _lastRecover = DateTime.MinValue, _cancelRetryDue = DateTime.MaxValue;
+    private string? _haltAnnounced;
     private readonly HashSet<string> _marginSkipped = [];             // setups logged as waiting for margin (logged once each)
     private DateTime _marginAlerted = DateTime.MinValue, _statusFailed = DateTime.MinValue;
     private readonly SemaphoreSlim _wake = new(0);
@@ -75,17 +89,26 @@ internal sealed class AccountScout(
     private (DateTime File, DateTime Catalogue)? _controlStamps;
     private bool _ackDue;
     private readonly HashSet<string> _heldLogged = [];
-    private string ControlPath => Path.Combine(TradebotPaths.Root, "control", $"scout-{account.Broker}-{account.AccountId}.json");
+    private string ControlPath => Path.Combine(_controlDir, $"scout-{account.Broker}-{account.AccountId}.json");
     private string AckPath => Path.ChangeExtension(ControlPath, ".ack.json");
 
     public long AccountId => account.AccountId;
 
+    private DateTime Now => _utcNow();
+
     /// <summary>After every (re)connect, once the symbols are resolved.</summary>
-    public void SetSession(CTraderSession session, IReadOnlyList<SymbolInfo> symbols)
+    public void SetSession(CTraderSession session, PriceFeed feed, IReadOnlyList<SymbolInfo> symbols)
+    {
+        _session = session;
+        UseGateway(new SessionGateway(session, feed), symbols);
+    }
+
+    internal void UseGateway(IBrokerGateway gateway, IReadOnlyList<SymbolInfo> symbols)
     {
         _symbols = symbols.ToDictionary(s => s.SymbolId);
-        _session = session;
+        _gateway = gateway;
         _dirty = true;
+        _recoverDue = true; // events may have been missed while there was no connection
         _wake.Release();
     }
 
@@ -106,11 +129,11 @@ internal sealed class AccountScout(
             while (_wake.CurrentCount > 0)
                 await _wake.WaitAsync(ct);
 
-            if (_session is not { } session || session.Closed.IsCompleted || registry.RoleOn(account.AccountId) != InstanceRole.Primary)
+            if (_session is not { } session || session.Closed.IsCompleted || _gateway is not { } gateway || registry.RoleOn(account.AccountId) != InstanceRole.Primary)
                 continue;
             try
             {
-                await RunOnceAsync(session);
+                await RunOnceAsync(gateway);
             }
             catch (Exception ex) when (ex is TimeoutException or IOException or CTraderApiException)
             {
@@ -120,7 +143,7 @@ internal sealed class AccountScout(
         }
     }
 
-    private async Task RunOnceAsync(CTraderSession session)
+    internal async Task RunOnceAsync(IBrokerGateway session)
     {
         var symbols = _symbols.Values.ToDictionary(s => s.Name);
         await CheckControlsAsync(session, symbols);
@@ -131,10 +154,10 @@ internal sealed class AccountScout(
             DrawMissingCharts(symbols);
         }
 
-        if (HandleExecutions() && !dryRun)
-            state.Save(DateTime.UtcNow);
+        if (HandleExecutions())
+            Persist();
 
-        var now = DateTime.UtcNow;
+        var now = _utcNow();
         foreach (var chart in _charts)
         {
             if (!symbols.TryGetValue(chart.Chart.Symbol, out var sym) || now < _nextFetch.GetValueOrDefault(chart))
@@ -144,7 +167,7 @@ internal sealed class AccountScout(
             var higher = chart.HigherTimeframe is { } h
                 ? await HistoryAsync(session, sym, h, (chart.Higher!.LastCandleUtc ?? now.AddDays(-30)) - 2 * Timeframes.Length(h), now)
                 : [];
-            now = DateTime.UtcNow;
+            now = _utcNow();
             foreach (var e in chart.Feed(main, higher, now))
                 Record(chart, sym, e, now);
             var offset = Offset(chart);
@@ -160,23 +183,24 @@ internal sealed class AccountScout(
             _dirty |= chart.Main.LastCandleUtc != before;
         }
 
-        if (_dirty || now - _lastSync >= FullSync)
+        if (_dirty || now - _lastSync >= FullSync || now >= _cancelRetryDue)
         {
             _dirty = false;
             _lastSync = now;
             await SyncAsync(session, symbols);
-            if (_ackDue)
+            _cancelRetryDue = state.Roles.Values.Where(r => r is { State: RoleState.CancelRequested, NextCancelUtc: not null }).Select(r => r.NextCancelUtc!.Value).DefaultIfEmpty(DateTime.MaxValue).Min();
+            if (_ackDue && !state.Roles.Values.Any(r => r.State == RoleState.CancelRequested)) // "applied" only once the broker has confirmed its cancels
             {
                 _ackDue = false;
-                WriteAck(DateTime.UtcNow, null);
+                WriteAck(_utcNow(), null);
             }
         }
     }
 
     // ── Controls from the dashboard (scout.md §2.6) ─────────────────────────────────────────────────────────────────
-    private async Task CheckControlsAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    private async Task CheckControlsAsync(IBrokerGateway session, Dictionary<string, SymbolInfo> symbols)
     {
-        var now = DateTime.UtcNow;
+        var now = _utcNow();
         if (now < _nextControlCheck)
             return;
         _nextControlCheck = now + ControlCheck;
@@ -223,7 +247,7 @@ internal sealed class AccountScout(
     private static DateTime Stamp(string path) => File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
 
     /// <summary>Puts each symbol on the timeframe the controls ask for (or back on the configured one), loading the new chart's history.</summary>
-    private async Task ApplyTimeframesAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    private async Task ApplyTimeframesAsync(IBrokerGateway session, Dictionary<string, SymbolInfo> symbols)
     {
         for (var i = 0; i < _charts.Count; i++)
         {
@@ -304,16 +328,16 @@ internal sealed class AccountScout(
     }
 
     /// <summary>Rebuilds the detectors from past candles once per process start; their events are not logged or acted on.</summary>
-    private async Task LoadHistoryAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    private async Task LoadHistoryAsync(IBrokerGateway session, Dictionary<string, SymbolInfo> symbols)
     {
         foreach (var chart in _charts)
             if (symbols.TryGetValue(chart.Chart.Symbol, out var sym))
                 await LoadChartAsync(session, sym, chart);
     }
 
-    private async Task LoadChartAsync(CTraderSession session, SymbolInfo sym, ChartTracker chart)
+    private async Task LoadChartAsync(IBrokerGateway session, SymbolInfo sym, ChartTracker chart)
     {
-        var now = DateTime.UtcNow;
+        var now = _utcNow();
         var days = TimeSpan.FromDays(config.HistoryDays);
         var main = await HistoryAsync(session, sym, chart.Chart.Timeframe, now - Max(days, 200 * chart.Length), now);
         var higher = chart.HigherTimeframe is { } h ? await HistoryAsync(session, sym, h, now - Max(days, 100 * Timeframes.Length(h)), now) : [];
@@ -324,12 +348,12 @@ internal sealed class AccountScout(
             account.Broker, sym.Name, chart.Chart.Timeframe, d.Count, skipped, TrendName(d.Trend), chart.HigherTimeframe ?? "-",
             TrendName(chart.Higher?.Trend ?? 0), d.MainLevel is { } m ? $"{Side(d.Trend)} Stop {Num(m, sym)}" : "none",
             d.ReversalLevel is { } r ? $", reversal {Side(-d.Trend)} Stop {Num(r, sym)}" : "");
-        _nextFetch[chart] = NextFetch(chart.Main.LastCandleUtc, chart.Length, sym.Schedule, 0, Offset(chart), DateTime.UtcNow);
+        _nextFetch[chart] = NextFetch(chart.Main.LastCandleUtc, chart.Length, sym.Schedule, 0, Offset(chart), _utcNow());
     }
 
     private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
 
-    private async Task<IReadOnlyList<Candle>> HistoryAsync(CTraderSession session, SymbolInfo sym, string tf, DateTime from, DateTime to)
+    private async Task<IReadOnlyList<Candle>> HistoryAsync(IBrokerGateway session, SymbolInfo sym, string tf, DateTime from, DateTime to)
         => await session.GetTrendbarsAsync(account.AccountId, sym.SymbolId, Timeframes.Period(tf), from, to); // paced by the session
 
     // ── Setup events → setups.csv and the log ────────────────────────────────────────────────────────────────────────
@@ -355,29 +379,31 @@ internal sealed class AccountScout(
     }
 
     // ── Orders: what the detectors want vs. what is on the account ──────────────────────────────────────────────────
-    private sealed record Want(ChartTracker Chart, SymbolInfo Sym, string Key, DateTime PauseStart, bool Reversal, int Dir, double Level, double? Far);
+    private sealed record Want(ChartTracker Chart, SymbolInfo Sym, string Key, DateTime PauseStart, bool Reversal, int Dir, double Level, double? Far, DateTime SinceUtc);
 
-    private async Task SyncAsync(CTraderSession session, Dictionary<string, SymbolInfo> symbols)
+    private async Task SyncAsync(IBrokerGateway session, Dictionary<string, SymbolInfo> symbols)
     {
-        var now = DateTime.UtcNow;
+        var now = Now;
         var rec = await session.ReconcileAsync(account.AccountId);
         var ourOrders = new Dictionary<string, ProtoOAOrder>();
-        foreach (var o in rec.Order)
-            if (KeyOf(o.TradeData.Label, o.TradeData.SymbolId) is { } k)
-                ourOrders[k] = o;
+        var duplicates = new List<(string Key, ProtoOAOrder Order)>();
+        foreach (var o in rec.Order.OrderBy(o => o.OrderId))
+            if (KeyOf(o.TradeData.Label, o.TradeData.SymbolId) is { } k && !ourOrders.TryAdd(k, o))
+                duplicates.Add((k, o));
         var ourPositions = new Dictionary<string, ProtoOAPosition>();
-        var changed = false;
         foreach (var p in rec.Position)
             if (KeyOf(p.TradeData.Label, p.TradeData.SymbolId) is { } k)
-            {
                 ourPositions[k] = p;
-                if (state.Roles.TryGetValue(k, out var r) && r.PositionId is null)
-                {
-                    r.PositionId = p.PositionId;
-                    r.Result = "filled";
-                    changed = true;
-                }
-            }
+
+        var changed = ResolveFromReconcile(ourOrders, ourPositions, now);
+        changed |= await RecoverFromHistoryAsync(session, ourOrders, ourPositions, now);
+        if (changed)
+            Persist();
+        foreach (var (key, order) in duplicates)
+            await CancelDuplicateAsync(session, key, order);
+
+        var status = await StatusAsync(session, rec);
+        var halt = UpdateHalt(status, now);
 
         var wants = new Dictionary<string, Want>();
         foreach (var chart in _charts)
@@ -388,31 +414,42 @@ internal sealed class AccountScout(
             if (d.MainLevel is { } m)
             {
                 var k = ScoutState.Key(sym.Name, chart.Chart.Timeframe, ps, false);
-                wants[k] = new Want(chart, sym, k, ps, false, d.Trend, m, d.MainFarSide);
+                wants[k] = new Want(chart, sym, k, ps, false, d.Trend, m, d.MainFarSide, d.MainSinceUtc ?? ps);
             }
             if (d.ReversalLevel is { } r)
             {
                 var k = ScoutState.Key(sym.Name, chart.Chart.Timeframe, ps, true);
-                wants[k] = new Want(chart, sym, k, ps, true, -d.Trend, r, d.ReversalFarSide);
+                wants[k] = new Want(chart, sym, k, ps, true, -d.Trend, r, d.ReversalFarSide, d.ReversalSinceUtc ?? ps);
             }
         }
 
-        // One cancels the other (Scout spec §4.4 I4), the dashboard's controls (§2.6), and setups that ended: cancel our
-        // unfilled orders. Orders from a chart Scout no longer reads (timeframe changed) stay until filled or expired.
+        // One cancels the other (Scout spec §4.4 I4), a halt (§2.7), the dashboard's controls (§2.6), and setups that ended: cancel
+        // our unfilled orders. Orders from a chart Scout no longer reads (timeframe changed) stay until filled or expired.
         foreach (var (key, order) in ourOrders)
         {
             var siblingFilled = ourPositions.ContainsKey(ScoutState.Sibling(key)) || state.Roles.GetValueOrDefault(ScoutState.Sibling(key))?.PositionId is not null;
             var parts = key.Split('|');
             var chartActive = _charts.Any(c => c.Chart.Symbol == parts[0] && c.Chart.Timeframe == parts[1]);
-            if (_controls.CancelReason(key, siblingFilled, chartActive, wants.ContainsKey(key), _endReason.GetValueOrDefault(key)) is not { } reason)
+            var reason = !siblingFilled && halt is not null
+                ? halt
+                : _controls.CancelReason(key, siblingFilled, chartActive, wants.ContainsKey(key), _endReason.GetValueOrDefault(key));
+            if (reason is null)
+            {
+                if (state.Roles.TryGetValue(key, out var kept) && kept.State == RoleState.CancelRequested)
+                {
+                    (kept.State, kept.CancelAttempts, kept.NextCancelUtc, kept.CancelAlerted) = (RoleState.Working, 0, null, false); // the reason went away
+                    Persist();
+                }
                 continue;
-            var held = !siblingFilled && _controls.HoldBack(key) is not null;
+            }
+            var held = !siblingFilled && (halt is not null || _controls.HoldBack(key) is not null);
             if (await CancelAsync(session, key, order, reason) && held)
             {
                 if (state.Roles.TryGetValue(key, out var role))
-                    role.Result = $"held: {reason}"; // placed again if the owner lets it go (scout.md §2.6)
-                ControlEntryFor(key)?.Cancelled.Add(order.OrderId);
-                changed = true;
+                    (role.State, role.Result) = (RoleState.Held, $"held: {reason}"); // placed again when released (scout.md §2.6, §2.7)
+                if (halt is null)
+                    ControlEntryFor(key)?.Cancelled.Add(order.OrderId);
+                Persist();
             }
         }
 
@@ -420,6 +457,12 @@ internal sealed class AccountScout(
         var margins = new Dictionary<(long, long), ExpectedMargin>();
         foreach (var want in wants.Values)
         {
+            if (halt is not null)
+            {
+                if (!ourOrders.ContainsKey(want.Key) && !ourPositions.ContainsKey(want.Key) && !state.Roles.ContainsKey(want.Key))
+                    SkipOnce(now, want, "halted", "ScoutHalted", halt);
+                continue;
+            }
             if (_controls.HoldBack(want.Key) is { } held)
             {
                 if (!ourOrders.ContainsKey(want.Key) && !ourPositions.ContainsKey(want.Key) && !state.Roles.ContainsKey(want.Key) && _heldLogged.Add(want.Key))
@@ -432,38 +475,345 @@ internal sealed class AccountScout(
             }
             if (state.Roles.TryGetValue(want.Key, out var heldRole) && heldRole.Result.StartsWith("held", StringComparison.Ordinal) && heldRole.PositionId is null)
             {
-                state.Roles.Remove(want.Key); // the owner let it go again: placed once more if the setup is still valid
-                changed = true;
+                state.Roles.Remove(want.Key); // released again: placed once more if the setup is still valid
+                Persist();
             }
-            if (state.Roles.ContainsKey(want.Key) || ourOrders.ContainsKey(want.Key) || ourPositions.ContainsKey(want.Key))
+            if (state.Roles.TryGetValue(want.Key, out var known) && known.State != RoleState.Intended || ourOrders.ContainsKey(want.Key) || ourPositions.ContainsKey(want.Key))
                 continue;
             var sibling = ScoutState.Sibling(want.Key);
             if (ourPositions.ContainsKey(sibling) || state.Roles.GetValueOrDefault(sibling)?.PositionId is not null)
                 continue;
             if (want.Chart.Chart.Mode == ScoutMode.Watch)
-                Alert(want, now);
-            else
             {
-                budget ??= await BudgetAsync(session, rec, ourOrders.Values, margins);
-                if (!await MarginFitsAsync(session, budget, want, margins, now))
-                    continue; // not remembered: tried again at the next sync, while the setup lasts
-                await PlaceAsync(session, want, now);
+                Alert(want, now);
+                Persist();
+                continue;
             }
-            changed = true;
+            if (ReadyToPlace(session, want, now) is not { } volume)
+                continue;
+            budget ??= await BudgetAsync(session, status, ourOrders.Values, margins);
+            if (!await MarginFitsAsync(session, budget, want, volume, margins, now))
+                continue; // not remembered: tried again at the next sync, while the setup lasts
+            await PlaceAsync(session, want, volume, now);
         }
-        if (changed && !dryRun)
-            state.Save(now);
     }
 
-    // ── Margin (scout.md §2.5, issue-log.md #1): no new order the account could not carry once filled, mirrored and hedged ──
-    private async Task<MarginBudget?> BudgetAsync(CTraderSession session, ProtoOAReconcileRes rec, IEnumerable<ProtoOAOrder> waiting,
-        Dictionary<(long, long), ExpectedMargin> margins)
+    private void Persist()
     {
-        if (DateTime.UtcNow - _statusFailed < TimeSpan.FromMinutes(5))
+        if (!dryRun)
+            state.Save(Now);
+    }
+
+    /// <summary>One skip row and one log line for this setup role and reason; the role is not remembered, so it is tried again while the setup lasts.</summary>
+    private void SkipOnce(DateTime now, Want w, string result, string logEvent, string why, long? volume = null)
+    {
+        if (!_skipLogged.Add($"{result}|{why}|{w.Key}"))
+            return;
+        OrderRow(now, w, "skip", 0, StopLoss(w), null, null, result, why, volume);
+        _log.Event(logEvent).Information("{Broker} {Symbol} {Tf}: {Side} Stop {Price} not placed: {Why}",
+            account.Broker, w.Sym.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(w.Level, w.Sym), why);
+    }
+
+    /// <summary>The server expiry of a setup's order: <see cref="ScoutConfig.ExpiryCandles"/> candles after the candle that gave its level, however late it is placed.</summary>
+    private DateTime ExpiryOf(Want w) => w.SinceUtc + w.Chart.Length + config.ExpiryCandles * w.Chart.Length;
+
+    /// <summary>
+    /// The checks before an order is sent (scout.md §2.3, review F-03, F-10, F-20): a size the broker takes without raising it, candles that are
+    /// up to date, a setup still young enough, and a live price that has not already passed the level.
+    /// </summary>
+    /// <returns>The volume to send, or null when the order is not sent now.</returns>
+    private long? ReadyToPlace(IBrokerGateway session, Want w, DateTime now)
+    {
+        var s = w.Sym;
+        if (s.VolumeNotAbove(config.LotsFor(s.Name)) is not { } volume)
+        {
+            SkipOnce(now, w, "size below minimum", "ScoutSizeRefused",
+                $"{config.LotsFor(s.Name).ToString("0.###", CultureInfo.InvariantCulture)} lot is below the broker's minimum {Lots(s, s.MinVolume)} lot, which would raise the risk");
+            return null;
+        }
+        if (w.Chart.Main.LastCandleUtc is { } last && now >= CandleDue(last, w.Chart.Length, s.Schedule, Offset(w.Chart)) + w.Chart.Length)
+        {
+            SkipOnce(now, w, "stale candles", "ScoutStaleCandles", $"last candle {CsvFormat.Time(last)} is more than a candle late");
+            return null;
+        }
+        if (ExpiryOf(w) - now < w.Chart.Length)
+        {
+            SkipOnce(now, w, "setup too old", "ScoutSetupOld", $"its level appeared at {CsvFormat.Time(w.SinceUtc)} and its expiry would be under one candle away");
+            return null;
+        }
+        if (session.LastQuote(account.AccountId, s.SymbolId) is not { } q || now - q.TimeUtc > QuoteMaxAge)
+        {
+            SkipOnce(now, w, "no live price", "ScoutNoQuote", "no fresh price from the broker (market closed or no ticks)");
+            return null;
+        }
+        var price = Math.Round(w.Level, s.Digits);
+        if (w.Dir == 1 ? q.Ask >= price : q.Bid <= price)
+        {
+            var seen = w.Dir == 1 ? $"ask {Num(q.Ask, s)}" : $"bid {Num(q.Bid, s)}";
+            OrderRow(now, w, "place", 0, StopLoss(w), null, null, "refused", $"LEVEL_PASSED: {seen} is already past the level", volume);
+            _log.Event("ScoutLevelPassed").Information("{Broker} {Symbol}: {Side} Stop {Price} not placed: {Seen} is already past it", account.Broker, s.Name, Side(w.Dir), Num(price, s), seen);
+            state.Roles[w.Key] = new RoleRecord { FirstSeenUtc = now, State = RoleState.Refused, Result = "refused: level passed" };
+            Persist();
+            return null;
+        }
+        return volume;
+    }
+
+    // ── Broker state decides (review P-01): what the reconcile and the broker's history say about each role ─────────────
+    private bool ResolveFromReconcile(Dictionary<string, ProtoOAOrder> orders, Dictionary<string, ProtoOAPosition> positions, DateTime now)
+    {
+        var changed = false;
+        foreach (var (key, p) in positions)
+        {
+            if (!state.Roles.TryGetValue(key, out var r))
+            {
+                state.Roles[key] = new RoleRecord { FirstSeenUtc = now, PositionId = p.PositionId, State = RoleState.Filled, Result = "filled", PlaceLogged = true, FillLogged = true, LogFromUtc = now };
+                notify.Warning("ScoutRoleRebuilt", $"Scout {account.Broker}: position {p.PositionId} was not in memory", $"{key}: rebuilt from its label", account.AccountId);
+                changed = true;
+            }
+            else if (r.PositionId is null)
+            {
+                MarkFilled(key, r, p.PositionId, r.FillLogged ? null : p.Price, now, "recovered from the broker");
+                changed = true;
+            }
+        }
+        foreach (var (key, o) in orders)
+        {
+            if (!state.Roles.TryGetValue(key, out var r))
+            {
+                state.Roles[key] = new RoleRecord { FirstSeenUtc = now, OrderId = o.OrderId, State = RoleState.Working, Result = "placed", ExpiresUtc = ExpiryOf(o), PlaceLogged = true, LogFromUtc = now };
+                _log.Event("ScoutRoleRebuilt").Warning("{Broker}: order {OrderId} was not in memory; {Key} rebuilt from its label", account.Broker, o.OrderId, key);
+                changed = true;
+            }
+            else if (r.IsInDoubt || r.State == RoleState.Intended)
+            {
+                (r.OrderId, r.State, r.Result, r.ExpiresUtc) = (o.OrderId, RoleState.Working, "placed", ExpiryOf(o));
+                if (!r.PlaceLogged && _symbols.TryGetValue(o.TradeData.SymbolId, out var s))
+                {
+                    ExecRow(now, s, key.Split('|'), "place", o, null, "", "", "", "", "recovered: no reply to the request, found on the broker");
+                    r.PlaceLogged = true;
+                }
+                _log.Event("ScoutOrderRecovered").Information("{Broker}: order {OrderId} of {Key} found on the broker after a lost reply", account.Broker, o.OrderId, key);
+                changed = true;
+            }
+        }
+        foreach (var (key, r) in state.Roles.Where(x => x.Value.IsInDoubt && !orders.ContainsKey(x.Key) && !positions.ContainsKey(x.Key)))
+            r.ReconcilesSinceSend++;
+        return changed;
+    }
+
+    private static DateTime? ExpiryOf(ProtoOAOrder o) => o.HasExpirationTimestamp ? DateTimeOffset.FromUnixTimeMilliseconds(o.ExpirationTimestamp).UtcDateTime : null;
+
+    /// <summary>
+    /// Orders and positions that left the account while Scout was not told (a restart, a lost connection, a lost reply): their fate from the
+    /// broker's order and deal history, written to orders.csv once. Runs after every (re)connect, and whenever a role is missing from the account.
+    /// </summary>
+    private async Task<bool> RecoverFromHistoryAsync(IBrokerGateway session, Dictionary<string, ProtoOAOrder> orders, Dictionary<string, ProtoOAPosition> positions, DateTime now)
+    {
+        var open = state.Roles.Where(x => x.Value.IsOpen).ToList();
+        var missing = open.Where(x => !orders.ContainsKey(x.Key) && !positions.ContainsKey(x.Key)).ToList();
+        var every = missing.Any(x => x.Value.IsInDoubt) ? RecoverInDoubtEvery : RecoverEvery;
+        if (!_recoverDue && (missing.Count == 0 || now - _lastRecover < every))
+            return false;
+        var targets = _recoverDue ? open : missing;
+        if (targets.Count == 0)
+        {
+            _recoverDue = false;
+            return false;
+        }
+
+        var earliest = targets.Min(x => x.Value.FirstSeenUtc).AddHours(-1);
+        var from = earliest > now - RecoverWindow ? earliest : now - RecoverWindow;
+        IReadOnlyList<ProtoOAOrder> history;
+        IReadOnlyList<ProtoOADeal> deals;
+        try
+        {
+            history = await session.GetOrdersAsync(account.AccountId, from, now);
+            deals = await session.GetDealsAsync(account.AccountId, from, now);
+        }
+        catch (CTraderApiException ex)
+        {
+            _lastRecover = now;
+            _log.Event("ScoutHistoryRefused").Warning("{Broker}: order history not available ({Message}); asked again later", account.Broker, ex.Message);
+            return false;
+        }
+        (_recoverDue, _lastRecover) = (false, now);
+
+        foreach (var (key, r) in targets)
+        {
+            var onAccount = orders.ContainsKey(key) || positions.ContainsKey(key);
+            var past = history.Where(o => r.OrderId != 0 ? o.OrderId == r.OrderId : KeyOf(o.TradeData.Label, o.TradeData.SymbolId) == key).MaxBy(o => o.OrderId);
+            if (!onAccount && past is not null && r.State != RoleState.Filled)
+                ApplyHistory(key, r, past, deals, now);
+
+            if (r.IsInDoubt && !onAccount && now - (r.LastSendUtc ?? r.FirstSeenUtc) >= UnknownGrace && r.ReconcilesSinceSend >= 2)
+            {
+                r.State = r.Attempts < MaxSendAttempts ? RoleState.Intended : RoleState.Abandoned;
+                r.Result = r.State == RoleState.Intended ? "not on the broker: may be sent again" : "abandoned: never reached the broker";
+                _log.Event("ScoutSendLost").Warning("{Broker} {Key}: the request never reached the broker ({Result})", account.Broker, key, r.Result);
+            }
+            else if (r.State == RoleState.Working && !onAccount && r.ExpiresUtc is { } expires && expires < now)
+                (r.State, r.Result) = (RoleState.Expired, "expired");
+
+            if (r.PositionId is { } pid && _symbols.TryGetValue(SymbolIdOf(key), out var s))
+            {
+                var closes = deals.Where(d => d.PositionId == pid && d.ClosePositionDetail is not null).ToList();
+                foreach (var d in closes)
+                    LogClose(key, r, d, s, now, "recovered from the broker's history");
+                if (!positions.ContainsKey(key) && (closes.Count > 0 || now - r.FirstSeenUtc > RecoverWindow))
+                    r.State = RoleState.Closed;
+            }
+        }
+        return true;
+    }
+
+    private long SymbolIdOf(string key) => _symbols.Values.FirstOrDefault(s => s.Name == key.Split('|')[0])?.SymbolId ?? -1;
+
+    private static bool Loggable(RoleRecord r, long timestampMs) =>
+        r.LogFromUtc is not { } from || DateTimeOffset.FromUnixTimeMilliseconds(timestampMs).UtcDateTime >= from;
+
+    private void ApplyHistory(string key, RoleRecord r, ProtoOAOrder o, IReadOnlyList<ProtoOADeal> deals, DateTime now)
+    {
+        if (!_symbols.TryGetValue(o.TradeData.SymbolId, out var s))
+            return;
+        const string Detail = "recovered from the broker's history";
+        var parts = key.Split('|');
+        var log = Loggable(r, o.UtcLastUpdateTimestamp);
+        r.OrderId = o.OrderId;
+        switch (o.OrderStatus)
+        {
+            case ProtoOAOrderStatus.OrderStatusFilled:
+                if (deals.Where(d => d.OrderId == o.OrderId && d.ClosePositionDetail is null).MinBy(d => d.ExecutionTimestamp) is { } fill)
+                    MarkFilled(key, r, fill.PositionId, r.FillLogged || !Loggable(r, fill.ExecutionTimestamp) ? null : fill.ExecutionPrice, now, Detail, o);
+                break;
+            case ProtoOAOrderStatus.OrderStatusCancelled when r.State == RoleState.CancelRequested:
+                (r.State, r.Result) = (RoleState.Cancelled, "cancelled");
+                if (log)
+                    ExecRow(now, s, parts, "cancel", o, null, "", "", "", "", Detail);
+                break;
+            case ProtoOAOrderStatus.OrderStatusCancelled:
+                (r.State, r.Result) = (RoleState.CancelledExternally, "cancelled, not by Scout");
+                if (log)
+                    ExecRow(now, s, parts, "cancelled", o, null, "", "", "", "", $"not by Scout (owner or TM); {Detail}");
+                break;
+            case ProtoOAOrderStatus.OrderStatusExpired:
+                (r.State, r.Result) = (RoleState.Expired, "expired");
+                if (log)
+                    ExecRow(now, s, parts, "expired", o, null, "", "", "", "", Detail);
+                break;
+            case ProtoOAOrderStatus.OrderStatusRejected:
+                (r.State, r.Result) = (RoleState.Refused, "rejected");
+                if (log)
+                    ExecRow(now, s, parts, "rejected", o, null, "", "", "", "", Detail);
+                break;
+        }
+    }
+
+    /// <summary>The role has a position. <paramref name="fillPrice"/>: write its filled row, at that price; null when the row exists or must not be written.</summary>
+    private void MarkFilled(string key, RoleRecord r, long positionId, double? fillPrice, DateTime now, string detail, ProtoOAOrder? order = null)
+    {
+        (r.PositionId, r.State, r.Result, r.CancelAttempts, r.NextCancelUtc) = (positionId, RoleState.Filled, "filled", 0, null);
+        if (fillPrice is not { } price)
+        {
+            r.FillLogged = true;
+            return;
+        }
+        if (_symbols.Values.FirstOrDefault(x => x.Name == key.Split('|')[0]) is not { } s)
+            return;
+        var parts = key.Split('|');
+        ordersCsv.Write(now,
+        [
+            CsvFormat.Time(now), s.Name, parts[1], SetupTime(parts[2]), parts[3], "filled", order is null ? "" : SideOf(order.TradeData.TradeSide),
+            order is null ? "" : Lots(s, order.TradeData.Volume), order is null ? "" : Num(order.StopPrice, s), order is { HasStopLoss: true } ? Num(order.StopLoss, s) : "", "",
+            r.OrderId == 0 ? "" : r.OrderId.ToString(CultureInfo.InvariantCulture), positionId.ToString(CultureInfo.InvariantCulture), Num(price, s), "", "", "", "ok", detail, "",
+        ]);
+        r.FillLogged = true;
+    }
+
+    private async Task CancelDuplicateAsync(IBrokerGateway session, string key, ProtoOAOrder order)
+    {
+        if (_duplicatesAlerted.Add(order.OrderId))
+            notify.Critical("ScoutDuplicateOrder", $"Scout {account.Broker}: two orders for one setup", $"{key}: order {order.OrderId} is the second; cancelling it", account.AccountId);
+        if (dryRun)
+            return;
+        try
+        {
+            await session.CancelOrderAsync(account.AccountId, order.OrderId, OrderTimeout);
+            if (_symbols.TryGetValue(order.TradeData.SymbolId, out var s))
+                CancelRow(Now, s, key.Split('|'), order, "ok", "duplicate order of this setup");
+        }
+        catch (Exception ex) when (ex is TimeoutException or CTraderApiException)
+        {
+            _log.Event("ScoutCancelRefused").Warning("{Broker}: duplicate order {OrderId} not cancelled yet: {Message}", account.Broker, order.OrderId, ex.Message);
+        }
+    }
+
+    /// <summary>The account's money, read before anything that adds exposure; null when the broker did not answer a moment ago.</summary>
+    private async Task<AccountStatus?> StatusAsync(IBrokerGateway session, ProtoOAReconcileRes rec)
+    {
+        if (Now - _statusFailed < TimeSpan.FromMinutes(5))
             return null; // the broker did not answer a moment ago (e.g. a replay broker without it): no new orders meanwhile
         try
         {
-            var status = await session.GetAccountStatusAsync(account.AccountId, rec);
+            return await session.GetAccountStatusAsync(account.AccountId, rec);
+        }
+        catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
+        {
+            _statusFailed = Now;
+            _log.Event("ScoutNoAccountStatus").Warning("{Broker}: account status not available ({Message}); no new orders until it is", account.Broker, ex.Message);
+            return null;
+        }
+    }
+
+    // ── Stopping new entries (scout.md §2.7): loss limits and the owner's control files. TM is never affected ──────────────
+    private string? UpdateHalt(AccountStatus? status, DateTime now)
+    {
+        if (status is not null)
+        {
+            var marks = state.Equity ??= new EquityMarks();
+            var changed = EntryHalt.Update(marks, status.Equity, now, config.RiskLimitsInForce);
+            var reset = Path.Combine(_controlDir, $"scout-reset-{account.Broker}-{account.AccountId}");
+            if (File.Exists(reset))
+            {
+                EntryHalt.Reset(marks, status.Equity, now);
+                changed = true;
+                try
+                {
+                    File.Delete(reset);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _log.Warning("{Broker}: reset file not removed: {Message}", account.Broker, ex.Message);
+                }
+                _log.Event("ScoutHaltReset").Warning("{Broker}: loss limits reset by the owner; they count from equity {Equity}", account.Broker, AccountStatus.Money(status.Equity));
+            }
+            if (changed)
+                Persist();
+        }
+
+        var owner = File.Exists(Path.Combine(_controlDir, "scout-halt")) || File.Exists(Path.Combine(_controlDir, $"scout-halt-{account.Broker}-{account.AccountId}"));
+        var reason = owner ? "stopped by the owner (control file)"
+            : state.Equity is { Halt: not LossHalt.None } m ? m.HaltReason
+            : null;
+        if (reason != _haltAnnounced)
+        {
+            if (reason is not null)
+                notify.Critical("ScoutHalted", $"Scout {account.Broker}: new entries stopped", $"{reason}. Its pending orders are cancelled; TM keeps managing open positions.", account.AccountId);
+            else
+                notify.Warning("ScoutResumed", $"Scout {account.Broker}: new entries allowed again", "The halt has ended.", account.AccountId);
+            _haltAnnounced = reason;
+        }
+        return reason;
+    }
+
+    // ── Margin (scout.md §2.5, issue-log.md #1): no new order the account could not carry once filled, mirrored and hedged ──
+    private async Task<MarginBudget?> BudgetAsync(IBrokerGateway session, AccountStatus? status, IEnumerable<ProtoOAOrder> waiting,
+        Dictionary<(long, long), ExpectedMargin> margins)
+    {
+        if (status is null)
+            return null;
+        try
+        {
             var held = 0.0;
             foreach (var o in waiting)
                 held += (await MarginAsync(session, o.TradeData.SymbolId, o.TradeData.Volume, margins)).For(o.TradeData.TradeSide == ProtoOATradeSide.Buy ? 1 : -1);
@@ -471,22 +821,21 @@ internal sealed class AccountScout(
         }
         catch (Exception ex) when (ex is CTraderApiException or TimeoutException)
         {
-            _statusFailed = DateTime.UtcNow;
+            _statusFailed = _utcNow();
             _log.Event("ScoutNoAccountStatus").Warning("{Broker}: account status not available ({Message}); no new orders until it is", account.Broker, ex.Message);
             return null;
         }
     }
 
-    private async Task<ExpectedMargin> MarginAsync(CTraderSession session, long symbolId, long volume, Dictionary<(long, long), ExpectedMargin> margins)
+    private async Task<ExpectedMargin> MarginAsync(IBrokerGateway session, long symbolId, long volume, Dictionary<(long, long), ExpectedMargin> margins)
     {
         if (!margins.TryGetValue((symbolId, volume), out var m))
             margins[(symbolId, volume)] = m = (await session.GetExpectedMarginAsync(account.AccountId, symbolId, [volume])).Single();
         return m;
     }
 
-    private async Task<bool> MarginFitsAsync(CTraderSession session, MarginBudget? budget, Want w, Dictionary<(long, long), ExpectedMargin> margins, DateTime now)
+    private async Task<bool> MarginFitsAsync(IBrokerGateway session, MarginBudget? budget, Want w, long volume, Dictionary<(long, long), ExpectedMargin> margins, DateTime now)
     {
-        var volume = w.Sym.VolumeForLots(config.LotsFor(w.Sym.Name));
         string why;
         if (budget is null)
             why = "account status not available";
@@ -548,16 +897,15 @@ internal sealed class AccountScout(
         notify.Info("Setup", $"Scout: {text}", $"Stop-loss {(w.Far is { } f ? Num(f, w.Sym) : "none")}; {w.Chart.HigherTimeframe} trend {WithHigher(w)}", account.AccountId);
         OrderRow(now, w, "alert", 0, null, null, null, "", "watch mode");
         if (!dryRun)
-            state.Roles[w.Key] = new RoleRecord { FirstSeenUtc = now, Result = "alerted" };
+            state.Roles[w.Key] = new RoleRecord { FirstSeenUtc = now, Result = "alerted", State = RoleState.Alerted };
     }
 
-    private async Task PlaceAsync(CTraderSession session, Want w, DateTime now)
+    private async Task PlaceAsync(IBrokerGateway session, Want w, long volume, DateTime now)
     {
         var s = w.Sym;
         var price = Math.Round(w.Level, s.Digits);
         var sl = StopLoss(w);
-        var volume = s.VolumeForLots(config.LotsFor(s.Name));
-        var expires = now + config.ExpiryCandles * w.Chart.Length;
+        var expires = ExpiryOf(w);
         var leg = $"{w.Chart.Chart.Timeframe}-{w.PauseStart:yyyyMMddHHmm}-{(w.Reversal ? "R" : "M")}";
         var label = identity.Label(leg);
         var comment = $"{CTraderSession.SentComment(now)} Scout {s.Name} {w.Chart.Chart.Timeframe} {(w.Reversal ? "reversal" : "main")} {w.Chart.HigherTimeframe}:{WithHigher(w)}";
@@ -568,17 +916,24 @@ internal sealed class AccountScout(
             return;
         }
 
-        var record = new RoleRecord { FirstSeenUtc = now };
+        // Saved before it goes out: after a crash or a lost reply the broker's state decides what became of it, and it is never sent blindly again.
+        var record = state.Roles.GetValueOrDefault(w.Key) ?? new RoleRecord { FirstSeenUtc = now };
+        record.State = RoleState.Sending;
+        record.Attempts++;
+        (record.LastSendUtc, record.ReconcilesSinceSend, record.ExpiresUtc) = (now, 0, expires);
         state.Roles[w.Key] = record;
+        Persist();
         try
         {
-            var order = await session.PlacePendingOrderAsync(account.AccountId, s.SymbolId, ProtoOAOrderType.Stop,
-                w.Dir == 1 ? ProtoOATradeSide.Buy : ProtoOATradeSide.Sell, volume, price, sl, null, label, ClientId(), comment, OrderTimeout,
-                trailingStopLoss: sl is not null, expiresUtc: expires);
+            var order = await session.PlaceStopOrderAsync(account.AccountId, s.SymbolId, w.Dir == 1 ? ProtoOATradeSide.Buy : ProtoOATradeSide.Sell, volume, price, sl,
+                label, ClientId(w.Key, record.Attempts), comment, OrderTimeout, sl is not null, expires);
             record.OrderId = order.OrderId;
+            record.State = RoleState.Working;
             record.Result = "placed";
+            record.PlaceLogged = true;
             record.Chart = DrawChart(w.Chart, Picture(w, order.OrderId, price, sl, now, expires));
             OrderRow(now, w, "place", order.OrderId, sl, expires, null, "ok", label, volume, record.Chart);
+            Persist();
             _log.Event("ScoutOrder").Information("{Broker} {Symbol} {Tf}: placed {Side} Stop {Price} SL {Sl} {Lots} lot, expires {Expires:HH:mm}Z, order {OrderId} ({Label})",
                 account.Broker, s.Name, w.Chart.Chart.Timeframe, Side(w.Dir), Num(price, s), sl is null ? "none" : Num(sl.Value, s), Lots(s, volume), expires, order.OrderId, label);
             notify.Info("OrderPlaced", $"Scout: {s.Name} {w.Chart.Chart.Timeframe} {Side(w.Dir)} Stop {Num(price, s)}",
@@ -586,46 +941,96 @@ internal sealed class AccountScout(
         }
         catch (CTraderApiException ex)
         {
+            var again = IsTemporary(ex) && record.Attempts < MaxSendAttempts;
+            record.State = again ? RoleState.Intended : RoleState.Refused;
             record.Result = $"refused: {ex.ErrorCode}";
             OrderRow(now, w, "place", 0, sl, expires, null, "refused", $"{ex.ErrorCode}: {ex.Message}", volume);
+            Persist();
             _log.Event("ScoutOrderRefused").Warning("{Broker} {Symbol}: {Side} Stop {Price} refused: {Error}", account.Broker, s.Name, Side(w.Dir), Num(price, s), ex.Message);
             notify.Warning("OrderRefused", $"Scout: {s.Name} {Side(w.Dir)} Stop {Num(price, s)} refused", ex.Message, account.AccountId);
         }
+        catch (Exception ex) when (ex is TimeoutException or IOException)
+        {
+            record.State = RoleState.Unknown;
+            record.Result = "unknown: no reply from the broker";
+            OrderRow(now, w, "place", 0, sl, expires, null, "unknown", ex.Message, volume);
+            Persist();
+            notify.Warning("ScoutSendUnknown", $"Scout: no reply placing {s.Name} {Side(w.Dir)} Stop {Num(price, s)}", "Scout checks the broker before doing anything else with this setup.", account.AccountId);
+            throw;
+        }
     }
 
-    /// <returns>True when the broker cancelled it.</returns>
-    private async Task<bool> CancelAsync(CTraderSession session, string key, ProtoOAOrder order, string reason)
+    // Refusals that say nothing about the order itself: it may be sent again, once. Lack of money comes back through the margin budget.
+    private static bool IsTemporary(CTraderApiException ex) =>
+        ex.IsTokenProblem || ex.ErrorCode is "CANT_ROUTE_REQUEST" or "UNKNOWN_ERROR" or "TIMEOUT_ERROR" or "REQUEST_FREQUENCY_EXCEEDED" or "NOT_ENOUGH_MONEY";
+
+    /// <returns>True when the broker confirmed the cancel.</returns>
+    private async Task<bool> CancelAsync(IBrokerGateway session, string key, ProtoOAOrder order, string reason)
     {
-        if (!_symbols.TryGetValue(order.TradeData.SymbolId, out var s) || _cancelling.Contains(order.OrderId))
+        if (!_symbols.TryGetValue(order.TradeData.SymbolId, out var s))
             return false;
         var parts = key.Split('|');
-        var now = DateTime.UtcNow;
+        var now = Now;
         if (dryRun)
         {
             _log.Information("{Broker} {Symbol}: would cancel order {OrderId} ({Reason})", account.Broker, s.Name, order.OrderId, reason);
             return false;
         }
-        _cancelling.Add(order.OrderId);
-        string result;
+        if (!state.Roles.TryGetValue(key, out var role))
+            state.Roles[key] = role = new RoleRecord { FirstSeenUtc = now, OrderId = order.OrderId, State = RoleState.Working, Result = "placed", PlaceLogged = true, LogFromUtc = now };
+        if (role.State == RoleState.CancelRequested && role.NextCancelUtc > now)
+            return false;
+
+        role.OrderId = order.OrderId;
+        role.State = RoleState.CancelRequested;
+        role.CancelAttempts++;
+        role.NextCancelUtc = now + CancelBackoff[Math.Min(role.CancelAttempts, CancelBackoff.Length) - 1];
+        Persist();
         try
         {
             await session.CancelOrderAsync(account.AccountId, order.OrderId, OrderTimeout);
-            result = "ok";
+            (role.State, role.Result, role.NextCancelUtc) = (RoleState.Cancelled, "cancelled", null);
+            Persist();
+            CancelRow(now, s, parts, order, "ok", reason);
             _log.Event("ScoutCancel").Information("{Broker} {Symbol}: cancelled order {OrderId} {Side} Stop {Price} — {Reason}",
                 account.Broker, s.Name, order.OrderId, SideOf(order.TradeData.TradeSide), Num(order.StopPrice, s), reason);
+            return true;
         }
         catch (CTraderApiException ex)
         {
-            result = $"refused: {ex.ErrorCode}";
-            _log.Event("ScoutCancelRefused").Warning("{Broker} {Symbol}: cancel of order {OrderId} refused: {Error}", account.Broker, s.Name, order.OrderId, ex.Message);
+            CancelRow(now, s, parts, order, $"refused: {ex.ErrorCode}", reason);
+            _log.Event("ScoutCancelRefused").Warning("{Broker} {Symbol}: cancel of order {OrderId} refused: {Error}; trying again", account.Broker, s.Name, order.OrderId, ex.Message);
         }
+        catch (Exception ex) when (ex is TimeoutException or IOException)
+        {
+            CancelRow(now, s, parts, order, "no reply", reason);
+            _log.Event("ScoutCancelRefused").Warning("{Broker} {Symbol}: no reply cancelling order {OrderId}: {Error}; checking the broker", account.Broker, s.Name, order.OrderId, ex.Message);
+            AlertCancelFailing(role, s, order, reason);
+            Persist();
+            if (ex is IOException)
+                throw;
+            return false;
+        }
+        AlertCancelFailing(role, s, order, reason);
+        Persist();
+        return false;
+    }
+
+    private void AlertCancelFailing(RoleRecord role, SymbolInfo s, ProtoOAOrder order, string reason)
+    {
+        if (role.CancelAttempts < 3 || role.CancelAlerted)
+            return;
+        role.CancelAlerted = true;
+        notify.Critical("ScoutCancelFailing", $"Scout {account.Broker}: order {order.OrderId} on {s.Name} cannot be cancelled",
+            $"{role.CancelAttempts} attempts failed ({reason}). It stays live until it fills or expires; Scout keeps trying.", account.AccountId);
+    }
+
+    private void CancelRow(DateTime now, SymbolInfo s, string[] parts, ProtoOAOrder order, string result, string reason) =>
         ordersCsv.Write(now,
         [
             CsvFormat.Time(now), s.Name, parts[1], SetupTime(parts[2]), parts[3], "cancel", SideOf(order.TradeData.TradeSide), Lots(s, order.TradeData.Volume),
             Num(order.StopPrice, s), order.HasStopLoss ? Num(order.StopLoss, s) : "", "", order.OrderId.ToString(CultureInfo.InvariantCulture), "", "", "", "", "", result, reason, "",
         ]);
-        return result == "ok";
-    }
 
     /// <summary>The control entry that made Scout cancel this setup role's order: the symbol switched off, else the setup skipped.</summary>
     private ControlEntry? ControlEntryFor(string roleKey)
@@ -637,63 +1042,112 @@ internal sealed class AccountScout(
     }
 
     // ── Execution events: fills, expiries and closes of what Scout started (for the review, Scout spec §4.6) ────────
-    /// <returns>True when the memory changed (a fill).</returns>
+    /// <returns>True when the memory changed.</returns>
     private bool HandleExecutions()
     {
         var changed = false;
         while (_executions.TryDequeue(out var e))
         {
-            var now = DateTime.UtcNow;
+            var now = Now;
             if (e.Order is { } o && KeyOf(o.TradeData.Label, o.TradeData.SymbolId) is { } key && _symbols.TryGetValue(o.TradeData.SymbolId, out var s))
             {
                 var parts = key.Split('|');
+                state.Roles.TryGetValue(key, out var r);
+                var same = r is not null && (r.OrderId == 0 || r.OrderId == o.OrderId);
                 switch (e.ExecutionType)
                 {
                     case ProtoOAExecutionType.OrderFilled when o.OrderType == ProtoOAOrderType.Stop && e.Position is not null && e.Deal is not null:
-                        if (state.Roles.TryGetValue(key, out var r))
-                        {
-                            r.PositionId = e.Position.PositionId;
-                            r.Result = "filled";
-                            changed = true;
-                        }
+                        if (r is { FillLogged: true } && r.PositionId == e.Position.PositionId)
+                            break; // the same event again
+                        r ??= state.Roles[key] = new RoleRecord { FirstSeenUtc = now, PlaceLogged = true, LogFromUtc = now };
+                        var wasCancelling = r.State == RoleState.CancelRequested;
+                        r.OrderId = o.OrderId;
+                        (r.PositionId, r.State, r.Result, r.FillLogged, r.NextCancelUtc) = (e.Position.PositionId, RoleState.Filled, "filled", true, null);
+                        changed = true;
                         var slip = (e.Deal.ExecutionPrice - o.StopPrice) * (o.TradeData.TradeSide == ProtoOATradeSide.Buy ? 1 : -1) / s.PipSize;
                         ExecRow(now, s, parts, "filled", o, e.Position.PositionId, Num(e.Deal.ExecutionPrice, s), CsvFormat.Num(slip, 1), "", "", "");
                         _log.Event("ScoutFilled").Information("{Broker} {Symbol}: order {OrderId} filled at {Price} (slip {Slip:F1} pips) → position {PositionId}",
                             account.Broker, s.Name, o.OrderId, Num(e.Deal.ExecutionPrice, s), slip, e.Position.PositionId);
+                        if (wasCancelling)
+                            notify.Warning("ScoutFilledDuringCancel", $"Scout {account.Broker}: order {o.OrderId} on {s.Name} filled while being cancelled", "TM manages the position.", account.AccountId);
                         _dirty = true; // the other order of the pair is cancelled in the next sync
                         break;
                     case ProtoOAExecutionType.OrderExpired:
+                        if (same && r!.State == RoleState.Expired)
+                            break;
                         ExecRow(now, s, parts, "expired", o, null, "", "", "", "", "");
+                        if (same)
+                        {
+                            (r!.State, r.Result) = (RoleState.Expired, "expired");
+                            changed = true;
+                        }
                         break;
                     case ProtoOAExecutionType.OrderCancelled when o.OrderType == ProtoOAOrderType.Stop:
-                        if (!_cancelling.Remove(o.OrderId))
+                        if (r is null)
                             ExecRow(now, s, parts, "cancelled", o, null, "", "", "", "", "not by Scout (owner or TM)");
+                        else if (!same || r.State is RoleState.Cancelled or RoleState.Held or RoleState.CancelledExternally)
+                            break; // Scout's own cancel, already written (or the second order of a duplicate)
+                        else if (r.State == RoleState.CancelRequested)
+                        {
+                            (r.State, r.Result, r.NextCancelUtc) = (RoleState.Cancelled, "cancelled", null);
+                            ExecRow(now, s, parts, "cancel", o, null, "", "", "", "", "confirmed by the broker after no reply");
+                            changed = true;
+                        }
+                        else
+                        {
+                            (r.State, r.Result) = (RoleState.CancelledExternally, "cancelled, not by Scout");
+                            ExecRow(now, s, parts, "cancelled", o, null, "", "", "", "", "not by Scout (owner or TM)");
+                            changed = true;
+                        }
                         break;
                     case ProtoOAExecutionType.OrderRejected:
+                        if (same && r!.State == RoleState.Refused)
+                            break; // the refusal PlaceAsync already wrote, or the same event again
                         ExecRow(now, s, parts, "rejected", o, null, "", "", "", "", e.ErrorCode ?? "");
+                        if (same)
+                        {
+                            (r!.State, r.Result) = (RoleState.Refused, $"rejected: {e.ErrorCode}");
+                            changed = true;
+                        }
                         break;
                 }
             }
 
             // A deal that closes (part of) a position that came from Scout's order: its result.
-            if (e.Deal is { ClosePositionDetail: { } close } deal && state.Roles.FirstOrDefault(x => x.Value.PositionId == deal.PositionId) is { Key: { } pk }
+            if (e.Deal is { ClosePositionDetail: not null } deal && state.Roles.FirstOrDefault(x => x.Value.PositionId == deal.PositionId) is { Key: { } pk, Value: { } role }
                 && _symbols.TryGetValue(deal.SymbolId, out var ps))
             {
-                var digits = close.HasMoneyDigits ? (int)close.MoneyDigits : 2;
-                double Money(long v) => v / Math.Pow(10, digits);
-                var net = Money(close.GrossProfit) + Money(close.Swap) + Money(close.Commission);
-                var parts = pk.Split('|');
-                ordersCsv.Write(now,
-                [
-                    CsvFormat.Time(now), ps.Name, parts[1], SetupTime(parts[2]), parts[3], "closed", SideOf(deal.TradeSide == ProtoOATradeSide.Buy ? ProtoOATradeSide.Sell : ProtoOATradeSide.Buy),
-                    Lots(ps, deal.FilledVolume), "", "", "", deal.OrderId.ToString(CultureInfo.InvariantCulture), deal.PositionId.ToString(CultureInfo.InvariantCulture),
-                    Num(deal.ExecutionPrice, ps), "", CsvFormat.Num(Money(close.GrossProfit), digits), CsvFormat.Num(net, digits), "ok", "", "",
-                ]);
-                _log.Event("ScoutClosed").Information("{Broker} {Symbol}: position {PositionId} closed {Lots} lot at {Price}, gross {Gross}, net {Net}",
-                    account.Broker, ps.Name, deal.PositionId, Lots(ps, deal.FilledVolume), Num(deal.ExecutionPrice, ps), Money(close.GrossProfit), net);
+                changed |= LogClose(pk, role, deal, ps, now, "");
+                if (e.Position is { PositionStatus: ProtoOAPositionStatus.PositionStatusClosed })
+                {
+                    role.State = RoleState.Closed;
+                    changed = true;
+                }
             }
         }
         return changed;
+    }
+
+    /// <summary>One orders.csv row per closing deal, once, however many times the deal is seen.</summary>
+    /// <returns>True when a new row was written.</returns>
+    private bool LogClose(string key, RoleRecord role, ProtoOADeal deal, SymbolInfo ps, DateTime now, string detail)
+    {
+        if (role.LoggedDeals.Contains(deal.DealId) || !Loggable(role, deal.ExecutionTimestamp) || deal.ClosePositionDetail is not { } close)
+            return false;
+        role.LoggedDeals.Add(deal.DealId);
+        var digits = close.HasMoneyDigits ? (int)close.MoneyDigits : 2;
+        double Money(long v) => v / Math.Pow(10, digits);
+        var net = Money(close.GrossProfit) + Money(close.Swap) + Money(close.Commission);
+        var parts = key.Split('|');
+        ordersCsv.Write(now,
+        [
+            CsvFormat.Time(now), ps.Name, parts[1], SetupTime(parts[2]), parts[3], "closed", SideOf(deal.TradeSide == ProtoOATradeSide.Buy ? ProtoOATradeSide.Sell : ProtoOATradeSide.Buy),
+            Lots(ps, deal.FilledVolume), "", "", "", deal.OrderId.ToString(CultureInfo.InvariantCulture), deal.PositionId.ToString(CultureInfo.InvariantCulture),
+            Num(deal.ExecutionPrice, ps), "", CsvFormat.Num(Money(close.GrossProfit), digits), CsvFormat.Num(net, digits), "ok", detail, "",
+        ]);
+        _log.Event("ScoutClosed").Information("{Broker} {Symbol}: position {PositionId} closed {Lots} lot at {Price}, gross {Gross}, net {Net}",
+            account.Broker, ps.Name, deal.PositionId, Lots(ps, deal.FilledVolume), Num(deal.ExecutionPrice, ps), Money(close.GrossProfit), net);
+        return true;
     }
 
     private void ExecRow(DateTime now, SymbolInfo s, string[] parts, string action, ProtoOAOrder o, long? positionId, string fill, string slip, string gross, string net, string detail) =>
@@ -788,7 +1242,7 @@ internal sealed class AccountScout(
                 continue;
             record.Chart = path;
             drawn++;
-            var now = DateTime.UtcNow;
+            var now = _utcNow();
             ordersCsv.Write(now,
             [
                 CsvFormat.Time(now), s.Name, o.Timeframe, CsvFormat.Time(o.SetupUtc), o.Reversal ? "R" : "M", "chart", Side(o.Dir), "", Num(o.Price, s),
@@ -798,7 +1252,7 @@ internal sealed class AccountScout(
         }
         _log.Event("ScoutCharts").Information("{Broker}: drew {Drawn} of {Missing} missing order picture(s)", account.Broker, drawn, missing.Count);
         if (drawn > 0 && !dryRun)
-            state.Save(DateTime.UtcNow);
+            state.Save(_utcNow());
     }
 
     private static string WithHigher(Want w) => TaggedEvent.Compare(w.Chart.Higher?.Trend ?? 0, w.Dir);
@@ -807,7 +1261,9 @@ internal sealed class AccountScout(
         DateTime.TryParseExact(compact, "yyyyMMddHHmm", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t)
             ? CsvFormat.Time(t) : compact;
 
-    private static string ClientId() => Guid.NewGuid().ToString("N")[..16];
+    // The same setup role and attempt always give the same ID: it links a request to its order. The label stays the key that prevents duplicates.
+    private static string ClientId(string key, int attempt) =>
+        $"s{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)))[..12].ToLowerInvariant()}-{attempt}";
     private static string Side(int dir) => dir == 1 ? "Buy" : dir == -1 ? "Sell" : "";
     private static string SideOf(ProtoOATradeSide side) => side == ProtoOATradeSide.Buy ? "Buy" : "Sell";
     private static string TrendName(int t) => t == 1 ? "up" : t == -1 ? "down" : "unknown";

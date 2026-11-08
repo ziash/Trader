@@ -39,6 +39,18 @@ public sealed record SymbolInfo(
         return Math.Max(MinVolume, raw / step * step);
     }
 
+    /// <summary>
+    /// Open API volume for <paramref name="lots"/>, rounded down to the step; null when that is below the broker's minimum.
+    /// For orders whose size is a risk decision: the broker's minimum never raises it (Scout review F-03).
+    /// </summary>
+    public long? VolumeNotAbove(double lots)
+    {
+        var raw = (long)Math.Round(lots * LotUnits * 100);
+        var step = Math.Max(1, StepVolume);
+        var volume = raw / step * step;
+        return volume >= MinVolume && volume > 0 ? volume : null;
+    }
+
     /// <summary>Lots for an Open API volume (e.g. 100,000 on EURUSD = 0.01 lot).</summary>
     public double LotsForVolume(long volume) => volume / 100.0 / LotUnits;
 

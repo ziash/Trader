@@ -131,14 +131,17 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
     bot.Log.Information("Orders: {Lots} lot ({Own} symbol(s) with their own size, listed after connecting), stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
         config.Lots, config.LotsBySymbol?.Count ?? 0, config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
 
+    var feed = new PriceFeed(); // live prices: an order whose level has already passed is not sent (scout.md §2.3)
     bot.Connection.MessageReceived += m =>
     {
+        feed.Handle(m);
         foreach (var scout in scouts)
             scout.OnMessage(m);
     };
 
     bot.Connection.OnReady = async (session, accounts, _) =>
     {
+        feed.Reset();
         foreach (var a in config.Accounts.Where(a => accounts.Any(x => x.CtidTraderAccountId == a.AccountId)))
         {
             var log = bot.Log.ForAccount(a.AccountId);
@@ -146,7 +149,9 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
             var symbols = await catalog.GetDetailsAsync(session, a.BrokerSymbolNames);
             foreach (var missing in a.BrokerSymbolNames.Where(n => symbols.All(x => x.Name != n.Key)))
                 log.Event("SymbolMissing").Warning("{Broker}: symbol {Symbol} not found; its charts are skipped", a.Broker, missing.Key);
-            scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, symbols);
+            if (symbols.Count > 0)
+                await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(x => x.SymbolId));
+            scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, feed, symbols);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
             LogOrderSizes(log, a.Broker, config, symbols);
         }
@@ -256,14 +261,20 @@ static void LogOrderSizes(Serilog.ILogger log, string broker, ScoutConfig config
     foreach (var s in symbols)
     {
         var want = config.LotsFor(s.Name);
-        var real = s.LotsForVolume(s.VolumeForLots(want));
+        if (s.VolumeNotAbove(want) is not { } volume)
+        {
+            log.Event("LotsRefused").Warning("{Broker} {Symbol}: {Want} lot is below the broker's minimum {Min}; no orders on this symbol until its size is changed",
+                broker, s.Name, want, s.LotsForVolume(s.MinVolume));
+            continue;
+        }
+        var real = s.LotsForVolume(volume);
         if (Math.Abs(real - want) > 1e-9)
-            log.Event("LotsAdjusted").Warning("{Broker} {Symbol}: {Want} lot is not a size the broker takes (minimum {Min}, step {Step}); orders use {Real} lot",
-                broker, s.Name, want, s.LotsForVolume(s.MinVolume), s.LotsForVolume(s.StepVolume), real);
+            log.Event("LotsAdjusted").Warning("{Broker} {Symbol}: {Want} lot is not a size the broker takes (step {Step}); orders use {Real} lot",
+                broker, s.Name, want, s.LotsForVolume(s.StepVolume), real);
     }
-    log.Information("{Broker}: order size per symbol: {Sizes}", broker, string.Join(", ", symbols.Select(s =>
+    log.Information("{Broker}: order size per symbol: {Sizes}", broker, string.Join(", ", symbols.Where(s => s.VolumeNotAbove(config.LotsFor(s.Name)) is not null).Select(s =>
     {
-        var real = s.LotsForVolume(s.VolumeForLots(config.LotsFor(s.Name)));
+        var real = s.LotsForVolume(s.VolumeNotAbove(config.LotsFor(s.Name))!.Value);
         return $"{s.Name} {real.ToString("0.##", inv)} lot = {(real * s.LotUnits).ToString("0.##", inv)} {s.BaseAsset}";
     })));
 }

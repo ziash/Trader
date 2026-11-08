@@ -18,7 +18,8 @@ public sealed record ScoutConfig(
     DetectorSettings? Setup = null,
     IReadOnlyDictionary<string, double>? LotsBySymbol = null, // own size per symbol, e.g. { "XAUUSD": 0.01 } (scout.md §2)
     double MarginUsePercent = 50,   // Scout places an order only while the margin in use, with its own orders filled, stays within this % of equity (scout.md §2.5)
-    double MarginFactor = 4)        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
+    double MarginFactor = 4,        // margin an order of Scout's needs once filled, × its own: TM's mirror doubles it, the two hedges double it again
+    RiskLimits? Limits = null)      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -28,6 +29,8 @@ public sealed record ScoutConfig(
     public double LotsFor(string symbol) => LotsBySymbol is not null && LotsBySymbol.TryGetValue(symbol, out var lots) ? lots : Lots;
 
     public DetectorSettings SetupSettings => Setup ?? new DetectorSettings();
+
+    public RiskLimits RiskLimitsInForce => Limits ?? new RiskLimits();
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -83,6 +86,8 @@ public sealed record ScoutConfig(
         }
         if (MarginUsePercent is <= 0 or > 100 || MarginFactor < 1)
             throw new ScoutConfigException($"{FileName}: \"marginUsePercent\" above 0 and at most 100, \"marginFactor\" at least 1");
+        if (RiskLimitsInForce is { DailyLossPercent: <= 0 or > 100 } or { WeeklyLossPercent: <= 0 or > 100 } or { PeakDrawdownPercent: <= 0 or > 100 })
+            throw new ScoutConfigException($"{FileName}: \"limits\" percentages must be above 0 and at most 100");
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

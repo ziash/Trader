@@ -60,6 +60,8 @@
   // margin of Scout's waiting orders and the new one (TM's mirror and two hedges) stays within marginUsePercent of equity.
   "marginUsePercent": 50,
   "marginFactor": 4,
+  // Losses that stop new entries, in % of equity (scout.md §2.7). TM keeps managing open positions. Starting values, to calibrate on replay.
+  "limits": { "dailyLossPercent": 3, "weeklyLossPercent": 6, "peakDrawdownPercent": 15 },
   "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
   "historyDays": 30,      // past candles read at start to rebuild the state
 

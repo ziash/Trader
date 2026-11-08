@@ -1,0 +1,48 @@
+# Builds everything and runs every test on each pull request and push to main (Scout review P-12). Uses no broker and no secret.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build Trader.sln -c Release
+      - run: dotnet test Trader.sln -c Release --no-build
+        env:
+          TRADEBOT_HOME: ${{ runner.temp }}/tradebot
+
+  dashboard-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/dashboard/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, openssl
+      - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpunit
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Names the files only, so a value is never printed. ExportTests.cs holds a deliberate fake key.
+      - name: No credentials in tracked files
+        run: |
+          if git grep -lE '(CTRADER_(CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)=[A-Za-z0-9_-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|GOCSPX-[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|sk-ant-[A-Za-z0-9_-]{10,})' -- . ':!tests/Trader.DashboardExport.Tests/ExportTests.cs'; then
+            echo "Credential-like text found in the files above"; exit 1
+          fi

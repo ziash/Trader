@@ -110,7 +110,7 @@ var atr = Candle.AverageTrueRange(days, 3);                                 // a
 ```
 
 - Market orders and closes wait for the fill; pending-order and SL/TP calls wait for the server's confirmation (several replies come back per order). All throw `CTraderApiException` with the broker's code on rejection (e.g. `TRADING_BAD_VOLUME`).
-- Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`.
+- Volumes are in Open API units (hundredths of a unit): use `SymbolInfo.VolumeForLots` / `LotsForVolume`. Where the size is a risk decision use `VolumeNotAbove`: it returns null rather than raising a size to the broker's minimum.
 - Place orders only while Primary on the account, and follow the ownership rule ([open-code-pieces.md §4](../../docs/open-code-pieces.md#4-one-framework-many-bots-and-the-rules-every-bot-follows)).
 
 ## Notifications to the owner

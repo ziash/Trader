@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.24 (08-Nov-2026) — history in §8 |
+| Document version | v1.25 (08-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -37,7 +37,7 @@ Per chart (symbol × timeframe) in `scout.json`: `"watch"` sends an alert for ea
 
 | When | Scout |
 |---|---|
-| A pause gets its stop level (2nd candle) | Places a **Buy Stop / Sell Stop** at the level: its symbol's size (`lotsBySymbol`, else `lots` = 0.1; the broker's minimum and step apply), **stop-loss at the far side of the pause**, **trailing switch on**, **expiry 16 candles** later on the server (good till date), label as above |
+| A pause gets its stop level (2nd candle) | Places a **Buy Stop / Sell Stop** at the level: its symbol's size (`lotsBySymbol`, else `lots` = 0.1; the broker's minimum and step apply), **stop-loss at the far side of the pause**, **trailing switch on**, **expiry on the server 16 candles after the candle that gave the level** (good till date), label as above |
 | The pause rolls over (reversal stop, Scout spec §2.1 rule 5) | Places the reversal stop the same way, its stop-loss at the main level |
 | One order of a pause fills | Cancels the other one (one cancels the other) |
 | The setup ends unfilled (trend turned, pause too long or too deep) | Cancels its own unfilled order(s) |
@@ -46,6 +46,20 @@ Per chart (symbol × timeframe) in `scout.json`: `"watch"` sends an alert for ea
 
 - Each setup role (pause × main/reversal) gets **at most one order, ever**: the memory file keeps it across restarts. A refused order (e.g. the price is already beyond the level) is logged and not retried. An order held back for margin (§2.5) is not an order: it is tried again while the setup lasts.
 - After a restart, Scout's pending orders are found by label (`Scout-` + timeframe + pause start), whatever instance placed them.
+- **Checked before sending** (v1.25, [review](reviews/2026-11-08-v1.0-independent-review.md) F-03, F-10, F-20). The order is not sent when: the configured size is below the broker's minimum (the minimum never raises a size; `skip`, *size below minimum*); the chart's candles are a whole candle late (*stale candles*); its expiry would be under one candle away (*setup too old*, so a late or restarted Scout never gives an old setup a fresh 16 hours); or there is no live price under two minutes old (*no live price*, e.g. the market is closed). These are tried again while the setup lasts. A level the live price has already passed (ask for a Buy Stop, bid for a Sell Stop) is refused for good (`place`, `refused`, `LEVEL_PASSED`): the broker would otherwise fill it at once at a worse price.
+- **The broker's state decides** (v1.25, review P-01). Each role has a state in the memory file, saved before and after every broker call:
+
+| State | Means | What happens next |
+|---|---|---|
+| `Sending` → `Working` | The request went out; the broker accepted it | Waits for fill, expiry or cancel |
+| `Unknown` | Timeout or lost connection: the broker may have it | Never sent blindly. Found by label: `Working`. Not on the account or in the broker's history after 30 s and two reconciles: `Intended` |
+| `Intended` | May be sent again (the request never arrived, or a temporary refusal such as `CANT_ROUTE_REQUEST` or `NOT_ENOUGH_MONEY`) | Through all the checks again; at most two sends in all, then `Abandoned` or `Refused` |
+| `Refused`, `Abandoned` | Final | The setup gets no more orders |
+| `CancelRequested` | Scout wants it gone; the broker has not confirmed | Tried after 5 s, 15 s, 60 s, then every 5 min while the order exists; a Critical pop-up after the third failure. Reverts to `Working` if the reason goes away |
+| `Cancelled`, `Held`, `CancelledExternally`, `Expired` | Final (`Held`: placed again when released) | |
+| `Filled` → `Closed` | Has a position; fully closed | A fill during a cancel wins and is reported |
+
+- **Recovery:** after every (re)connect, and whenever a role is missing from the account, Scout reads the broker's order and deal history (14 days) and writes what it missed to `orders.csv`, once (`detail`: *recovered …*). Orders and positions missing from the memory are rebuilt from their labels. Two orders with one label: the newer is cancelled, with a Critical pop-up.
 - Acts only while Primary on the account (open-code-pieces.md §6); a second copy only watches.
 
 ### 2.4 With TM
@@ -79,6 +93,30 @@ The owner can steer Scout from the dashboard ([dashboard.md §3.4](../../dashboa
 - A restart applies the current file again (it describes the wanted state, so applying it twice changes nothing).
 - Controls never move, close or resize anything: they only hold Scout back or change which chart it reads. Order size, mode and the symbol list stay in `scout.json`.
 
+### 2.7 Stopping new entries (v1.25, 08-Nov-2026)
+
+From the independent review (F-02, P-04). A halt **only stops new entries**: Scout cancels its pending orders (TM then cancels their mirrors) and places none. **TM keeps managing and protecting every open position**; nothing is closed. Applies on the next sync, within a minute.
+
+| Trigger | Default (`limits` in `scout.json`, % of equity) | Ends |
+|---|---|---|
+| Daily loss, from the first equity of the UTC day | `dailyLossPercent` 3 | At the next UTC day |
+| Weekly loss, from the first equity of the week (Monday UTC) | `weeklyLossPercent` 6 | Owner's reset |
+| Fall from the peak equity | `peakDrawdownPercent` 15 | Owner's reset |
+| Owner's command | The file below exists | The file is removed |
+
+The values are starting points to calibrate on replay. Halts survive restarts (`Equity` in the memory file); a recovery of the equity does not end one. Setups cancelled by a halt are placed again afterwards if still valid and young enough.
+
+**Commands on the laptop** (no website needed):
+
+```bash
+touch ~/tradebot/control/scout-halt                      # stop new entries on every account
+rm ~/tradebot/control/scout-halt                         # allow them again
+touch ~/tradebot/control/scout-halt-brokerB-49124666     # one account only
+touch ~/tradebot/control/scout-reset-brokerB-49124666    # end a loss halt; the limits then count from the equity now
+```
+
+Pop-ups: `ScoutHalted` (Critical), `ScoutResumed` (Warning). A dashboard switch is a later step (review P-10).
+
 ## 3. Logs and outputs
 
 `~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/`:
@@ -86,7 +124,7 @@ The owner can steer Scout from the dashboard ([dashboard.md §3.4](../../dashboa
 | File | One row per |
 |---|---|
 | `setups.csv` | detector event: `NewStop`, `StopMoved`, `NewReversal`, `ReversalMoved`, `StopFilled`, `ReversalFilled`, `Cancelled` (with reason), `TrendTurned` — with level, far side, pause start, pause candles, pause height and move in ATR, pull-back, ATR, higher-timeframe trend and *with / against* |
-| `orders.csv` | order action or result: `place` (ok / refused), `cancel` (with reason), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode), `chart` (a picture drawn later for an earlier order, §3.1). Column `chart`: the order's picture (§3.1), on its `place` or `chart` row |
+| `orders.csv` | order action or result: `place` (ok / refused / unknown), `skip` (the reason in `result`), `cancel` (with reason; `result` ok / refused / no reply), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode), `chart` (a picture drawn later for an earlier order, §3.1). Column `chart`: the order's picture (§3.1), on its `place` or `chart` row |
 | `events.csv` | every log line with an event name (shared format, open-code-pieces.md §8) |
 | `charts/*.svg` | one picture per order Scout placed (§3.1) |
 
@@ -187,4 +225,5 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.25 | 08 Nov 2026 | **Review Phase 1** (owner: implement the audit, [report](reviews/2026-11-08-v1.0-independent-review.md)): order states confirmed by the broker, retries and backoff (§2.3), recovery from the broker's history, checks before sending (no raising to the broker's minimum, stale candles, setup age, live price), expiry counted from the level's candle (Scout spec v1.10), account halt and loss limits (§2.7), `IBrokerGateway` and a fault-injecting fake broker. Tests: 81 (35 new). Not deployed |
 | v1.24 | 08 Nov 2026 | **Independent review v1.0** published ([report](reviews/2026-11-08-v1.0-independent-review.md), reviewed at `0a50a52`), with the audit prompt so it can be run again ([reviews/README.md](reviews/README.md)). Recommendations wait for the owner's approval. No change to the bot |

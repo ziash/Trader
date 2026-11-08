@@ -8,6 +8,22 @@
 
 The brief given to the reviewer: [audit-prompt.md](audit-prompt.md).
 
+## Implementation status of review v1.0
+
+Phase 1 is built and tested but **not deployed** (Scout v1.25, 08-Nov-2026).
+
+| Finding | Status |
+|---|---|
+| F-02 loss limits and global new-entry stop | Built (local command; dashboard switch to come, P-10) |
+| F-03 size raised by the broker minimum | Built |
+| F-04, F-05, F-07, F-16, F-17, F-18 placement, cancel, recovery, duplicates, saves, client ID | Built |
+| F-06 applied shown while a cancel is open | Built for the acknowledgement; requested and confirmed on the dashboard to come (P-10) |
+| F-10 live-price check | Built. Rewind already refuses a passed level. Broker behaviour on such an order not tested separately |
+| F-15 test harness; CI (P-12) | Built. Scout-side tests for TM health wait for its gate (Phase 2). Abnormal spread is covered in TM's tests; a Scout entry guard waits for its experiment (Phase 4) |
+| F-20 old setups | Built |
+| F-13 remote dead-man alarm | **Open:** needs the owner's choice of an off-machine channel |
+| Phases 2–6 | Not started |
+
 ## Rules
 
 - **File name:** `YYYY-MM-DD-vN.M-independent-review.md`.

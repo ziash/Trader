@@ -45,6 +45,28 @@ public sealed class ScoutTests
     }
 
     [Fact]
+    public void A_size_for_risk_is_rounded_down_and_never_raised_to_the_minimum()
+    {
+        SymbolInfo Sym(long lotUnits, long min, long step) =>
+            new(1, "X", "X", "X", "USD", 2, 2, lotUnits, true, ProtoOATradingMode.Enabled, TradingSchedule.AlwaysOpen, min, step);
+        var gas = Sym(10_000, 500_000, 10_000);  // minimum 0.5 lot, as XNGUSD at IC Markets
+        Assert.Null(gas.VolumeNotAbove(0.06));
+        Assert.Equal(0.5, gas.LotsForVolume(gas.VolumeNotAbove(0.5)!.Value), 9);
+        var de40 = Sym(1, 10, 10);               // minimum and step 0.1 lot
+        Assert.Equal(0.1, de40.LotsForVolume(de40.VolumeNotAbove(0.15)!.Value), 9);
+        Assert.Null(de40.VolumeNotAbove(0.05));
+    }
+
+    [Fact]
+    public void Limits_must_be_sensible_percentages()
+    {
+        var account = new ScoutAccount("a", 1, [new ScoutChart("EURUSD", "H1")]);
+        Assert.Throws<ScoutConfigException>(() => new ScoutConfig([account], Limits: new RiskLimits(0)).Validated());
+        Assert.Throws<ScoutConfigException>(() => new ScoutConfig([account], Limits: new RiskLimits(PeakDrawdownPercent: 101)).Validated());
+        Assert.Equal(3, new ScoutConfig([account]).Validated().RiskLimitsInForce.DailyLossPercent);
+    }
+
+    [Fact]
     public void Config_refuses_a_chart_twice_and_unknown_timeframes()
     {
         var chart = new ScoutChart("EURUSD", "H1");

@@ -73,6 +73,7 @@ public sealed class Detector(DetectorSettings? settings = null)
     private double _pHi = double.NaN, _pLo = double.NaN;
     private double? _main, _mainFar;   // pending stop in the trend's direction (and its far side)
     private double? _ctr, _ctrFar;     // pending reversal stop
+    private int? _mainAt, _ctrAt;      // index of the candle on which each level first appeared
 
     public DetectorSettings Settings => _p;
     public int Trend => _trend;
@@ -81,6 +82,10 @@ public sealed class Detector(DetectorSettings? settings = null)
     public double? ReversalLevel => _ctr;
     public double? ReversalFarSide => _ctrFar;
     public DateTime? PauseStartUtc => _ps is { } ps ? _c[ps].OpenUtc : null;
+    /// <summary>Open time of the candle on which the main level first appeared; its order's expiry counts from that candle's close.</summary>
+    public DateTime? MainSinceUtc => _mainAt is { } i ? _c[i].OpenUtc : null;
+    /// <summary>Open time of the candle on which the reversal level first appeared.</summary>
+    public DateTime? ReversalSinceUtc => _ctrAt is { } i ? _c[i].OpenUtc : null;
     public DateTime? LastCandleUtc => _c.Count > 0 ? _c[^1].OpenUtc : null;
     public int Count => _c.Count;
     /// <summary>Every closed candle added so far, oldest first (for the order pictures, scout.md §3.1).</summary>
@@ -151,6 +156,7 @@ public sealed class Detector(DetectorSettings? settings = null)
         {
             _ps = null;
             _main = _mainFar = _ctr = _ctrFar = null;
+            _mainAt = _ctrAt = null;
         }
 
         var d = _trend;
@@ -316,6 +322,7 @@ public sealed class Detector(DetectorSettings? settings = null)
             else if (lvl != _main)
                 events.Add(Ev(SetupEventKind.StopMoved, d, lvl, d == 1 ? below : above, false, pause: info));
             _main = lvl;
+            _mainAt ??= i;
             _mainFar = d == 1 ? below : above;
         }
 
@@ -328,6 +335,7 @@ public sealed class Detector(DetectorSettings? settings = null)
             else if (rl != _ctr)
                 events.Add(Ev(SetupEventKind.ReversalMoved, -d, rl, d == 1 ? above : below, true, pause: info));
             _ctr = rl;
+            _ctrAt ??= i;
             _ctrFar = d == 1 ? above : below;
         }
     }

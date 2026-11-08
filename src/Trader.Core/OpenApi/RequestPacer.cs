@@ -21,7 +21,7 @@ public sealed class RequestPacer(TimeSpan interval)
             var now = DateTime.UtcNow;
             if (_next > now)
                 await Task.Delay(_next - now, ct);
-            _next = (_next > now ? _next : now) + interval;
+            _next = DateTime.UtcNow + interval; // from the real moment: a late wake-up must not shorten the next gap
         }
         finally
         {
