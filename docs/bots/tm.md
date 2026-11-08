@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Built** — steps 1–6 done 20-Oct-2026, tested on both demos; runs as the systemd user service `trader-tm` (§10); from 03-Nov-2026 also manages [Scout](scout/scout.md)'s orders (`takeOver`, decision 12); from v1.9 reads the account's margin and acts on it (§5.1, [issue-log.md #1](../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)) |
-| Document version | v1.17 (08-Nov-2026) — history in §13 |
+| Document version | v1.18 (08-Nov-2026) — history in §13 |
 | Code | [`src/Trader.TM`](../../src/Trader.TM) (`Planner.cs` = the rules, `AccountManager.cs` = the loop, `TradeState.cs` = memory, `Alerts.cs` = news / Friday / disconnect pop-ups) |
 | Tests | [`tests/Trader.TM.Tests`](../../tests/Trader.TM.Tests) — the rules run against a simulated broker |
 | Config | [`config/tm.json`](../../config/tm.json) (accounts, symbols, rule values, pop-up timing) — live copy `~/tradebot/config/tm.json`; news dates: `news-releases.json` (shared with the Audit Bot); pop-ups: `notifications.json` |
@@ -322,3 +322,4 @@ Then open positions in cTrader on a listed symbol, as usual. Pop-ups show warnin
 | v1.15 | 08 Nov 2026 | TM reports each finished management cycle through the instance registry, so Scout can stop new entries when TM is not working ([scout.md §2.7](scout/scout.md#27-stopping-new-entries-v125-08-nov-2026)). No change to TM's rules |
 | v1.16 | 08 Nov 2026 | v1.15 live 15:34 UTC (`TM-8408d9a`, owner's OK): 12 remembered trades picked up on both demos, no action taken by the restart |
 | v1.17 | 08 Nov 2026 | Protection label per leg (§5.1, review F-08, P-05): from the broker's state, with the stop's risk in R; `LegUnprotected` pop-up. Tests: 73 (4 new). No change to TM's rules. Not deployed |
+| v1.18 | 08 Nov 2026 | v1.17 live 15:46 UTC (`TM-4f1aef3`, owner's OK): all 23 open legs labelled on the first plan (16 hedge filled, 7 hedge pending at 3R), none unprotected; no action taken by the restart |
