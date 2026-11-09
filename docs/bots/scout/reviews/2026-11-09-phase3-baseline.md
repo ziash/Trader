@@ -1,13 +1,15 @@
 # Phase 3 baseline: Scout and TM together on history
 
-**The first measurement of the whole system. It loses money after costs in both periods tested, so no trading edge is shown.** Run on 09-Nov-2026 from Trader `76a8694` plus the report script, Rewind `d3c8fd0`. Review reference: [P-06, P-07](2026-11-08-v1.0-independent-review.md).
+**The first measurement of the whole system. It loses money after costs in both periods tested, so no trading edge is shown.** Run on 09-Nov-2026 from Trader `eacc430` plus the replay clock fix, Rewind `0c2ced5`. Review reference: [P-06, P-07](2026-11-08-v1.0-independent-review.md).
 
 | Period | Equity from $5,000 | Largest fall | Mean per finished trade, after costs (95 % interval) |
 |---|---|---|---|
-| Development, Nov 2024 to Dec 2025 | **−54.3 %** | 57.1 % | −0.192 R (−0.338 to −0.047) |
-| Validation, Jan to Jun 2026 | **−32.2 %** | 35.0 % | −0.129 R (−0.355 to +0.088) |
+| Development, Nov 2024 to Dec 2025 | **−57.2 %** | 63.7 % | −0.197 R (−0.368 to −0.032) |
+| Validation, Jan to Jun 2026 | **−44.2 %** | 46.3 % | −0.225 R (−0.379 to −0.079) |
 
-The **locked period, Jul to Oct 2026, has not been run.** The review keeps it for one final test.
+The **locked period, Jul to Oct 2026, has not been run.** The review keeps it for one final test. Dukascopy's SOLUSD history stops on 22-Aug-2026, so that test will lack SOLUSD from then on.
+
+**Corrected the same day.** The first version of this report showed −54.3 % and −32.2 %. Matching the replay to [real trading](2026-11-09-phase3-real-week.md) showed that Scout acted 5 minutes late in every replay. These are the runs with that fixed.
 
 ## What was run
 
@@ -17,15 +19,16 @@ One setting differs from live: **the weekly and peak loss halts are lifted**, be
 
 ## What the runs show
 
-- **Costs and rule losses dominate.** Both periods lose. Only the interval for development excludes zero. Validation alone cannot separate its result from zero.
-- **Results differ by group, and not consistently.** JPY crosses lost in both periods. Indices made a little in both. Crypto, energy and metals changed sign or had too few trades. With about a dozen symbol-period results positive in one period only, this is not yet a basis for choosing symbols.
-- **Old hedged trades fill the account.** A leg was held for a median of about 15 hours, but the longest for 228 days. In development at least 28 positions, about seven trades, were open for 73 % of the hours, and the limit of 8 trades refused 13,538 tries. Scout was mostly shut out by trades that were frozen but not finished.
-- **The figures per trade flatter the system.** They count finished trades only. The money check in each table shows what is still in open trades: −$543 and −$425. The equity line is the full measure.
-- **The risk controls held.** Margin use peaked at 14 % and 21 %, against the limit of 33 %. No stop-out by the broker and no hedge refused for lack of margin.
+- **Costs and rule losses dominate.** Both periods lose, and in both the 95 % interval lies wholly below zero.
+- **Results differ by group, and not consistently.** JPY crosses and crypto lost in both periods. Indices made a little in both. Energy changed sign. Most symbols change sign between the periods, so this is not yet a basis for choosing symbols.
+- **Metals did not trade in validation.** At 2026's prices, 0.5 % of a $5,000 account or less no longer buys the broker's minimum size, so the sizer refused them. In development there were 33 metal trades, which lost.
+- **Old hedged trades fill the account.** A leg was held for a median of about 14 hours, but the longest for 234 days. At least 28 positions, about seven trades, were open for 82 % of the hours in development and 46 % in validation, and in development the limit of 8 trades refused 14,415 tries. Scout was mostly shut out by trades that were frozen but not finished.
+- **The figures per trade flatter the system.** They count finished trades only. The money check in each table shows what is still in open trades: −$1,031 and −$174. The equity line is the full measure.
+- **The risk controls held.** Margin use peaked at 16 % and 18 %, against the limit of 33 %. No stop-out by the broker and no hedge refused for lack of margin.
 
 ## Limits of this measurement
 
-- **Not yet checked against the real broker.** The review's acceptance test, a real trial week matched to broker deals, and the replays of issues #1 and #2 have not been done.
+- **Right in general, not trade by trade.** [Against real trading](2026-11-09-phase3-real-week.md), a replay on Dukascopy's history finds about 75 % of the real orders; on the broker's own candles, 96 %. So these figures describe the system's behaviour, not what each trade would have done.
 - History is Dukascopy's, and its spreads differ from Pepperstone's. Each 5-minute candle is walked in 4 price steps.
 - Today's swap, commission and margin rates are applied to all past dates.
 - Only one parameter set. No experiments yet (review Phase 4).
@@ -39,127 +42,127 @@ Made with `scripts/replay-report.py`. R is a trade's result divided by the risk 
 
 | Measure | Value |
 |---|---|
-| Equity | $5,000.00 → $2,283.87 (-54.3 %) |
-| Largest fall from a peak | 57.1 % |
-| Worst day; best day | -3.3 %; +7.1 % |
-| Whole trades finished | 572 (and 30 positions still open at the end) |
-| Mean result per trade, after costs | **-0.192 R** (95 % interval -0.338 to -0.047) |
-| Trades won | 52.4 % |
-| Profit factor | 0.72 |
-| Longest losing run | 8 trades |
-| Worst trade; best trade | -7.42 R; +8.56 R |
-| Money check | balance changed -2,592.77: finished trades -2,049.30, parts of trades still open -543.47 |
-| Commission paid | $411.80 |
-| Margin use: typical; highest | 8 %; 14 % |
+| Equity | $5,000.00 → $2,137.83 (-57.2 %) |
+| Largest fall from a peak | 63.7 % |
+| Worst day; best day | -4.1 %; +4.7 % |
+| Whole trades finished | 480 (and 28 positions still open at the end) |
+| Mean result per trade, after costs | **-0.197 R** (95 % interval -0.368 to -0.032) |
+| Trades won | 52.9 % |
+| Profit factor | 0.73 |
+| Longest losing run | 6 trades |
+| Worst trade; best trade | -8.86 R; +8.48 R |
+| Money check | balance changed -2,746.45: finished trades -1,715.66, parts of trades still open -1,030.79 |
+| Commission paid | $350.98 |
+| Margin use: typical; highest | 6 %; 16 % |
 | Stop-outs by the broker | 0 |
 | Orders refused at their price for lack of margin | 0 |
 
 | Scout's orders | Count |
 |---|---|
-| Placed | 1249 |
-| Filled | 580 |
-| Not placed: portfolio limit | 13538 |
-| Not placed: size refused | 3458 |
-| Not placed: no live price | 1874 |
-| Not placed: stale candles | 1441 |
-| Not placed: setup too old | 184 |
-| Not placed: halted | 81 |
-| Refused because the level had passed | 9113 |
+| Placed | 1014 |
+| Filled | 487 |
+| Not placed: portfolio limit | 14415 |
+| Not placed: size refused | 3491 |
+| Not placed: no live price | 1775 |
+| Not placed: stale candles | 1413 |
+| Not placed: setup too old | 178 |
+| Not placed: halted | 177 |
+| Refused because the level had passed | 8870 |
 
 | Symbol | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| AUDJPY | 30 | -0.759 | 47 % | 0.30 | -450.54 |
-| BTCUSD | 35 | -0.374 | 54 % | 0.48 | -272.22 |
-| DE40 | 25 | +0.238 | 68 % | 1.47 | +104.94 |
-| ETHUSD | 44 | -0.438 | 52 % | 0.45 | -316.64 |
-| EURJPY | 45 | -0.237 | 51 % | 0.70 | -179.70 |
-| EURUSD | 61 | +0.139 | 49 % | 1.27 | +204.32 |
-| GBPJPY | 63 | -0.144 | 59 % | 0.77 | -163.86 |
-| GBPUSD | 40 | +0.044 | 62 % | 1.09 | +34.90 |
-| SOLUSD | 29 | -0.312 | 59 % | 0.56 | -207.88 |
-| US500 | 35 | +0.160 | 63 % | 1.31 | +128.38 |
-| USDJPY | 39 | -0.280 | 41 % | 0.48 | -252.56 |
-| USTEC | 16 | -0.448 | 56 % | 0.43 | -137.90 |
-| XAGUSD | 5 | +0.050 | 40 % | 1.11 | +0.90 |
-| XAUUSD | 26 | -0.087 | 50 % | 0.84 | -50.14 |
-| XBRUSD | 17 | -0.279 | 41 % | 0.67 | -83.86 |
-| XNGUSD | 24 | -0.348 | 38 % | 0.47 | -180.54 |
-| XPTUSD | 11 | -0.273 | 36 % | 0.66 | -71.78 |
-| XTIUSD | 27 | -0.427 | 48 % | 0.58 | -155.12 |
+| AUDJPY | 24 | -1.084 | 42 % | 0.22 | -593.86 |
+| BTCUSD | 24 | -0.169 | 58 % | 0.69 | -48.86 |
+| DE40 | 20 | -0.427 | 40 % | 0.48 | -176.10 |
+| ETHUSD | 43 | -0.073 | 53 % | 0.88 | -8.72 |
+| EURJPY | 23 | -0.536 | 48 % | 0.43 | -220.18 |
+| EURUSD | 66 | -0.085 | 48 % | 0.86 | +47.24 |
+| GBPJPY | 32 | -0.541 | 53 % | 0.43 | -309.24 |
+| GBPUSD | 46 | +0.163 | 61 % | 1.30 | +171.74 |
+| SOLUSD | 30 | -0.239 | 60 % | 0.69 | -141.80 |
+| US500 | 35 | -0.029 | 54 % | 0.96 | +12.20 |
+| USDJPY | 27 | -0.099 | 56 % | 0.84 | -51.16 |
+| USTEC | 19 | +0.580 | 68 % | 2.90 | +216.04 |
+| XAGUSD | 9 | -1.251 | 33 % | 0.11 | -300.52 |
+| XAUUSD | 17 | +0.338 | 65 % | 2.00 | +145.16 |
+| XBRUSD | 14 | -0.130 | 43 % | 0.87 | -22.22 |
+| XNGUSD | 22 | -0.477 | 41 % | 0.45 | -258.72 |
+| XPTUSD | 7 | -0.956 | 29 % | 0.13 | -179.88 |
+| XTIUSD | 22 | -0.030 | 68 % | 0.96 | +3.22 |
 
 | Group | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| USD | 140 | -0.005 | 51 % | 0.99 | -13.34 |
-| JPY | 138 | -0.308 | 54 % | 0.61 | -794.10 |
-| Metals | 42 | -0.119 | 45 % | 0.80 | -121.02 |
-| Indices | 76 | +0.057 | 63 % | 1.10 | +95.42 |
-| Energy | 68 | -0.362 | 43 % | 0.57 | -419.52 |
-| Crypto | 108 | -0.383 | 55 % | 0.49 | -796.74 |
+| USD | 139 | -0.006 | 54 % | 0.99 | +167.82 |
+| JPY | 79 | -0.705 | 48 % | 0.35 | -1,123.28 |
+| Metals | 33 | -0.370 | 48 % | 0.53 | -335.24 |
+| Indices | 74 | +0.020 | 54 % | 1.03 | +52.14 |
+| Energy | 58 | -0.224 | 52 % | 0.74 | -277.72 |
+| Crypto | 97 | -0.148 | 57 % | 0.77 | -199.38 |
 
 | Half-year | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| 2024-H2 | 202 | -0.098 | 53 % | 0.85 | -506.94 |
-| 2025-H1 | 225 | -0.075 | 57 % | 0.87 | -362.14 |
-| 2025-H2 | 145 | -0.504 | 44 % | 0.45 | -1,180.22 |
+| 2024-H2 | 213 | +0.053 | 59 % | 1.08 | +257.42 |
+| 2025-H1 | 141 | -0.223 | 51 % | 0.70 | -782.54 |
+| 2025-H2 | 126 | -0.589 | 44 % | 0.35 | -1,190.54 |
 
 ## validation: 05 Jan 2026 to 29 Jun 2026
 
 | Measure | Value |
 |---|---|
-| Equity | $5,000.00 → $3,389.46 (-32.2 %) |
-| Largest fall from a peak | 35.0 % |
-| Worst day; best day | -5.4 %; +6.6 % |
-| Whole trades finished | 349 (and 32 positions still open at the end) |
-| Mean result per trade, after costs | **-0.129 R** (95 % interval -0.355 to +0.088) |
-| Trades won | 52.4 % |
-| Profit factor | 0.82 |
+| Equity | $5,000.00 → $2,791.85 (-44.2 %) |
+| Largest fall from a peak | 46.3 % |
+| Worst day; best day | -3.9 %; +3.8 % |
+| Whole trades finished | 421 (and 32 positions still open at the end) |
+| Mean result per trade, after costs | **-0.225 R** (95 % interval -0.379 to -0.079) |
+| Trades won | 51.3 % |
+| Profit factor | 0.67 |
 | Longest losing run | 8 trades |
-| Worst trade; best trade | -5.75 R; +19.77 R |
-| Money check | balance changed -1,466.31: finished trades -1,041.60, parts of trades still open -424.71 |
-| Commission paid | $415.82 |
-| Margin use: typical; highest | 13 %; 21 % |
+| Worst trade; best trade | -4.26 R; +6.90 R |
+| Money check | balance changed -2,100.03: finished trades -1,925.84, parts of trades still open -174.19 |
+| Commission paid | $413.74 |
+| Margin use: typical; highest | 9 %; 18 % |
 | Stop-outs by the broker | 0 |
 | Orders refused at their price for lack of margin | 0 |
 
 | Scout's orders | Count |
 |---|---|
-| Placed | 756 |
-| Filled | 357 |
-| Not placed: portfolio limit | 4753 |
-| Not placed: size refused | 1977 |
-| Not placed: no live price | 590 |
-| Not placed: stale candles | 471 |
-| Not placed: halted | 148 |
+| Placed | 898 |
+| Filled | 429 |
+| Not placed: portfolio limit | 4744 |
+| Not placed: size refused | 2222 |
+| Not placed: no live price | 573 |
+| Not placed: stale candles | 465 |
+| Not placed: halted | 99 |
 | Not placed: setup too old | 31 |
-| Refused because the level had passed | 3467 |
+| Refused because the level had passed | 3323 |
 
 | Symbol | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| AUDJPY | 25 | -0.361 | 56 % | 0.61 | -182.50 |
-| BTCUSD | 24 | +0.000 | 54 % | 1.00 | +1.22 |
-| DE40 | 17 | +0.290 | 47 % | 1.61 | +101.20 |
-| ETHUSD | 23 | -0.040 | 39 % | 0.94 | -10.08 |
-| EURJPY | 24 | -0.654 | 58 % | 0.43 | -366.56 |
-| EURUSD | 36 | +0.082 | 56 % | 1.14 | +47.00 |
-| GBPJPY | 28 | -1.007 | 36 % | 0.21 | -642.34 |
-| GBPUSD | 40 | -0.405 | 52 % | 0.50 | -369.58 |
-| SOLUSD | 10 | +0.982 | 90 % | 5.35 | +222.36 |
-| US500 | 27 | -0.237 | 44 % | 0.59 | -159.08 |
-| USDJPY | 35 | -0.071 | 51 % | 0.89 | -35.38 |
-| USTEC | 15 | +0.677 | 80 % | 5.01 | +238.94 |
-| XBRUSD | 10 | +0.572 | 70 % | 2.76 | +122.64 |
-| XNGUSD | 18 | +0.586 | 39 % | 1.85 | +209.12 |
-| XTIUSD | 17 | -0.599 | 53 % | 0.34 | -218.56 |
+| AUDJPY | 30 | -0.460 | 47 % | 0.50 | -214.86 |
+| BTCUSD | 27 | -0.291 | 37 % | 0.60 | -166.02 |
+| DE40 | 11 | +0.289 | 73 % | 2.08 | +75.60 |
+| ETHUSD | 22 | -1.072 | 23 % | 0.22 | -479.76 |
+| EURJPY | 28 | -0.337 | 57 % | 0.60 | -170.00 |
+| EURUSD | 48 | -0.032 | 56 % | 0.95 | -58.20 |
+| GBPJPY | 39 | -0.685 | 41 % | 0.18 | -512.34 |
+| GBPUSD | 47 | -0.655 | 38 % | 0.24 | -614.46 |
+| SOLUSD | 16 | -0.209 | 62 % | 0.71 | -71.38 |
+| US500 | 42 | +0.057 | 55 % | 1.13 | -6.50 |
+| USDJPY | 41 | +0.125 | 59 % | 1.26 | +78.30 |
+| USTEC | 19 | +0.483 | 79 % | 5.35 | +182.16 |
+| XBRUSD | 14 | +0.887 | 86 % | 14.46 | +245.60 |
+| XNGUSD | 15 | -0.401 | 47 % | 0.50 | -112.72 |
+| XTIUSD | 22 | -0.189 | 50 % | 0.72 | -101.26 |
 
 | Group | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| USD | 111 | -0.142 | 53 % | 0.80 | -357.96 |
-| JPY | 77 | -0.687 | 49 % | 0.39 | -1,191.40 |
+| USD | 136 | -0.200 | 51 % | 0.70 | -594.36 |
+| JPY | 97 | -0.515 | 47 % | 0.40 | -897.20 |
 | Metals | 0 | | | | |
-| Indices | 59 | +0.147 | 54 % | 1.33 | +181.06 |
-| Energy | 45 | +0.135 | 51 % | 1.20 | +113.20 |
-| Crypto | 57 | +0.156 | 54 % | 1.29 | +213.50 |
+| Indices | 72 | +0.205 | 64 % | 1.62 | +251.26 |
+| Energy | 51 | +0.044 | 59 % | 1.08 | +31.62 |
+| Crypto | 65 | -0.535 | 38 % | 0.43 | -717.16 |
 
 | Half-year | Trades | Mean R | Won | Profit factor | USD |
 |---|---|---|---|---|---|
-| 2026-H1 | 349 | -0.129 | 52 % | 0.82 | -1,041.60 |
+| 2026-H1 | 421 | -0.225 | 51 % | 0.67 | -1,925.84 |

@@ -1,4 +1,5 @@
 using Trader.Core.MarketData;
+using Trader.Core.OpenApi;
 using Trader.Scout;
 
 namespace Trader.Scout.Tests;
@@ -13,6 +14,15 @@ public sealed class CandleTimingTests
     private static readonly TradingSchedule Forex = new([(22 * 3600, 5 * 86400 + 22 * 3600)], TimeZoneInfo.Utc);
 
     private static DateTime Utc(int day, int hour, int minute = 0, int second = 0) => new(2026, 11, day, hour, minute, second, DateTimeKind.Utc);
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(18)] // the largest offset a chart gets
+    public void In_a_replay_the_turn_at_a_candles_close_is_already_past_the_time_scout_asks_for_it(int offset)
+    {
+        var close = Utc(11, 12);
+        Assert.True(close + LockStep.CandleReadDelay >= AccountScout.CandleDue(Utc(11, 10), H1, Forex, TimeSpan.FromSeconds(offset)));
+    }
 
     [Fact]
     public void Next_candle_is_asked_for_a_few_seconds_after_it_closes_plus_the_charts_offset()

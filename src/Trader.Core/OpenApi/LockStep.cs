@@ -10,6 +10,12 @@ namespace Trader.Core.OpenApi;
 public sealed class LockStep
 {
     public const string Option = "--lockstep";
+
+    /// <summary>
+    /// How long after a candle closes a bot's clock stands at the turn of that close. A live Scout asks for a new candle 5 s after the close, up to 18 s more per chart; without this a replay's
+    /// turn at the close would be too early and the order would go out one turn, 5 minutes, late (found by matching a real trial week, review P-06).
+    /// </summary>
+    public static readonly TimeSpan CandleReadDelay = TimeSpan.FromSeconds(30);
     private const string TurnPrefix = "turn ";
     private readonly SemaphoreSlim _turn = new(0);
     private long _ticks;
