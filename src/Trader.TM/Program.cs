@@ -9,6 +9,7 @@
 //
 // Options: --config-dir <dir> (default ~/tradebot/config), plus the common ones (--help, --test-notification).
 
+using Trader.Core.OpenApi;
 using Trader.Core.Csv;
 using Trader.Core.Hosting;
 using Trader.Core.Logging;
@@ -44,6 +45,7 @@ return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
     string Folder(TmAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
     string DayFile(TmAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
 
+    var lockStep = LockStep.FromArgs(bot.Args, bot.SecretsPath); // a replay on Rewind, run in step with it (open-code-pieces.md §3)
     var feed = new PriceFeed();
     var events = new CsvEventSink();
     var registry = new InstanceRegistry(TradebotPaths.Instances, bot.Identity, bot.Log);
@@ -57,7 +59,7 @@ return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
         events.AddAccount(a.AccountId, eventsCsv);
         registry.Register(a.Broker, a.AccountId, a.Symbols);
         var book = TradeBook.Load(Path.Combine(TradebotPaths.Root, "run", "tm", $"{a.Broker}-{a.AccountId}.json"));
-        managers.Add(new AccountManager(a, config, bot.Identity, bot.Log, bot.Notify, registry, feed, book, actionsCsv));
+        managers.Add(new AccountManager(a, config, bot.Identity, bot.Log, bot.Notify, registry, feed, book, actionsCsv, lockStep));
         bot.Log.Information("{Broker} (account {Ctid}): {Symbols}; {Trades} remembered trade(s) → {Folder}",
             a.Broker, a.AccountId, string.Join(", ", a.Symbols), book.Trades.Count, Folder(a));
     }
@@ -78,6 +80,8 @@ return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
     var alerts = new Alerts(config, news, () => bot.Connection.DownSinceUtc, () => managers.SelectMany(m => m.OpenTrades).ToList());
 
     bot.Connection.MessageReceived += feed.Handle;
+    if (lockStep is not null)
+        bot.Connection.MessageReceived += lockStep.Handle;
     bot.Connection.MessageReceived += m =>
     {
         foreach (var manager in managers)
@@ -98,13 +102,19 @@ return await BotRunner.RunAsync(TmConfig.BotName, args, async (bot, ct) =>
                 await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(s => s.SymbolId));
             managers.Single(m => m.AccountId == a.AccountId).SetSession(session, symbols);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(s => s.Name)));
+            if (lockStep is not null)
+            {
+                while (registry.RoleOn(a.AccountId) != InstanceRole.Primary)
+                    await Task.Delay(100);
+                await lockStep.JoinAsync(session, a.AccountId);
+            }
         }
     };
 
     bot.Notify.Info("Started", "TM started", $"Watching {string.Join(", ", config.Accounts.Select(a => a.Broker))}");
     try
     {
-        await BotRunner.RunTogetherAsync(ct, [registry.RunAsync, bot.Connection.RunAsync, c => alerts.RunAsync(bot.Notify, c), .. managers.Select(m => (Func<CancellationToken, Task>)m.RunAsync)]);
+        await BotRunner.RunTogetherAsync(ct, [registry.RunAsync, bot.Connection.RunAsync, c => lockStep is null ? alerts.RunAsync(bot.Notify, c) : Task.Delay(Timeout.Infinite, c), .. managers.Select(m => (Func<CancellationToken, Task>)m.RunAsync)]);
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {

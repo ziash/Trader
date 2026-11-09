@@ -33,7 +33,8 @@ internal sealed class AccountScout(
     Func<DateTime>? utcNow = null,
     string? controlDir = null,
     Func<DateTime?>? tmHealthyUtc = null,
-    string? tmStateFile = null)
+    string? tmStateFile = null,
+    LockStep? lockStep = null)
 {
     public static readonly string[] SetupsHeader =
     [
@@ -134,6 +135,12 @@ internal sealed class AccountScout(
     {
         while (true)
         {
+            if (lockStep is { } step)
+            {
+                await step.NextTurnAsync(ct);
+                await TurnAsync(step);
+                continue;
+            }
             await _wake.WaitAsync(Cycle, ct);
             while (_wake.CurrentCount > 0)
                 await _wake.WaitAsync(ct);
@@ -150,6 +157,24 @@ internal sealed class AccountScout(
                 _dirty = true;
             }
         }
+    }
+
+    /// <summary>A replay's turn (open-code-pieces.md §3): Scout acts at the end of each 5-minute candle; other turns are passed at once.</summary>
+    private async Task TurnAsync(LockStep step)
+    {
+        if (step.UtcNow.Ticks % TimeSpan.FromMinutes(5).Ticks == 0 && _gateway is { } gateway)
+        {
+            try
+            {
+                await RunOnceAsync(gateway);
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException or CTraderApiException)
+            {
+                _log.Event("ScoutCycleError").Warning("{Broker}: {Message}; retrying", account.Broker, ex.Message);
+                _dirty = true;
+            }
+        }
+        await step.FinishTurnAsync();
     }
 
     internal async Task RunOnceAsync(IBrokerGateway session)

@@ -43,6 +43,11 @@ public sealed class CTraderSession : IAsyncDisposable
     /// <summary>At most 2 historical-candle requests per second on this connection (Spotware's limit is 5).</summary>
     public static readonly TimeSpan TrendbarSpacing = TimeSpan.FromMilliseconds(500);
     private readonly RequestPacer _trendbars = new(TrendbarSpacing);
+    private Func<DateTime> _clock = () => DateTime.UtcNow;
+    private bool _paceCandles = true;
+
+    /// <summary>A lock-step replay (<see cref="LockStep"/>): the account status is stamped with the replay's time, and the replay broker's candles need no pacing.</summary>
+    internal void UseReplayClock(Func<DateTime> clock) => (_clock, _paceCandles) = (clock, false);
 
     private readonly IOpenApiClient _client;
     private readonly ILogger _log;
@@ -395,7 +400,8 @@ public sealed class CTraderSession : IAsyncDisposable
     /// <summary>Historical candles from the broker, oldest first; paced to 2 requests/s (Spotware's limit: 5/s).</summary>
     public async Task<IReadOnlyList<Candle>> GetTrendbarsAsync(long ctidTraderAccountId, long symbolId, ProtoOATrendbarPeriod period, DateTime fromUtc, DateTime toUtc)
     {
-        await _trendbars.WaitAsync();
+        if (_paceCandles)
+            await _trendbars.WaitAsync();
         var res = await RequestAsync<ProtoOAGetTrendbarsRes>(new ProtoOAGetTrendbarsReq
         {
             CtidTraderAccountId = ctidTraderAccountId,
@@ -424,7 +430,7 @@ public sealed class CTraderSession : IAsyncDisposable
         var trader = await GetTraderAsync(ctidTraderAccountId);
         reconcile ??= await ReconcileAsync(ctidTraderAccountId);
         var pnl = reconcile.Position.Count > 0 ? await GetUnrealizedPnLAsync(ctidTraderAccountId) : new ProtoOAGetPositionUnrealizedPnLRes();
-        return AccountStatus.From(trader, reconcile, pnl, DateTime.UtcNow);
+        return AccountStatus.From(trader, reconcile, pnl, _clock());
     }
 
     /// <summary>Margin that new positions of these volumes on the symbol would hold, buy and sell, in the account currency. Read-only.</summary>

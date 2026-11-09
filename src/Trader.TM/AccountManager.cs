@@ -24,7 +24,8 @@ internal sealed class AccountManager(
     InstanceRegistry registry,
     PriceFeed feed,
     TradeBook book,
-    DailyCsvWriter actionsCsv)
+    DailyCsvWriter actionsCsv,
+    LockStep? lockStep = null)
 {
     public static readonly string[] Header =
     [
@@ -95,6 +96,12 @@ internal sealed class AccountManager(
     {
         while (true)
         {
+            if (lockStep is { } step)
+            {
+                await step.NextTurnAsync(ct);
+                await TurnAsync(step);
+                continue;
+            }
             await _wake.WaitAsync(Cycle, ct);
             while (_wake.CurrentCount > 0)
                 await _wake.WaitAsync(ct); // one run for a burst of events
@@ -113,11 +120,38 @@ internal sealed class AccountManager(
         }
     }
 
+    private const int MaxRunsPerTurn = 8;
+
+    /// <summary>A replay's turn (open-code-pieces.md §3): runs until nothing is left to do, as the one-second loop would have done between two price steps.</summary>
+    private async Task TurnAsync(LockStep step)
+    {
+        if (_session is { } session && !session.Closed.IsCompleted)
+        {
+            try
+            {
+                var runs = 0;
+                do
+                {
+                    await RunOnceAsync(session);
+                }
+                while (_dirty && ++runs < MaxRunsPerTurn);
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException or CTraderApiException)
+            {
+                _log.Event("TmCycleError").Warning("{Broker}: {Message}; retrying", account.Broker, ex.Message);
+                _dirty = true;
+            }
+        }
+        await step.FinishTurnAsync();
+    }
+
+    private DateTime UtcNow => lockStep?.UtcNow ?? DateTime.UtcNow;
+
     private Snapshot? _snapshot;
 
     private async Task RunOnceAsync(CTraderSession session)
     {
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         var statusDue = (_statusDue || _status is null || now - _status.TimeUtc >= StatusEvery) && now - _statusFailed >= StatusRetry;
         if (_dirty || _snapshot is null || now - _lastReconcile >= FullReconcile || statusDue)
         {
@@ -235,7 +269,7 @@ internal sealed class AccountManager(
 
         var t = action.Trade!;
         var s = symbols[t.SymbolId];
-        var sent = DateTime.UtcNow;
+        var sent = UtcNow;
         var label = identity.Label(action is PlaceMirrorOrder ? TmLabel.OrderLeg(t.MainOrderId) : TmLabel.Leg(t.MainId, action.Role));
         var comment = CTraderSession.SentComment(sent);
         string kind = action.GetType().Name, side = "", lots = "", requested = "";
@@ -301,9 +335,9 @@ internal sealed class AccountManager(
                 _statusDue = true;
             // Every refusal is a row in actions.csv; the same one pops up (and is an events.csv line) once per 10 minutes.
             var key = $"{t.Name}|{action.Role}|{kind}|{ex.ErrorCode}";
-            if (DateTime.UtcNow - _failedAlerts.GetValueOrDefault(key, DateTime.MinValue) >= FailedAlertEvery)
+            if (UtcNow - _failedAlerts.GetValueOrDefault(key, DateTime.MinValue) >= FailedAlertEvery)
             {
-                _failedAlerts[key] = DateTime.UtcNow;
+                _failedAlerts[key] = UtcNow;
                 notify.Warning("TmActionFailed", $"{account.Broker} {s.Name}: {Describe(action)} refused",
                     $"Trade {t.Name}: {ex.ErrorCode} {ex.Message}. TM tries again if the rule still applies"
                     + (ex.ErrorCode == Planner.NotEnoughMoney ? " (after a minute; past the hedge level it closes the leg instead)." : "."), ctid);
@@ -315,7 +349,7 @@ internal sealed class AccountManager(
     /// <summary>Default hedge distance (tm.md §3): a share of the average daily range of the last N days, at least a multiple of the spread.</summary>
     private async Task FetchDistanceAsync(CTraderSession session, SymbolInfo s)
     {
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         double? atr = null;
         try
         {

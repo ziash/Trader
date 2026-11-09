@@ -8,7 +8,7 @@
 //
 // Options: --config-dir <dir> (default ~/tradebot/config); --dry-run (no orders: logs what it would do);
 // --test-order (places one far-away EURUSD Buy Stop with stop-loss, trailing and expiry on the first account,
-// reads it back, cancels it and exits); --sizes (prints the size the money-at-risk sizing would give on each symbol of the first account, and exits; read-only); --risk (prints the money at risk on the first account against the portfolio limits, and exits; read-only);
+// reads it back, cancels it and exits); --sizes (prints the size the money-at-risk sizing would give on each symbol of the first account, and exits; read-only); --risk (prints the money at risk on the first account against the portfolio limits, and exits; read-only); --export-symbols <file> (writes the first account's symbol details in Rewind's symbols.json format, and exits; read-only); --lockstep (a replay on Rewind in step with it; replay mode only);
 // --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
 // closed candles to a file and exits; read-only); --replay <file.csv> (runs the detector on such a file and prints
 // its events; no connection; with --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1] it writes the
@@ -111,12 +111,18 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         await SizeReport.RunAsync(bot, config, config.Accounts[0], ct);
         return;
     }
+    if (Array.IndexOf(args, "--export-symbols") is >= 0 and var exportAt)
+    {
+        await SymbolExport.RunAsync(bot, config.Accounts[0], args[exportAt + 1], ct);
+        return;
+    }
     if (risk)
     {
         await RiskReport.RunAsync(bot, config, config.Accounts[0], ct);
         return;
     }
 
+    var lockStep = LockStep.FromArgs(bot.Args, bot.SecretsPath); // a replay on Rewind, run in step with it (open-code-pieces.md §3)
     string Folder(ScoutAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
     string DayFile(ScoutAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
 
@@ -133,7 +139,8 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         events.AddAccount(a.AccountId, eventsCsv);
         registry.Register(a.Broker, a.AccountId, a.Charts.Select(c => c.Symbol).Distinct().ToList());
         var state = ScoutState.Load(Path.Combine(TradebotPaths.Root, "run", "scout", $"{a.Broker}-{a.AccountId}.json"));
-        scouts.Add(new AccountScout(a, config, bot.Identity, bot.Log, bot.Notify, registry, state, setupsCsv, ordersCsv, Folder(a), dryRun));
+        scouts.Add(new AccountScout(a, config, bot.Identity, bot.Log, bot.Notify, registry, state, setupsCsv, ordersCsv, Folder(a), dryRun,
+            utcNow: lockStep is null ? null : () => lockStep.UtcNow, lockStep: lockStep));
         bot.Log.Information("{Broker} (account {Ctid}): {Charts}; {Roles} remembered setup order(s) → {Folder}",
             a.Broker, a.AccountId, string.Join(", ", a.Charts.Select(c => $"{c.Symbol} {c.Timeframe} {c.Mode}")), state.Roles.Count, Folder(a));
     }
@@ -150,6 +157,8 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         sizing.Enabled ? $"from the money at risk: {sizing.RiskPercent} % of equity per trade, {sizing.Legs} legs (scout.md §2.8)" : $"{config.Lots} lot ({config.LotsBySymbol?.Count ?? 0} symbol(s) with their own size, listed after connecting)",
         config.ExpiryCandles, dryRun ? " — DRY RUN: no orders are placed or cancelled" : "");
 
+    if (lockStep is not null)
+        bot.Connection.MessageReceived += lockStep.Handle;
     var feed = new PriceFeed(); // live prices: an order whose level has already passed is not sent (scout.md §2.3)
     bot.Connection.MessageReceived += m =>
     {
@@ -173,6 +182,12 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
                 await session.SubscribeSpotsAsync(a.AccountId, symbols.Select(x => x.SymbolId).Concat(conversions.Values.Select(c => c.SymbolId)).Distinct());
             scouts.Single(x => x.AccountId == a.AccountId).SetSession(session, feed, symbols, conversions);
             log.Event("Subscribed").Information("{Broker}: watching {Symbols}", a.Broker, string.Join(", ", symbols.Select(x => x.Name)));
+            if (lockStep is not null)
+            {
+                while (registry.RoleOn(a.AccountId) != InstanceRole.Primary)
+                    await Task.Delay(100);
+                await lockStep.JoinAsync(session, a.AccountId);
+            }
             if (!config.SizingInForce.Enabled)
                 LogOrderSizes(log, a.Broker, config, symbols);
         }
@@ -200,7 +215,7 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         foreach (var w in writers)
             w.Dispose();
     }
-}, new BotOptions { AccountIds = testOrder || sizes || risk || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
+}, new BotOptions { AccountIds = testOrder || sizes || risk || args.Contains("--export-symbols") || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
 
 // One far-away EURUSD Buy Stop (0.01 lot, 3 % above the price) with stop-loss, trailing switch and a 1-hour expiry:
 // checks that the server accepts and keeps all three (scout.md §5), then cancels it.
