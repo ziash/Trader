@@ -8,7 +8,7 @@
 //
 // Options: --config-dir <dir> (default ~/tradebot/config); --dry-run (no orders: logs what it would do);
 // --test-order (places one far-away EURUSD Buy Stop with stop-loss, trailing and expiry on the first account,
-// reads it back, cancels it and exits); --sizes (prints the size the money-at-risk sizing would give on each symbol of the first account, and exits; read-only);
+// reads it back, cancels it and exits); --sizes (prints the size the money-at-risk sizing would give on each symbol of the first account, and exits; read-only); --risk (prints the money at risk on the first account against the portfolio limits, and exits; read-only);
 // --candles <SYMBOL> <TF> <from yyyy-MM-dd> <file.csv> (writes the first account's
 // closed candles to a file and exits; read-only); --replay <file.csv> (runs the detector on such a file and prints
 // its events; no connection; with --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1] it writes the
@@ -34,6 +34,7 @@ if (Array.IndexOf(args, "--config-dir") is var dirIndex and >= 0)
 var dryRun = args.Contains("--dry-run");
 var testOrder = args.Contains("--test-order");
 var sizes = args.Contains("--sizes");
+var risk = args.Contains("--risk");
 var candlesAt = Array.IndexOf(args, "--candles");
 if (candlesAt >= 0 && candlesAt + 4 >= args.Length)
 {
@@ -110,6 +111,11 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         await SizeReport.RunAsync(bot, config, config.Accounts[0], ct);
         return;
     }
+    if (risk)
+    {
+        await RiskReport.RunAsync(bot, config, config.Accounts[0], ct);
+        return;
+    }
 
     string Folder(ScoutAccount a) => Path.Combine(TradebotPaths.Logs, a.Broker, a.AccountId.ToString(), bot.Identity.InstanceId);
     string DayFile(ScoutAccount a, DateOnly d, string file) => Path.Combine(Folder(a), d.ToString("yyyy-MM-dd"), file);
@@ -135,6 +141,10 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
     var s = config.SetupSettings;
     bot.Log.Information("Setup (Scout spec §3.2): strong {Push}×ATR, move {Move}×ATR, pause {Min}–{Max} candles, ≤ {H}×ATR, pull-back ≤ {R}, reversal after {Rev}, turn {Flip}×ATR / {Ch} candles, level {Level}",
         s.PushBody, s.MinMove, s.MinPause, s.MaxPause, s.MaxPauseHeight, s.MaxRetrace, s.ReversalAfter, s.FlipAtr, s.Channel, s.Level);
+    var portfolio = config.PortfolioInForce;
+    bot.Log.Information("Portfolio limits (scout.md §2.9): {State}", portfolio.Enabled
+        ? $"on: per trade {portfolio.TradePercent} %, all trades {portfolio.TotalPercent} %, per symbol {portfolio.SymbolPercent} %, per group {portfolio.GroupPercent} %, margin use {config.MarginLimitInForce} %, at most {portfolio.MaxTrades} trades and {portfolio.MaxPendingOrders} entry orders"
+        : "off");
     var sizing = config.SizingInForce;
     bot.Log.Information("Orders: size {Size}, stop-loss at the far side of the pause, trailing on, expiry after {Expiry} candles{Dry}",
         sizing.Enabled ? $"from the money at risk: {sizing.RiskPercent} % of equity per trade, {sizing.Legs} legs (scout.md §2.8)" : $"{config.Lots} lot ({config.LotsBySymbol?.Count ?? 0} symbol(s) with their own size, listed after connecting)",
@@ -190,7 +200,7 @@ return await BotRunner.RunAsync(ScoutConfig.BotName, args, async (bot, ct) =>
         foreach (var w in writers)
             w.Dispose();
     }
-}, new BotOptions { AccountIds = testOrder || sizes || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
+}, new BotOptions { AccountIds = testOrder || sizes || risk || candlesAt >= 0 ? [config.Accounts[0].AccountId] : config.Accounts.Select(a => a.AccountId).ToList() });
 
 // One far-away EURUSD Buy Stop (0.01 lot, 3 % above the price) with stop-loss, trailing switch and a 1-hour expiry:
 // checks that the server accepts and keeps all three (scout.md §5), then cancels it.

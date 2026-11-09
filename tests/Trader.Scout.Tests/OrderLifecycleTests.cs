@@ -74,12 +74,12 @@ public sealed class OrderLifecycleTests : IDisposable
         _scout.UseGateway(_broker, symbols);
     }
 
-    private void Restart(ScoutConfig? config = null)
+    private void Restart(ScoutConfig? config = null, params SymbolInfo[] more)
     {
         foreach (var w in _writers)
             w.Dispose();
         _writers.Clear();
-        Start(config);
+        Start(config, more);
     }
 
     private async Task Cycle(int seconds = 61)
@@ -127,6 +127,94 @@ public sealed class OrderLifecycleTests : IDisposable
     }
 
     private RoleRecord Role => _state.Roles[Key];
+
+    // ── Money at risk across the account (scout.md §2.9, review P-03) ────────────────────────────────────────────────
+    // A lot of these symbols is 100 units: with the sizing on, $5,000 × 0.5 % gives 0.01 lot and a whole trade risks $18.20. EURUSD (100,000 units) stays below its minimum and is never placed.
+    private static SymbolInfo Small(long id, string name) =>
+        new(id, name, name, "EUR", "USD", 2, 2, 100, true, ProtoOATradingMode.Enabled, TradingSchedule.AlwaysOpen, 100, 100);
+
+    private static readonly PortfolioSettings Wide = new(true, TradePercent: 100, TotalPercent: 100, SymbolPercent: 100, GroupPercent: 100, MaxTrades: 1000, MaxPendingOrders: 1000);
+
+    private void AllFire(PortfolioSettings? portfolio, params string[] names)
+    {
+        var more = names.Select((n, i) => Small(10 + i, n)).ToArray();
+        foreach (var s in more)
+            _broker.Candles[s.SymbolId] = Setup();
+        Restart(new ScoutConfig([new ScoutAccount("brokerT", 1, [])], Sizing: new SizingSettings(true), Portfolio: portfolio), more);
+    }
+
+    private IEnumerable<string> PlacedSymbols => Rows("place").Where(r => r["result"] == "ok").Select(r => r["symbol"]);
+
+    private IReadOnlyList<CsvRow> RiskRefused => Rows("skip").Where(r => r["result"] == "portfolio limit").ToList();
+
+    [Fact]
+    public async Task With_the_limits_off_every_symbol_that_fires_is_placed()
+    {
+        AllFire(null, "BTCUSD", "ETHUSD", "SOLUSD", "XAUUSD", "XTIUSD", "US500");
+        await Run();
+        Assert.Equal(6, _broker.Orders.Count);
+        Assert.Empty(RiskRefused);
+    }
+
+    [Fact]
+    public async Task When_all_symbols_fire_together_the_limit_across_the_account_holds()
+    {
+        AllFire(Wide with { TotalPercent = 1 }, "BTCUSD", "ETHUSD", "SOLUSD", "XAUUSD", "XTIUSD", "US500"); // $50: two trades of $18.20
+        await Run();
+        Assert.Equal(["BTCUSD", "ETHUSD"], PlacedSymbols);
+        Assert.Equal(4, RiskRefused.Count);
+        Assert.Contains("all trades", RiskRefused[0]["detail"]);
+
+        await Cycle(); // what is already on the broker is counted the same way: nothing more goes out, and each refusal is logged once
+        Assert.Equal(2, _broker.Orders.Count);
+        Assert.Equal(4, RiskRefused.Count);
+    }
+
+    [Fact]
+    public async Task A_correlated_group_takes_only_what_its_limit_allows()
+    {
+        AllFire(Wide with { GroupPercent = 0.5 }, "BTCUSD", "ETHUSD", "XAUUSD"); // $25 a group: one trade each
+        await Run();
+        Assert.Equal(["BTCUSD", "XAUUSD"], PlacedSymbols);
+        Assert.Contains("group Crypto", Assert.Single(RiskRefused)["detail"]);
+    }
+
+    [Fact]
+    public async Task An_order_refused_by_a_limit_goes_out_once_there_is_room_again()
+    {
+        AllFire(Wide with { TotalPercent = 0.5 }, "BTCUSD", "ETHUSD"); // $25: one trade
+        await Run();
+        Assert.Equal(["BTCUSD"], PlacedSymbols);
+        _broker.Remove(_broker.Orders[0], ProtoOAOrderStatus.OrderStatusCancelled);
+        await Cycle();
+        Assert.Contains("ETHUSD", PlacedSymbols);
+    }
+
+    [Fact]
+    public async Task An_order_whose_fate_is_unknown_stops_new_orders_until_it_is_known()
+    {
+        AllFire(Wide, "BTCUSD", "ETHUSD");
+        _broker.PlaceReplies.Enqueue(Reply.LostReply);
+        await Run();                 // BTCUSD: no reply, the round ends there
+        Assert.Equal(1, _broker.PlaceCalls);
+        _broker.Orders.Clear();      // and the broker never shows it during this check
+        await Cycle();
+        Assert.Equal(1, _broker.PlaceCalls);
+        Assert.Contains("not known", Assert.Single(RiskRefused)["detail"]);
+    }
+
+    [Fact]
+    public async Task A_position_nothing_protects_stops_new_orders_and_is_left_alone()
+    {
+        AllFire(Wide, "BTCUSD");
+        var manual = new ProtoOAPosition { PositionId = 7, Price = 100, TradeData = new ProtoOATradeData { SymbolId = 10, Volume = 100, TradeSide = ProtoOATradeSide.Buy, Label = "" } };
+        _broker.Positions.Add(manual);
+        await Run();
+        Assert.Empty(_broker.Orders);
+        Assert.Contains("no stop-loss and no hedge", Assert.Single(RiskRefused)["detail"]);
+        Assert.Contains(manual, _broker.Positions);
+        Assert.Equal(0, _broker.CancelCalls);
+    }
 
     // ── Placing ─────────────────────────────────────────────────────────────────────────────────────────────────────
     [Fact]

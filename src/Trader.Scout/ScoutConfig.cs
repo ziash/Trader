@@ -21,7 +21,8 @@ public sealed record ScoutConfig(
     RiskLimits? Limits = null,      // loss limits that stop new entries (scout.md §2.7); left out = the defaults of RiskLimits
     SizingSettings? Sizing = null,  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
     bool RequireTm = true,          // no new entries unless TM is working on the account (scout.md §2.7)
-    MarginStress? Stress = null)    // the stress a new trade must survive (scout.md §2.5); left out = the defaults of MarginStress
+    MarginStress? Stress = null,    // the stress a new trade must survive (scout.md §2.5); left out = the defaults of MarginStress
+    PortfolioSettings? Portfolio = null) // limits on the money at risk across the account (scout.md §2.9); left out = off
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -38,6 +39,11 @@ public sealed record ScoutConfig(
     public SizingSettings SizingInForce => Sizing ?? new SizingSettings();
 
     public MarginStress StressInForce => Stress ?? new MarginStress();
+
+    public PortfolioSettings PortfolioInForce => Portfolio ?? new PortfolioSettings();
+
+    /// <summary>The margin use a new trade must stay within: while the portfolio limits are on, also the limit shared with TM (review F-23).</summary>
+    public double MarginLimitInForce => PortfolioInForce.Enabled ? Math.Min(MarginUsePercent, PortfolioInForce.MarginUsePercent) : MarginUsePercent;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -99,6 +105,9 @@ public sealed record ScoutConfig(
             throw new ScoutConfigException($"{FileName}: \"limits\" percentages must be above 0 and at most 100");
         if (SizingInForce is { RiskPercent: <= 0 or > 5 } or { Legs: < 1 or > 2 } or { SlippageSpreads: < 0 } or { MinStopSpreads: < 0 } or { LimitR: < 1 } or { MaxLossPercent: <= 0 or > 100 })
             throw new ScoutConfigException($"{FileName}: \"sizing\": riskPercent above 0 and at most 5, legs 1 or 2, slippageSpreads and minStopSpreads not negative, limitR at least 1, maxLossPercent above 0 and at most 100");
+        if (PortfolioInForce is { TradePercent: <= 0 or > 100 } or { TotalPercent: <= 0 or > 100 } or { SymbolPercent: <= 0 or > 100 } or { GroupPercent: <= 0 or > 100 } or { MarginUsePercent: <= 0 or > 100 }
+            or { MaxTrades: < 1 } or { MaxPendingOrders: < 1 } or { HedgeCycleR: < 0 })
+            throw new ScoutConfigException($"{FileName}: \"portfolio\": percentages above 0 and at most 100, maxTrades and maxPendingOrders at least 1, hedgeCycleR not negative");
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.32 (08-Nov-2026) — history in §8 |
+| Document version | v1.33 (09-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -71,7 +71,7 @@ TM takes over orders whose label starts with `"Scout-"` (`takeOver` in `tm.json`
 After the IC Markets margin call of 06-Nov-2026 ([issue-log.md #1](../../issue-log.md#1-ic-markets-demo-in-a-margin-call-06-nov-2026)), Scout checks the account before each new order. It reads the balance, equity and margin in use (read-only, [Open Code Pieces](../../open-code-pieces.md) v1.9) and the margin the order would hold once filled (`ProtoOAExpectedMarginReq`):
 
 - **What is counted (v1.31, review P-05):** the margin the account could come to hold, worked out per symbol by the broker's own rule (`TotalMarginCalculationType`: SUM both sides, MAX the larger, NET the difference). Open positions count at the margin they hold. Each waiting trade counts as Scout's order and TM's mirror together, asked from the broker for that combined size so a leverage tier counts, with hedges of the same size implied; TM's waiting hedge orders count too. Each symbol is worked out with everything filled but unhedged, and again with the hedges filled, and the larger counts. The two orders of one pause count once.
-- Scout places a trade only if that total stays within **`marginUsePercent` = 50 % of equity**, and the account could still carry it **under stress**: margin × 2 on metals and crypto, equity −10 %, every open position losing 4 more spreads (`stress` in `scout.json`).
+- Scout places a trade only if that total stays within **`marginUsePercent` = 50 % of equity** (33 % while the limits of §2.9 are on), and the account could still carry it **under stress**: margin × 2 on metals and crypto, equity −10 %, every open position losing 4 more spreads (`stress` in `scout.json`).
 - Every 5 minutes, new order or not, the stress is checked again; if the account would not carry what is on it, a `ScoutMarginStress` pop-up at most once an hour. New trades wait. Nothing is closed or cancelled for this.
 - Otherwise: one `skip` row in `orders.csv` (result `no margin`, the numbers in `detail`), a `ScoutNoMargin` line in `events.csv`, and a pop-up at most once an hour. The setup is tried again at each check (every minute) while it lasts.
 - No account status (the broker did not answer): no new orders, and Scout asks again after 5 minutes.
@@ -140,6 +140,42 @@ Refused, with a `skip` row (*size refused*) and tried again while the setup last
 
 Preview, read-only, without turning it on: `dotnet ~/tradebot/bin/Scout/Trader.Scout.dll --sizes`.
 
+### 2.9 Limits across the account (v1.33, built and **off**, 09-Nov-2026)
+
+From the independent review (F-01, F-23, P-03). Sizing (§2.8) limits one trade; these limits look at everything on the account together. They **only stop new orders**: nothing already on the account is cancelled or changed, and TM's mirrors, hedges and stops are never held back. Off until the owner turns it on with `"portfolio": { "enabled": true }` in `scout.json`. See what it would count, at any time and read-only: `--risk` (§5).
+
+**What is counted**, in USD at the loss from the entry, from the broker's own list of positions and orders each time an order is about to go out:
+
+| On the account | Counts as |
+|---|---|
+| Position with a stop-loss and no hedge | The loss at that stop; nothing once the stop is at break-even or better. A leg with only TM's backstop therefore counts its full 3R |
+| Leg with a hedge order waiting | The loss at the hedge level, plus `hedgeCycleR` (half) for the cost of a hedge that fills and is stopped out; never more than the loss at its own stop |
+| Leg with a filled hedge | The frozen loss, plus the risk to the hedge's stop (nothing once the hedge's stop is past its fill; half the frozen loss while it has no stop yet) |
+| Scout order waiting | As if filled: Scout's order and TM's mirror, costs included. The two orders of one pause count once, at the larger. A mirror order is not counted again |
+| The owner's positions and orders | Counted the same way, never touched. An order with no stop-loss takes the one on its mirror order |
+
+**The limits**, starting values to calibrate on replay:
+
+| Setting | Default | Reached |
+|---|---|---|
+| `tradePercent` | 0.5 % of equity, all legs of one trade | Size reduced; refused if the broker's minimum is still too much (never raised) |
+| `totalPercent` | 5 %, everything open and waiting | Refused |
+| `symbolPercent` | 1 %, one symbol (caps staircase entries) | Refused |
+| `groupPercent` | 2 %, one group below | Refused |
+| `maxTrades` | 8, trades open plus pauses waiting (a waiting trade counts as if filled) | Refused |
+| `maxPendingOrders` | 12, entry orders waiting; TM's hedge and mirror orders not counted | Refused |
+| `marginUsePercent` | 33 %, replaces the 50 % of §2.5 while this is on | Refused (§2.5) |
+
+33 % margin use is TM's 300 % margin level (`marginWarnLevel`), where TM stops mirroring: Scout stops adding trades first, so no trade loses its mirror to this rule. A test fails if the two configuration files in the repository drift apart; the live copies are compared at each deploy.
+
+**Groups** (a static map to start with): USD (EURUSD, GBPUSD, USDJPY, kept apart by the dollar's direction: long EURUSD and short USDJPY are both short dollars and add up; long and short dollars do not offset, each side has its own limit), JPY (USDJPY, GBPJPY, EURJPY, AUDJPY), Metals (XAUUSD, XAGUSD, XPTUSD), US equity (US500, USTEC, DE40 at half), Crypto (BTCUSD, ETHUSD, SOLUSD), Energy (XTIUSD, XBRUSD, XNGUSD at half).
+
+**Refused rather than guessed.** No new orders, with a `ScoutRiskUnknown` pop-up at most once an hour, while: a position or order has neither a stop-loss nor a hedge; one is on a symbol Scout does not follow; no price converts its currency to USD (after a restart at the weekend, until the market reopens); the account status is missing; or what became of a sent order is not yet known. A mirror that filled from an order carries the order's id in its label, so which trade it belongs to is read from TM's saved state (`~/tradebot/run/tm/`); without that, it counts on its own stop-loss.
+
+A refused order gets one `skip` row (result `portfolio limit`, the numbers in `detail`) and a `ScoutRiskRefused` log line, and is tried again at each check while the setup lasts.
+
+**Known limits of the count.** Equity already holds a frozen loss, so counting it again is deliberately cautious: old hedged trades use up room until they end. A waiting order counts its stop; once it fills and TM swaps the stop for a hedge order it counts the extra `hedgeCycleR`, so the counted total can rise by up to half after the orders were approved, without any order going out. The groups are a fixed list, not measured correlation.
+
 ## 3. Logs and outputs
 
 `~/tradebot/logs/<broker>/<ctid>/<instanceId>/<date>/`:
@@ -190,6 +226,7 @@ By hand (stop the service first, so only one Scout acts): `dotnet run --project 
 | `--dry-run` | Runs normally but places and cancels nothing |
 | `--test-order` | One far-away EURUSD Buy Stop (0.01 lot, stop-loss, trailing, 1-hour expiry) on the first account, read back, cancelled. Run with TM stopped (TM would mirror it) |
 | `--sizes` | Prints, read-only, the size §2.8 would give on each symbol of the first account beside today's fixed lots, for a tight, median and wide stop |
+| `--risk` | Prints, read-only, the money at risk on the first account, by symbol and group, against the limits of §2.9, whether they are on or off |
 | `--candles <SYMBOL> <TF> <from> <file.csv>` | Writes the first account's closed candles to a file (read-only); used for the tests and the review |
 | `--replay <file.csv>` | Runs the detector on such a file and prints its events (no connection) |
 | `--replay <h1.csv> --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1]` | Writes the orders Trade mode would place and cancel on those candles (§2.3 rules, setup settings and expiry from `scout.json`; no margin budget or controls), for Scout Lens ([scout-lens.md](scout-lens.md) §8 step 1); `scripts/lens-replay.sh` runs it on Rewind's history and has Rewind play the orders out in R |
@@ -249,6 +286,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.33 | 09 Nov 2026 | **Portfolio Risk Manager built, off** (§2.9, review P-03, F-01, F-23; owner: build the next item): money at risk from the broker's positions and orders; limits per trade, across trades, per symbol, per group, on trades and on waiting orders; 33 % margin use shared with TM while on; refuses when something cannot be valued; `--risk` read-only view. The review proposed reading TM's protection label; the facts are read from the broker instead, and TM's state only joins a mirror to its trade. Tests: 152 (38 new), and 26 deliberate breakages of the code all caught. Not deployed |
 | v1.32 | 08 Nov 2026 | **Margin by scenario live** on the demo, 15:47 UTC (owner's OK; build `Scout-4f1aef3`, live `scout.json` updated). A clean start: no halt, no order placed or cancelled |
 | v1.31 | 08 Nov 2026 | **Margin by scenario** (§2.5, review F-09, F-24, P-05): `marginFactor` removed; margin by the broker's rule for each stage of a trade, leverage tier from the trade's full size, a stress test before a new trade and every 5 minutes. Tests: 113 (11 new). Not deployed; the live `scout.json` must lose `marginFactor` at deploy |
 | v1.30 | 08 Nov 2026 | **TM health check live** on the demo, 15:35 UTC (owner's OK; build `Scout-8408d9a`). A clean start: TM seen working, no halt, no order placed or cancelled |

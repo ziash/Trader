@@ -32,7 +32,8 @@ internal sealed class AccountScout(
     bool dryRun,
     Func<DateTime>? utcNow = null,
     string? controlDir = null,
-    Func<DateTime?>? tmHealthyUtc = null)
+    Func<DateTime?>? tmHealthyUtc = null,
+    string? tmStateFile = null)
 {
     public static readonly string[] SetupsHeader =
     [
@@ -80,7 +81,7 @@ internal sealed class AccountScout(
     private readonly Func<DateTime?> _tmHealthyUtc = tmHealthyUtc ?? (() => registry.HealthyUtc(ScoutConfig.TmBotName, account.AccountId));
     private DateTime _tmLastHealthy = DateTime.MinValue;
     private readonly HashSet<string> _marginSkipped = [];             // setups logged as waiting for margin (logged once each)
-    private DateTime _marginAlerted = DateTime.MinValue, _statusFailed = DateTime.MinValue;
+    private DateTime _marginAlerted = DateTime.MinValue, _statusFailed = DateTime.MinValue, _riskAlerted = DateTime.MinValue;
     private readonly SemaphoreSlim _wake = new(0);
     private volatile CTraderSession? _session;
     private volatile IReadOnlyDictionary<long, SymbolInfo> _symbols = new Dictionary<long, SymbolInfo>();
@@ -96,6 +97,7 @@ internal sealed class AccountScout(
     private (DateTime File, DateTime Catalogue)? _controlStamps;
     private bool _ackDue;
     private readonly HashSet<string> _heldLogged = [];
+    private readonly string _tmStateFile = tmStateFile ?? RiskReport.TmStateFile(account);
     private string ControlPath => Path.Combine(_controlDir, $"scout-{account.Broker}-{account.AccountId}.json");
     private string AckPath => Path.ChangeExtension(ControlPath, ".ack.json");
 
@@ -462,6 +464,7 @@ internal sealed class AccountScout(
 
         var margins = new Dictionary<(long, long), ExpectedMargin>();
         var budget = await StressCheckAsync(session, status, rec, margins, now);
+        RiskBook? risk = null;
         foreach (var want in wants.Values)
         {
             if (halt is not null)
@@ -498,11 +501,62 @@ internal sealed class AccountScout(
             }
             if (ReadyToPlace(session, want, status, now) is not { } volume)
                 continue;
+            double riskCash = 0;
+            if (config.PortfolioInForce.Enabled)
+            {
+                risk ??= BuildRisk(session, status, rec);
+                if (RiskAllows(session, risk, want, volume, now) is not { } allowed)
+                    continue; // not remembered: tried again at the next sync, while the setup lasts
+                (volume, riskCash) = allowed;
+            }
             budget ??= await BudgetAsync(session, status, rec, margins);
             if (!await MarginFitsAsync(session, budget, want, volume, margins, now))
                 continue; // not remembered: tried again at the next sync, while the setup lasts
             await PlaceAsync(session, want, volume, now);
+            risk?.Take(want.Sym.Name, want.Dir, riskCash, RiskBook.PauseOf(want.Key));
         }
+    }
+
+    // ── Money at risk across the account (scout.md §2.9, review P-03): new risk only; what is on the account is never touched ──
+    private RiskBook BuildRisk(IBrokerGateway session, AccountStatus? status, ProtoOAReconcileRes rec)
+    {
+        var book = RiskBook.Build(config.PortfolioInForce, status?.Equity, new RiskInputs(rec, _symbols,
+            currency => session.UsdPer(account.AccountId, currency), id => session.LastQuote(account.AccountId, id)?.Spread ?? 0, KeyOf, config.SizingInForce, TmLinks.Load(_tmStateFile)));
+        if (state.Roles.Where(x => x.Value.IsInDoubt).Select(x => x.Key).FirstOrDefault() is { } unknown)
+            book.Fail($"what became of the order for {unknown} is not known yet");
+        var now = Now;
+        if (book.Problem is { } problem && now - _riskAlerted >= TimeSpan.FromHours(1))
+        {
+            _riskAlerted = now;
+            notify.Warning("ScoutRiskUnknown", $"Scout {account.Broker}: new orders wait, the money at risk cannot be worked out", $"{problem}. Scout tries again while each setup lasts.", account.AccountId);
+        }
+        return book;
+    }
+
+    /// <summary>The volume the limits allow and its risk in USD; null, with one skip row, when the order is refused for now.</summary>
+    private (long Volume, double Risk)? RiskAllows(IBrokerGateway session, RiskBook book, Want w, long volume, DateTime now)
+    {
+        var s = w.Sym;
+        var entry = Math.Round(w.Level, s.Digits);
+        var sizing = config.SizingInForce;
+        if (session.UsdPer(account.AccountId, s.QuoteAsset) is not { } rate || rate <= 0)
+        {
+            SkipOnce(now, w, "portfolio limit", "ScoutRiskRefused", $"no price converts {s.QuoteAsset} to USD", volume);
+            return null;
+        }
+        var distance = Math.Abs(entry - StopLoss(w)!.Value);
+        var perLot = PositionSizer.LossPerLot(s, sizing, entry, distance, session.LastQuote(account.AccountId, s.SymbolId)?.Spread ?? 0, rate);
+        var d = book.Decide(s, volume, perLot, sizing.Legs, RiskBook.PauseOf(w.Key), w.Dir);
+        if (d.Volume is not { } allowed)
+        {
+            SkipOnce(now, w, "portfolio limit", "ScoutRiskRefused", d.Refusal!, volume);
+            return null;
+        }
+        if (allowed != volume)
+        {
+            _sizing[w.Key] = $"{Lots(s, allowed)} lot, ${d.RiskCash.ToString("0.00", CultureInfo.InvariantCulture)} at the stop, all legs (reduced from {Lots(s, volume)} lot by the limit per trade)";
+        }
+        return (allowed, d.RiskCash);
     }
 
     private void Persist()
@@ -878,7 +932,7 @@ internal sealed class AccountScout(
         {
             var stress = config.StressInForce;
             var legs = config.SizingInForce.Legs;
-            var budget = new MarginBudget(status.MarginMode, status.Equity, config.MarginUsePercent, stress, id => _symbols.TryGetValue(id, out var s) && stress.Applies(s.Name));
+            var budget = new MarginBudget(status.MarginMode, status.Equity, config.MarginLimitInForce, stress, id => _symbols.TryGetValue(id, out var s) && stress.Applies(s.Name));
             foreach (var p in rec.Position)
             {
                 budget.AddPosition(p.TradeData.SymbolId, DirOf(p.TradeData.TradeSide), AccountStatus.MarginOf(p));
@@ -963,12 +1017,15 @@ internal sealed class AccountScout(
         return w.Far is { } f && (f - price) * w.Dir < 0 ? Math.Round(f, w.Sym.Digits) : null;
     }
 
-    private string? KeyOf(string? label, long symbolId)
+    private string? KeyOf(string? label, long symbolId) => KeyOf(label, symbolId, _symbols);
+
+    /// <summary>The setup role of a Scout label; null for any other label.</summary>
+    internal static string? KeyOf(string? label, long symbolId, IReadOnlyDictionary<long, SymbolInfo> symbols)
     {
         if (!BotIdentity.TryParseLabel(label, out var bot, out _, out var leg) || bot != ScoutConfig.BotName || leg is null)
             return null;
         var parts = leg.Split('-');
-        if (parts.Length != 3 || !_symbols.TryGetValue(symbolId, out var sym)
+        if (parts.Length != 3 || !symbols.TryGetValue(symbolId, out var sym)
             || !DateTime.TryParseExact(parts[1], "yyyyMMddHHmm", CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var ps))
             return null;
         return ScoutState.Key(sym.Name, parts[0], ps, parts[2] == "R");

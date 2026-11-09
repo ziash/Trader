@@ -33,6 +33,41 @@ public sealed class ScoutTests
         Assert.Equal(new RiskLimits(3, 6, 15), c.Limits);
         Assert.NotNull(c.Stress);
         Assert.True(c.RequireTm);
+        Assert.NotNull(c.Portfolio);
+    }
+
+    /// <summary>Scout must stop adding trades at or before the margin level where TM stops mirroring them (review F-23). 300 % margin level = 33.3 % margin use.</summary>
+    [Fact]
+    public void The_portfolio_margin_limit_is_within_TMs_no_mirror_level()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(dir, "Trader.sln")))
+            dir = Path.GetDirectoryName(dir)!;
+        var c = ScoutConfig.Load(Path.Combine(dir, "config", ScoutConfig.FileName));
+        using var tm = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(dir, "config", "tm.json")),
+            new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        Assert.True(c.PortfolioInForce.MarginUsePercent <= 100 * 100 / tm.RootElement.GetProperty("marginWarnLevel").GetDouble());
+    }
+
+    [Fact]
+    public void The_margin_limit_is_the_lower_one_only_while_the_portfolio_limits_are_on()
+    {
+        ScoutAccount[] a = [new("brokerA", 1, [new ScoutChart("XAUUSD", "H1")])];
+        Assert.Equal(50, new ScoutConfig(a).MarginLimitInForce);
+        Assert.Equal(50, new ScoutConfig(a, Portfolio: new PortfolioSettings()).MarginLimitInForce);
+        Assert.Equal(33, new ScoutConfig(a, Portfolio: new PortfolioSettings(true)).MarginLimitInForce);
+        Assert.Equal(20, new ScoutConfig(a, MarginUsePercent: 20, Portfolio: new PortfolioSettings(true)).MarginLimitInForce);
+    }
+
+    [Fact]
+    public void Portfolio_settings_are_checked()
+    {
+        ScoutConfig With(PortfolioSettings p) => new([new ScoutAccount("brokerA", 1, [new ScoutChart("XAUUSD", "H1")])], Portfolio: p);
+        Assert.NotNull(With(new PortfolioSettings(true)).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new PortfolioSettings(true, TotalPercent: 0)).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new PortfolioSettings(true, GroupPercent: 101)).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new PortfolioSettings(true, MaxTrades: 0)).Validated());
+        Assert.Throws<ScoutConfigException>(() => With(new PortfolioSettings(true, HedgeCycleR: -1)).Validated());
     }
 
     [Fact]

@@ -31,6 +31,10 @@ public sealed record SizeDecision(long? Volume, double RiskCash, string? Refusal
 /// </summary>
 public static class PositionSizer
 {
+    /// <summary>One leg's loss per lot at the stop, in USD: the distance, the allowance for spread and slippage, and the commission opened and closed.</summary>
+    public static double LossPerLot(SymbolInfo s, SizingSettings p, double entry, double distance, double spread, double usdPerQuote) =>
+        (distance + p.SlippageSpreads * spread) * s.LotUnits * usdPerQuote + (s.Commission?.RoundTripPerLotUsd(entry * s.LotUnits * usdPerQuote, usdPerQuote) ?? 0);
+
     /// <param name="usdPerQuote">USD for 1 unit of the symbol's quote currency (1 for USD); null when no price converts it.</param>
     public static SizeDecision Decide(SymbolInfo s, SizingSettings p, double equity, double entry, double? stopLoss, double spread, double? usdPerQuote)
     {
@@ -48,9 +52,7 @@ public static class PositionSizer
         if (distance < p.MinStopSpreads * spread)
             return No($"stop is only {N(spread > 0 ? distance / spread : 0, "0.0")} spreads away (minimum {N(p.MinStopSpreads, "0.0")})");
 
-        var perLot = (distance + p.SlippageSpreads * spread) * s.LotUnits * rate;
-        var commission = s.Commission?.RoundTripPerLotUsd(entry * s.LotUnits * rate, rate) ?? 0;
-        var lossPerLot = perLot + commission;
+        var lossPerLot = LossPerLot(s, p, entry, distance, spread, rate);
         var budget = equity * p.RiskPercent / 100;
         var lots = Math.Min(budget / (p.Legs * lossPerLot), ScoutConfig.MaxLots);
 

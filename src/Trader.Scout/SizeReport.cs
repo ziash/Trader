@@ -25,6 +25,27 @@ internal static class SizeReport
         return found;
     }
 
+    /// <summary>A few seconds of live prices for the symbols and their conversions; a closed market gives none.</summary>
+    public static async Task<PriceFeed> ReadPricesAsync(CTraderSession session, ScoutAccount a, IReadOnlyList<SymbolInfo> symbols, IReadOnlyDictionary<string, UsdConversion> conversions)
+    {
+        var feed = new PriceFeed();
+        var ids = symbols.Select(s => s.SymbolId).Concat(conversions.Values.Select(c => c.SymbolId)).Distinct().ToList();
+        session.MessageReceived += feed.Handle;
+        try
+        {
+            await session.SubscribeSpotsAsync(a.AccountId, ids);
+            var until = DateTime.UtcNow + PriceWait;
+            while (DateTime.UtcNow < until && ids.Any(id => feed.Last(a.AccountId, id) is null))
+                await Task.Delay(200);
+            await session.UnsubscribeSpotsAsync(a.AccountId, ids);
+        }
+        finally
+        {
+            session.MessageReceived -= feed.Handle;
+        }
+        return feed;
+    }
+
     public static async Task RunAsync(BotContext bot, ScoutConfig config, ScoutAccount a, CancellationToken ct)
     {
         var done = new TaskCompletionSource();
@@ -50,21 +71,7 @@ internal static class SizeReport
         var conversions = Conversions(catalog, symbols);
         var status = await session.GetAccountStatusAsync(a.AccountId);
 
-        var feed = new PriceFeed();
-        var ids = symbols.Select(s => s.SymbolId).Concat(conversions.Values.Select(c => c.SymbolId)).Distinct().ToList();
-        session.MessageReceived += feed.Handle;
-        try
-        {
-            await session.SubscribeSpotsAsync(a.AccountId, ids);
-            var until = DateTime.UtcNow + PriceWait;
-            while (DateTime.UtcNow < until && ids.Any(id => feed.Last(a.AccountId, id) is null))
-                await Task.Delay(200);
-            await session.UnsubscribeSpotsAsync(a.AccountId, ids);
-        }
-        finally
-        {
-            session.MessageReceived -= feed.Handle;
-        }
+        var feed = await ReadPricesAsync(session, a, symbols, conversions);
 
         var inv = CultureInfo.InvariantCulture;
         var p = config.SizingInForce;
