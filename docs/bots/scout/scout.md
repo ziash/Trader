@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.39 (09-Nov-2026) — history in §8 |
+| Document version | v1.40 (09-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -86,6 +86,7 @@ The owner can steer Scout from the dashboard ([dashboard.md §3.4](../../dashboa
 |---|---|---|---|
 | `enabled` | symbol | on / off | **Off:** no new orders on the symbol; its pending orders are cancelled (`cancel`, reason *switched off on the dashboard*); positions stay with TM; setups are still logged. **On again:** orders again at the next check (within a minute) for setups that are still valid |
 | `timeframe` | symbol | `H1`, `H4`, `D1` | Swaps the symbol's chart for the new timeframe (its higher timeframe as §2.2: H4 for H1, D1 for H4, W1 for D1), loads its history first, and looks for setups there from then on. **Pending orders from the old chart stay** until filled or expired (owner, 06-Nov-2026); one cancels the other still holds for them. Back to the configured timeframe = the same swap |
+| `dailyDirection` | scout (one account) | on / off | §2.10. **Off:** orders on either side of the daily direction, as before v1.40. **On:** waiting orders against it are cancelled at the next check. Not set = `daily.enabled` in `scout.json`, on by default |
 | `decision` | setup | `keep`, `skip` | **Skip:** that setup's pending orders are cancelled (reason *skipped on the dashboard*) and none placed for it while skipped. Already filled: nothing, TM manages it. **Keep again:** its order is placed again at the next check if the setup is still valid — the one exception to "at most one order per setup role" (§2.3), because the owner asked for it |
 
 - **Setup key** = `<symbol>-<timeframe>-<pause start yyyyMMddHHmm>`, the setup part of Scout's order label; one key covers the main and the reversal stop. Entries older than 7 days are ignored.
@@ -175,6 +176,24 @@ From the independent review (F-01, F-23, P-03). Sizing (§2.8) limits one trade;
 A refused order gets one `skip` row (result `portfolio limit`, the numbers in `detail`) and a `ScoutRiskRefused` log line, and is tried again at each check while the setup lasts.
 
 **Known limits of the count.** Equity already holds a frozen loss, so counting it again is deliberately cautious: old hedged trades use up room until they end. A waiting order counts its stop; once it fills and TM swaps the stop for a hedge order it counts the extra `hedgeCycleR`, so the counted total can rise by up to half after the orders were approved, without any order going out. The groups are a fixed list, not measured correlation.
+
+### 2.10 Daily direction (v1.40, owner 09-Nov-2026; Scout spec §4.7 D1)
+
+A Scout on a 1H or 4H chart also reads closed daily candles. Before an order is placed, and at every check while it waits:
+
+| Daily direction | Order | Result |
+|---|---|---|
+| Up or down, same side as the order | Any | Goes on as before |
+| Up or down, other side | Any, main or reversal | Not placed; a waiting one is cancelled (*against daily*) |
+| Unknown | Buy with daily resistance near, sell with daily support near | Not placed; a waiting one is cancelled (*near daily resistance*, *near daily support*) |
+| Unknown | No zone near, or no zones known | Goes on as before |
+
+- **Direction:** the detector's own trend, run on closed daily candles with the setup settings of `scout.json` (the same test as the 4H tag, §2.2). It reads as unknown only until the first strong daily candle.
+- **Zone** (`daily` in `scout.json`): at least `zoneTouches` 2 daily swing highs or lows, within `zoneWidthAtr` 0.25 daily ATR of each other. A swing high is the highest candle of `zoneSwing` 3 on either side, in the last `zoneCandles` 250 daily candles; a swing low likewise. Highs and lows count together, so a level can be support, then resistance.
+- **Resistance for a buy** is any zone whose top is above the order's level; **support for a sell** is any zone whose bottom is below it. A level beyond the zone has cleared it, which is the owner's entry just past a daily level. **Near** = inside the zone, or within `zoneNearAtr` 0.5 daily ATR of it.
+- **On by default** (owner; `enabled` in `daily`, and `dailyDirection` on the dashboard's Settings page, §2.6). The dashboard's choice wins over the file. Daily charts are not filtered.
+- Written to `orders.csv` once per setup role as a `skip` row (result *against daily*, *near daily resistance* or *near daily support*), and `ScoutAgainstDaily` in the log. No pop-up. An order cancelled for this is placed again if the direction allows it later and the setup is still valid, as for §2.6's skip.
+- The replay uses the same rule (`OrderPlanner`), with `--daily <D1.csv>`; `--daily-rule off` keeps every order and only labels it (`daily_trend`, `with_daily`, `daily_zone`).
 
 ## 3. Logs and outputs
 
@@ -291,6 +310,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.37 | 09 Nov 2026 | **Full-system replay built and first baseline** (review P-06, P-07; owner: use Rewind and a switch, no separate simulator): `--lockstep`, `--export-symbols`, `scripts/full-replay.sh`, `scripts/replay-report.py`, Rewind v0.15. [Baseline](reviews/2026-11-09-phase3-baseline.md): −54.3 % (Nov 2024 to Dec 2025) and −32.2 % (Jan to Jun 2026), no edge shown; old hedged trades fill the limit of 8 trades. Locked period unused; not yet matched to a real trial week. Live bots unchanged |
 | v1.38 | 09 Nov 2026 | **Replay matched against real trading** (review P-06): [report](reviews/2026-11-09-phase3-real-week.md), `scripts/replay-compare.py`, `scripts/trial-week/`. On the broker's prices 7 of 8 checks pass and issue #1 reproduces; issue #2 does not. Found that Scout acted 5 minutes late in every replay: fixed in replay mode only (`LockStep.CandleReadDelay`), baseline rerun: −57 % and −44 %. No change on the demos |
 | v1.39 | 09 Nov 2026 | **Replay tolerance agreed** (owner, review P-06): the eight checks in the [report](reviews/2026-11-09-phase3-real-week.md) stand as written. Result unchanged: 7 of 8 on the broker's prices, the sum of results outside tolerance and explained, issue #2 open. No code change |
+| v1.40 | 09 Nov 2026 | **Daily direction built** (§2.10; owner, Scout spec v1.11 §4.7 D1): by rule from closed daily candles, on by default, switch on the dashboard's Settings page; when the direction is unknown, no buy near daily resistance and no sell near daily support. Phase 4 of the review started with this, ahead of exits (owner); Phase 3 closed with its gaps recorded (owner). Replay labels every order (`daily_trend`, `with_daily`, `daily_zone`). [Measured](reviews/2026-11-09-phase4-daily-direction.md): misses the pass mark set before the run (−41 % and −49 % against −57 % and −44 %); the zones never acted, as the direction was almost never unknown. Not deployed |
 | v1.36 | 09 Nov 2026 | **Phase 3 of the review started** (owner; the off-machine alarm F-13 left for later). Step 1, shared order rules (P-09, F-28): `OrderPlanner` holds which orders a setup wants, the stop-loss rule and the expiry, for the live bot and the replay; `ReplayOrders` has none of its own. No change in behaviour: the replay on all 19 symbols' history gives byte-identical orders before and after, and a new test feeds the live path real candles one at a time and gets the replay's orders exactly. Tests: 159. Not deployed |
 | v1.35 | 09 Nov 2026 | **Portfolio limits turned on** on the Pepperstone demo, 01:40 UTC (owner; instance `Scout-0aadfa`, same build). At the start: 4.07 % of equity at risk across the account, 5 trades, 3 entry orders; the old BTCUSD trade (2.58 %) is above the symbol limit and the crypto group above its limit, so new crypto orders wait until it ends. Nothing on the account was changed |
 | v1.34 | 09 Nov 2026 | v1.33 live on the Pepperstone demo, 01:39 UTC (owner's OK; build `Scout-8b28fe9`, instance `Scout-a43191`), portfolio limits **off**: Scout counts nothing against them until they are turned on, and `--risk` shows the exposure. TM not restarted (no code change) |

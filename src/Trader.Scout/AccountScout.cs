@@ -201,8 +201,12 @@ internal sealed class AccountScout(
             var higher = chart.HigherTimeframe is { } h
                 ? await HistoryAsync(session, sym, h, (chart.Higher!.LastCandleUtc ?? now.AddDays(-30)) - 2 * Timeframes.Length(h), now)
                 : [];
+            // Daily candles only when one should have closed since the last: one more request per symbol and day, not per hour (scout.md §2.10).
+            var daily = chart.ReadsDaily && now >= (chart.Daily!.LastCandleUtc ?? DateTime.MinValue) + TimeSpan.FromDays(2)
+                ? await HistoryAsync(session, sym, "D1", (chart.Daily.LastCandleUtc ?? now.AddDays(-10)) - TimeSpan.FromDays(2), now)
+                : null;
             now = _utcNow();
-            foreach (var e in chart.Feed(main, higher, now))
+            foreach (var e in chart.Feed(main, higher, now, daily))
                 Record(chart, sym, e, now);
             var offset = Offset(chart);
             var misses = chart.Main.LastCandleUtc != before ? 0
@@ -375,7 +379,9 @@ internal sealed class AccountScout(
         var days = TimeSpan.FromDays(config.HistoryDays);
         var main = await HistoryAsync(session, sym, chart.Chart.Timeframe, now - Max(days, 200 * chart.Length), now);
         var higher = chart.HigherTimeframe is { } h ? await HistoryAsync(session, sym, h, now - Max(days, 100 * Timeframes.Length(h)), now) : [];
-        var skipped = chart.Feed(main, higher, now).Count;
+        // Up to a year of daily candles for the daily zones: the broker gives at most 366 days of D1 per request (scout.md §2.10).
+        var daily = chart.ReadsDaily ? await HistoryAsync(session, sym, "D1", now - TimeSpan.FromDays(365), now) : null;
+        var skipped = chart.Feed(main, higher, now, daily).Count;
         var d = chart.Main;
         _log.Event("ScoutHistory").Information(
             "{Broker} {Symbol} {Tf}: {Candles} candles ({Events} past events); trend {Trend}, {Higher} trend {HigherTrend}; pending {Main}{Rev}",
@@ -440,12 +446,23 @@ internal sealed class AccountScout(
         var halt = UpdateHalt(status, now);
 
         var wants = new Dictionary<string, Want>();
+        var dailyHeld = new Dictionary<string, (Want Want, string Why)>();
+        var dailyRule = config.DailyInForce with { Enabled = _controls.DailyDirection ?? config.DailyInForce.Enabled };
         foreach (var chart in _charts)
         {
             if (!symbols.TryGetValue(chart.Chart.Symbol, out var sym))
                 continue;
             foreach (var i in OrderPlanner.Wanted(chart.Main, sym.Name, chart.Chart.Timeframe))
-                wants[i.Key] = new Want(chart, sym, i.Key, i.PauseStartUtc, i.Reversal, i.Dir, i.Level, i.FarSide, i.SinceUtc);
+            {
+                var want = new Want(chart, sym, i.Key, i.PauseStartUtc, i.Reversal, i.Dir, i.Level, i.FarSide, i.SinceUtc);
+                if (OrderPlanner.DailyHold(chart, i, dailyRule) is { } why)
+                {
+                    dailyHeld[i.Key] = (want, why); // not wanted while this lasts: a waiting order is cancelled below, with this reason (scout.md §2.10)
+                    _endReason[i.Key] = why;
+                }
+                else
+                    wants[i.Key] = want;
+            }
         }
 
         // One cancels the other (Scout spec §4.4 I4), a halt (§2.7), the dashboard's controls (§2.6), and setups that ended: cancel
@@ -467,7 +484,7 @@ internal sealed class AccountScout(
                 }
                 continue;
             }
-            var held = !siblingFilled && (halt is not null || _controls.HoldBack(key) is not null);
+            var held = !siblingFilled && (halt is not null || _controls.HoldBack(key) is not null || dailyHeld.ContainsKey(key));
             if (await CancelAsync(session, key, order, reason) && held)
             {
                 if (state.Roles.TryGetValue(key, out var role))
@@ -481,6 +498,10 @@ internal sealed class AccountScout(
         var margins = new Dictionary<(long, long), ExpectedMargin>();
         var budget = await StressCheckAsync(session, status, rec, margins, now);
         RiskBook? risk = null;
+        if (halt is null)
+            foreach (var (want, why) in dailyHeld.Values)
+                if (!ourOrders.ContainsKey(want.Key) && !ourPositions.ContainsKey(want.Key) && !state.Roles.ContainsKey(want.Key))
+                    SkipOnce(now, want, why, "ScoutAgainstDaily", why);
         foreach (var want in wants.Values)
         {
             if (halt is not null)

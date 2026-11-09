@@ -22,7 +22,8 @@ public sealed record ScoutConfig(
     SizingSettings? Sizing = null,  // size from the money at risk instead of fixed lots (scout.md §2.8); left out = off
     bool RequireTm = true,          // no new entries unless TM is working on the account (scout.md §2.7)
     MarginStress? Stress = null,    // the stress a new trade must survive (scout.md §2.5); left out = the defaults of MarginStress
-    PortfolioSettings? Portfolio = null) // limits on the money at risk across the account (scout.md §2.9); left out = off
+    PortfolioSettings? Portfolio = null, // limits on the money at risk across the account (scout.md §2.9); left out = off
+    DailySettings? Daily = null)    // the daily-direction rule (scout.md §2.10); left out = the defaults of DailySettings, which is on
 {
     public const string FileName = "scout.json";
     public const string BotName = "Scout";
@@ -41,6 +42,8 @@ public sealed record ScoutConfig(
     public MarginStress StressInForce => Stress ?? new MarginStress();
 
     public PortfolioSettings PortfolioInForce => Portfolio ?? new PortfolioSettings();
+
+    public DailySettings DailyInForce => Daily ?? new DailySettings();
 
     /// <summary>The margin use a new trade must stay within: while the portfolio limits are on, also the limit shared with TM (review F-23).</summary>
     public double MarginLimitInForce => PortfolioInForce.Enabled ? Math.Min(MarginUsePercent, PortfolioInForce.MarginUsePercent) : MarginUsePercent;
@@ -108,6 +111,8 @@ public sealed record ScoutConfig(
         if (PortfolioInForce is { TradePercent: <= 0 or > 100 } or { TotalPercent: <= 0 or > 100 } or { SymbolPercent: <= 0 or > 100 } or { GroupPercent: <= 0 or > 100 } or { MarginUsePercent: <= 0 or > 100 }
             or { MaxTrades: < 1 } or { MaxPendingOrders: < 1 } or { HedgeCycleR: < 0 })
             throw new ScoutConfigException($"{FileName}: \"portfolio\": percentages above 0 and at most 100, maxTrades and maxPendingOrders at least 1, hedgeCycleR not negative");
+        if (DailyInForce is { ZoneSwing: < 1 } or { ZoneCandles: < 10 } or { ZoneTouches: < 1 } or { ZoneWidthAtr: <= 0 } or { ZoneNearAtr: < 0 })
+            throw new ScoutConfigException($"{FileName}: \"daily\": zoneSwing and zoneTouches at least 1, zoneCandles at least 10, zoneWidthAtr above 0, zoneNearAtr not negative");
         if (ExpiryCandles < 1 || HistoryDays < 5)
             throw new ScoutConfigException($"{FileName}: \"expiryCandles\" at least 1, \"historyDays\" at least 5");
         return this;

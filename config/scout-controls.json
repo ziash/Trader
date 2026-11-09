@@ -1,8 +1,15 @@
 {
   // The options the dashboard may set for Scout (dashboard.md §3.4, scout.md §2.6). Live copy: ~/tradebot/config/scout-controls.json
   // Edited on the laptop only: nothing on the web can add an option or a value. Raise "version" on every change.
-  "version": 1,
+  "version": 2,
   "options": [
+    {
+      "key": "dailyDirection", "scope": "scout", "type": "switch", "default": true,
+      "label": "Trade with the daily direction",
+      "help": "On: on 1H and 4H charts Scout places no order against the daily trend. If the daily trend is unknown, no buy near daily resistance and no sell near daily support. Off: Scout trades both sides.",
+      "confirm": "Scout applies this at its next check, within a minute. Switching on cancels waiting orders against the daily direction. Open positions stay with TM.",
+      "applies": "now"
+    },
     {
       "key": "enabled", "scope": "symbol", "type": "switch", "default": true,
       "label": "Trade this symbol",

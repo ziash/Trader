@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Live with Scout's and TM's data** (06-Nov-2026): build steps 0–5 done — Google sign-in for the owner (account pinned) and viewers, Claude's machine account, Users and Status pages, the 30-min data upload, the **Scout page (view only)**, the read-only **account snapshot**, the **Accounts** and **Trades** pages with trade pictures, and the **Trading conditions** and **Audit** pages; step 6, the **controls** (Symbols, Keep / Skip, Settings), built. Next: step 7, a few days' use (§8) |
-| Document version | v1.15 (07-Nov-2026) — history in §11 |
+| Document version | v1.16 (09-Nov-2026) — history in §11 |
 | Address | `https://trader.uzlabz.com` — people sign in with Google (owner `zia.zeeshan@gmail.com`; others watch once approved), machines with M2M sign-in (`claude`, administrator); API under `/api/` (§5) |
 | Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) and no Node.js — so nothing of ours can run there all the time; the site is plain files (the screens) plus a small PHP API (§4.1) |
 | Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result, [`design/`](design/HANDOFF.md) (tokens, screen sources, handoff notes), is the reference for the pages |
@@ -49,7 +49,7 @@ One row per symbol per account, for the symbols in Scout's `scout.json` only (§
 - **More settings:** every further option the catalogue lists for a symbol appears in the row's expandable panel, drawn from the catalogue — no page change needed to add one.
 - Beside each: market group (forex, metals, indices, energies, crypto), Scout's size (lots), today's setups and orders. Each setting shows its state (*saved* / *applied by Scout HH:MM* / *refused: reason*) and whether it differs from the laptop's configured value, with **Reset to configured**.
 
-A page **Settings** lists the options that are not per symbol (per account or for all of Scout), also drawn from the catalogue. A symbol cannot be added here — adding one stays a change to `scout.json` and `tm.json` on the laptop.
+A page **Settings** has one tab per project: **Scout**, **Scout Lens** and **TM** (owner, 09-Nov-2026). The Scout tab shows the options that are not per symbol, drawn from the catalogue, as working controls with their state; the first is *Trade with the daily direction* ([Scout §2.10](../bots/scout/scout.md)), set per account. Scout Lens and TM have no options on the site yet, and their tabs say so; when they have options, they get a catalogue and control file of their own (§3.4). A symbol cannot be added here — adding one stays a change to `scout.json` and `tm.json` on the laptop.
 
 ### 2.3 TM trades
 
@@ -246,6 +246,7 @@ An option in the catalogue that the running Scout does not know yet is shown gre
 |---|---|
 | Setup **skip** (grey) | Cancels that setup's pending orders (its own, by label — the ownership rule holds) and places or moves none for it while it is skipped. TM then cancels its mirror order, as for any cancelled entry ([TM §3.1](../bots/tm.md#31-entry-by-a-pending-order-owner-22-oct-2026)). Already filled: nothing — TM manages the position; the page says *too late — filled* |
 | Setup back to **keep** (green) | Places the setup's order again at the next check (within a minute) if the setup is still valid then ([Scout §2.6](../bots/scout/scout.md)) |
+| **Trade with the daily direction** (scope `scout`, target `all`) | Off: Scout places orders on either side of the daily direction. On: waiting orders against it are cancelled at the next check ([Scout §2.10](../bots/scout/scout.md)). Stored in the file's `scout` block, once set, even when it equals the default |
 | Symbol **off** | No new orders on it; cancels its pending ones; filled positions stay with TM. Setups are still logged, so the page keeps showing them |
 | Symbol back **on** | Trades it again from the next check, for setups still valid |
 | Symbol **timeframe** (e.g. 1H → 1D) | Swaps the symbol's chart: loads the new chart's history first, then finds setups there (with its own higher timeframe, as Scout's spec sets per timeframe). Pending orders found on the old chart stay until filled or expired (owner, 06-Nov-2026). New orders, labels and pictures carry the new timeframe |
@@ -430,3 +431,4 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 | v1.13 | 06 Nov 2026 | **Build step 6 built** (owner): the controls — catalogue `config/scout-controls.json`, `scout-options.json` upload, control file and history on the server, `dashboard-sync.sh` every minute, Scout's checks and acknowledgement ([Scout](../bots/scout/scout.md) v1.8 §2.6); Symbols, Keep / Skip and Settings pages. Owner's choices: all three options; a timeframe change keeps the old chart's orders (open item closed); setup back to keep and symbol back on act at the next check, not the next candle. The Audit page shows the broker choice (IC Markets, `config/dashboard.json`) |
 | v1.14 | 07 Nov 2026 | Build step 7 started: the controls checked live end to end; three fixes (§3.4): each change's own applied time on the Status page and the Symbols page, switch values as JSON, `ControlReset` logged ([Scout](../bots/scout/scout.md) v1.9) |
 | v1.15 | 07 Nov 2026 | Documents reorganised (owner, [shared](../shared.md) v1.13): this document, the design brief and `design/` moved to `docs/dashboard/` (with a [README](README.md)); the tokens test now reads `docs/dashboard/design/tokens.css`; Related line |
+| v1.16 | 09 Nov 2026 | **Settings in tabs** (owner, §2.2): Scout, Scout Lens, TM. First option of scope `scout`: *Trade with the daily direction* (§3.4, Scout v1.40), a working switch with its state. API: `POST /api/controls` takes scope `scout`, `GET` returns its value and state |

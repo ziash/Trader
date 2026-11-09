@@ -4,6 +4,7 @@
 # Symbol details come from ~/rewind/config/symbols.pepperstone.json (Trader.Scout --export-symbols), over Rewind's own symbols.json.
 #
 #   scripts/full-replay.sh 2025-01-06 2025-02-03 [run-folder]
+#   DAILY=off scripts/full-replay.sh …    the daily rule off (scout.md §2.10); on is the default, as for the live bot
 set -euo pipefail
 
 FROM="$1"; TO="$2"
@@ -33,6 +34,9 @@ assert n == 1
 # A weekly or peak halt lasts until the owner resets it, and a replay has no owner: left in force it ends the run within weeks. The daily halt stays.
 scout, n = re.subn(r'"weeklyLossPercent":\s*[\d.]+,\s*"peakDrawdownPercent":\s*[\d.]+', '"weeklyLossPercent": 100, "peakDrawdownPercent": 100', scout)
 assert n == 1
+if os.environ.get('DAILY') == 'off':
+    scout, n = re.subn(r'"daily":\s*\{\s*"enabled":\s*true', '"daily": { "enabled": false', scout)
+    assert n == 1
 open(f'{out}/home/config/scout.json', 'w', encoding='utf-8').write(scout)
 tm = open(f'{repo}/config/tm.json', encoding='utf-8').read()
 symbols = ["EURUSD","GBPUSD","USDJPY","GBPJPY","EURJPY","AUDJPY","XAUUSD","XAGUSD","XPTUSD","US500","USTEC","DE40","XTIUSD","XBRUSD","XNGUSD","BTCUSD","ETHUSD","SOLUSD"]

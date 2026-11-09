@@ -20,6 +20,10 @@ internal static class OrderPlanner
             yield return new OrderIntent(ScoutState.Key(symbol, timeframe, start, true), start, true, -d.Trend, reversal, d.ReversalFarSide, d.ReversalSinceUtc ?? start);
     }
 
+    /// <summary>Why the daily rule holds this order back (scout.md §2.10), or null: also null when the rule is off or does not apply to the chart.</summary>
+    public static string? DailyHold(ChartTracker chart, OrderIntent i, DailySettings s) =>
+        !s.Enabled || chart.Daily is not { } d ? null : DailyRule.Hold(i.Dir, i.Level, d.Trend, chart.DailyZones(s), d.Atr, s);
+
     /// <summary>The far side of the pause, when it is on the losing side of the order's price; otherwise no valid stop-loss.</summary>
     public static double? StopLoss(int dir, double price, double? farSide) => farSide is { } far && (far - price) * dir < 0 ? far : null;
 

@@ -9,7 +9,8 @@ namespace Trader.Scout;
 /// </summary>
 public sealed record ReplayOrder(
     DateTime TimeUtc, string Key, string Action, int Dir, double Price, double? StopLoss, DateTime? ExpiresUtc,
-    DateTime PauseStartUtc, bool Reversal, PauseInfo? Pause, double Atr, int HigherTrend, string? Reason);
+    DateTime PauseStartUtc, bool Reversal, PauseInfo? Pause, double Atr, int HigherTrend, string? Reason,
+    int? DailyTrend = null, string? DailyZone = null);
 
 /// <summary>
 /// Plays a chart's closed candles through the detector (with the next timeframe up for the tag) and lists the orders
@@ -20,9 +21,13 @@ public sealed record ReplayOrder(
 /// </summary>
 public static class ReplayOrders
 {
+    /// <param name="daily">Closed daily candles for the daily rule and its labels (scout.md §2.10); null on a replay without them.</param>
+    /// <param name="dailyRule">Null or Enabled = false: every order is kept and only labelled.</param>
     public static List<ReplayOrder> Run(string symbol, string timeframe, IReadOnlyList<Candle> main, IReadOnlyList<Candle> higher,
-        DetectorSettings settings, int expiryCandles)
+        DetectorSettings settings, int expiryCandles, IReadOnlyList<Candle>? daily = null, DailySettings? dailyRule = null)
     {
+        var rule = dailyRule ?? new DailySettings { Enabled = false };
+        var di = 0;
         var tracker = new ChartTracker(new ScoutChart(symbol, timeframe, ScoutMode.Trade), settings);
         var len = tracker.Length;
         var hLen = tracker.HigherTimeframe is { } h && Timeframes.IsKnown(h) ? Timeframes.Length(h) : TimeSpan.Zero;
@@ -39,7 +44,10 @@ public static class ReplayOrders
             var newHigher = new List<Candle>();
             while (hi < higher.Count && higher[hi].OpenUtc + hLen <= now)
                 newHigher.Add(higher[hi++]);
-            foreach (var te in tracker.Feed([candle], newHigher, now))
+            var newDaily = new List<Candle>();
+            while (daily is not null && di < daily.Count && daily[di].OpenUtc + TimeSpan.FromDays(1) <= now)
+                newDaily.Add(daily[di++]);
+            foreach (var te in tracker.Feed([candle], newHigher, now, newDaily))
             {
                 var e = te.Event;
                 if (e.PauseStartUtc is not { } ps)
@@ -55,10 +63,20 @@ public static class ReplayOrders
 
             var d = tracker.Main;
             var wants = OrderPlanner.Wanted(d, symbol, timeframe).ToDictionary(i => i.Key);
+            var dailyHeld = new HashSet<string>();
+            foreach (var (key, w) in wants.ToList())
+                if (OrderPlanner.DailyHold(tracker, w, rule) is { } why)
+                {
+                    wants.Remove(key);
+                    dailyHeld.Add(key);
+                    endReason[key] = why;
+                }
 
             foreach (var key in pending.Where(k => !wants.ContainsKey(k)).Order(StringComparer.Ordinal).ToList())
             {
                 pending.Remove(key);
+                if (dailyHeld.Contains(key))
+                    placed.Remove(key); // placed again if the direction allows it later, as the live bot does (scout.md §2.10)
                 orders.Add(new ReplayOrder(now, key, "cancel", 0, 0, null, null, PauseStart(key), key[^1] == 'R', null, 0, 0,
                     endReason.GetValueOrDefault(key, "setup ended")));
             }
@@ -72,7 +90,8 @@ public static class ReplayOrders
                 pending.Add(key);
                 var ev = lastEvent.GetValueOrDefault(key);
                 orders.Add(new ReplayOrder(now, key, "place", w.Dir, w.Level, sl, OrderPlanner.Expiry(w.SinceUtc, len, expiryCandles), w.PauseStartUtc, w.Reversal,
-                    ev?.Event.Pause, ev?.Event.Atr ?? d.Atr ?? 0, tracker.Higher?.Trend ?? 0, null));
+                    ev?.Event.Pause, ev?.Event.Atr ?? d.Atr ?? 0, tracker.Higher?.Trend ?? 0, null,
+                    tracker.Daily?.Trend, tracker.Daily is { } dd ? DailyRule.ZoneInTheWay(w.Dir, w.Level, tracker.DailyZones(rule), dd.Atr, rule) : null));
             }
         }
         return orders;
@@ -82,7 +101,7 @@ public static class ReplayOrders
         DateTime.SpecifyKind(DateTime.ParseExact(key.Split('|')[2], "yyyyMMddHHmm", System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc);
 
     public const string Header =
-        "time_utc,setup_id,symbol,timeframe,role,action,side,price,stop_loss,expires_utc,setup_utc,pause_candles,pause_height_atr,move_atr,pullback,atr,higher_tf,higher_trend,with_higher,reason";
+        "time_utc,setup_id,symbol,timeframe,role,action,side,price,stop_loss,expires_utc,setup_utc,pause_candles,pause_height_atr,move_atr,pullback,atr,higher_tf,higher_trend,with_higher,reason,daily_trend,with_daily,daily_zone";
 
     /// <summary>Writes the orders as CSV (Trader CSV rules, shared.md §5); prices with 6 decimals (the broker rounds them).</summary>
     public static void Write(string path, string symbol, string timeframe, IEnumerable<ReplayOrder> orders)
@@ -104,6 +123,9 @@ public static class ReplayOrders
                 place ? CsvFormat.Num(o.Atr, 6) : "", place ? higherTf : "",
                 place ? (o.HigherTrend > 0 ? "up" : o.HigherTrend < 0 ? "down" : "unknown") : "",
                 place ? TaggedEvent.Compare(o.HigherTrend, o.Dir) : "", o.Reason ?? "",
+                place && o.DailyTrend is { } dt ? (dt > 0 ? "up" : dt < 0 ? "down" : "unknown") : "",
+                place && o.DailyTrend is { } dw ? TaggedEvent.Compare(dw, o.Dir) : "",
+                place ? o.DailyZone ?? "" : "",
             ]));
         }
     }

@@ -575,9 +575,9 @@ export interface paths {
                         /** @example brokerA-49123893 */
                         account: string;
                         /** @enum {string} */
-                        scope: "symbol" | "setup";
+                        scope: "scout" | "symbol" | "setup";
                         /**
-                         * @description a symbol, or a setup key symbol-timeframe-yyyyMMddHHmm
+                         * @description a symbol, a setup key symbol-timeframe-yyyyMMddHHmm, or "all" for scope scout
                          * @example XNGUSD
                          */
                         target: string;
@@ -925,6 +925,7 @@ export interface components {
                 by: string;
                 /** @enum {string} */
                 applied: "waiting" | "applied" | "refused";
+                /** @description when Scout applied this change (the first file version it applied at or after it) */
                 applied_utc?: string | null;
                 reason?: string | null;
             }[];
@@ -1304,6 +1305,7 @@ export interface components {
         ControlState: {
             /** @enum {string} */
             state?: "saved" | "applied" | "refused";
+            /** @description saved = when the file was written; applied / refused = when Scout applied this control's last change */
             utc?: string | null;
             reason?: string | null;
             /** @description orders Scout cancelled for it */
@@ -1341,6 +1343,16 @@ export interface components {
                 applied_utc?: string | null;
                 error?: string | null;
             } | null;
+            /** @description The options for all of Scout on this account */
+            scout?: {
+                /** @description what the owner set; absent = the catalogue's default */
+                set?: {
+                    [key: string]: unknown;
+                };
+                state?: {
+                    [key: string]: components["schemas"]["ControlState"];
+                };
+            };
             symbols: {
                 symbol?: string;
                 charts?: number;

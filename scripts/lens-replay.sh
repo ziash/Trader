@@ -31,7 +31,7 @@ rm -f "$ORDERS"/*.orders.csv
 for h1 in "$LAB"/candles/*-H1.csv; do
   sym="$(basename "$h1" -H1.csv)"
   if [[ -n "$SYMBOLS" && ",$SYMBOLS," != *",$sym,"* ]]; then continue; fi
-  "$SCOUT" --replay "$h1" --higher "$LAB/candles/$sym-H4.csv" --symbol "$sym" --orders "$ORDERS/$sym-H1.orders.csv"
+  "$SCOUT" --replay "$h1" --higher "$LAB/candles/$sym-H4.csv" --daily "$LAB/candles/$sym-D1.csv" --daily-rule off --symbol "$sym" --orders "$ORDERS/$sym-H1.orders.csv"
 done
 
 echo "== 3. Outcomes"

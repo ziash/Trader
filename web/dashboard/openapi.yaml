@@ -215,8 +215,8 @@ paths:
               required: [account, scope, target, key]
               properties:
                 account: { type: string, example: brokerA-49123893 }
-                scope: { type: string, enum: [symbol, setup] }
-                target: { type: string, example: XNGUSD, description: 'a symbol, or a setup key symbol-timeframe-yyyyMMddHHmm' }
+                scope: { type: string, enum: [scout, symbol, setup] }
+                target: { type: string, example: XNGUSD, description: 'a symbol, a setup key symbol-timeframe-yyyyMMddHHmm, or "all" for scope scout' }
                 key: { type: string, example: enabled }
                 value: { description: 'true/false for a switch, one of the values for a choice, null = as configured' }
       responses:
@@ -789,6 +789,12 @@ components:
             - type: object
               properties: { version: { type: integer }, applied_utc: { type: [string, 'null'] }, error: { type: [string, 'null'] } }
             - type: 'null'
+        scout:
+          type: object
+          description: The options for all of Scout on this account
+          properties:
+            set: { type: object, additionalProperties: {}, description: what the owner set; absent = the catalogue's default }
+            state: { type: object, additionalProperties: { $ref: '#/components/schemas/ControlState' } }
         symbols:
           type: array
           items:

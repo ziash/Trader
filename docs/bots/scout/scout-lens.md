@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1). **Building: §8 step 1 started 08-Nov-2026** — the replay dataset with outcomes in R runs on Rewind (§8.1); first full run on all 18 symbols done (08-Nov-2026): −0.14R per trade, no asset group clearly positive. Planned: the §1.2 tags, near-miss rows (§1.1), phase a's laptop loop (§9) |
-| Document version | v1.11 (09-Nov-2026) |
+| Document version | v1.12 (09-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -64,6 +64,7 @@ The owner reads the charts top-down: **the daily and monthly charts set the dire
 - **Without a context file** (Claude down, a new symbol), Scout runs as today, and says so in its log.
 - **Cost:** 18 symbols × one daily picture ≈ 400 reviews a month, plus 18 monthly; a few dollars a month on the API (estimate). Not time-critical, so phase a (§4.1) can run it on the laptop after the daily close.
 - **Lower-timeframe confirmation** (Scout spec §4.8, owner's USTEC 1H/5M example in the Scout repository, `research/setup-examples/USTEC-2026-10`): a pause whose lower-timeframe correction stays within 38.2 % by bodies, with every counter-trend candle answered within 1–2 candles, is a strong pause — a rule tag, and an input for the scorer and the reviewer.
+- **Rule first (owner, 09-Nov-2026):** Scout's daily direction is a rule on closed daily candles (scout.md §2.10), as the independent review asks, because a rule can be tested on history. Claude's daily picture comes later and is compared with that rule.
 - **Measured first:** the replay (§8 step 1) tags every past setup with the daily direction and its retracement depth, so the gain from D1, D4 and D5 is known on years of history before Scout's rules change.
 
 ## 2. Option 1 — Setup scorer
@@ -395,3 +396,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.9 | 08 Nov 2026 | **Step 1 started on Rewind** (owner, §8.1): Rewind's `rewind-lab` exports candles and plays Scout's orders out in R; Scout's `--replay … --orders` (scout.md v1.23) writes the orders; `scripts/lens-replay.sh` runs the chain. First run on 6 symbols: −0.20R per trade, 29 % won (Scout's order alone). Download of the other 12 symbols started |
 | v1.10 | 08 Nov 2026 | §8.1: step 1's first full run on Scout's 18 symbols (−0.14R per trade; by group and symbol). Rewind v0.13: all history downloaded, XNGUSD and SOLUSD price factors corrected, SOLUSD ends 22-Aug-2026 |
 | v1.11 | 09 Nov 2026 | §8.1: the history row points to Rewind spec §4.1, the state of each symbol's download |
+| v1.12 | 09 Nov 2026 | §1.2: daily direction by rule first (owner). `scripts/lens-replay.sh` labels every order with the daily direction and nearby zones (`daily_trend`, `with_daily`, `daily_zone`; scout.md v1.40); it keeps every order, whatever the switch says |

@@ -130,6 +130,61 @@ public sealed class OrderLifecycleTests : IDisposable
 
     // ── One set of order rules (review P-09, F-28) ─────────────────────────────────────────────────────────────────────
     /// <summary>The live bot, fed real candles one at a time against the fake broker, and the replay on the same candles: every order, its price, stop-loss and expiry alike.</summary>
+    /// <summary>16 flat days, then a strong day (close 90 = falling, 110 = rising) that closes at <paramref name="closes"/>.</summary>
+    private static List<Candle> DailyChart(double strongClose, DateTime closes)
+    {
+        var days = Enumerable.Range(0, 16).Select(i => new Candle(closes.AddDays(i - 17), 100, 105, 95, 100)).ToList();
+        days.Add(new Candle(closes.AddDays(-1), 100, Math.Max(101, strongClose + 1), Math.Min(99, strongClose - 1), strongClose));
+        return days;
+    }
+
+    [Fact]
+    public async Task A_buy_against_the_daily_direction_is_not_placed_and_is_logged_once()
+    {
+        _broker.DailyCandles[Eur] = DailyChart(90, T0);
+        await Cycle();
+        await Cycle();
+        Assert.Empty(_broker.Orders);
+        var skip = Assert.Single(Rows("skip"));
+        Assert.Equal("against daily", skip["result"]);
+    }
+
+    [Fact]
+    public async Task A_buy_with_the_daily_direction_is_placed()
+    {
+        _broker.DailyCandles[Eur] = DailyChart(110, T0);
+        await Cycle();
+        Assert.Single(_broker.Orders);
+    }
+
+    [Fact]
+    public async Task The_switch_in_scout_json_turns_the_rule_off()
+    {
+        var account = new ScoutAccount("brokerT", 1, [new ScoutChart("EURUSD", "H1", ScoutMode.Trade)]);
+        Restart(new ScoutConfig([account], Daily: new DailySettings { Enabled = false }));
+        _broker.DailyCandles[Eur] = DailyChart(90, T0);
+        await Cycle();
+        Assert.Single(_broker.Orders);
+    }
+
+    [Fact]
+    public async Task A_waiting_order_is_cancelled_when_the_daily_direction_turns_against_it_and_placed_again_when_it_turns_back()
+    {
+        var turn = _now.AddMinutes(5);
+        var falling = DailyChart(90, turn);
+        _broker.DailyCandles[Eur] = falling.Take(16).ToList();
+        await Cycle();
+        Assert.Single(_broker.Orders); // the direction is unknown so far, with no zones: it goes on
+
+        _broker.DailyCandles[Eur] = falling;
+        _now = turn.AddDays(2).AddSeconds(5);                                      // the next fetch that asks for daily candles
+        _broker.Candles[Eur] = Setup();
+        await Run();
+        Assert.Empty(_broker.Orders);
+        Assert.Contains(Rows("cancel"), r => r["detail"].Contains("against daily", StringComparison.Ordinal));
+        Assert.StartsWith("held", Role.Result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task The_live_bot_and_the_replay_place_the_same_orders_on_real_candles()
     {

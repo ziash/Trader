@@ -33,6 +33,11 @@ final class ControlsData
         $configured = $options['accounts'][$accountId] ?? [];
         $changed = $this->lastChanged($accountId);
 
+        $scoutState = [];
+        foreach ($file['scout'] ?? [] as $key => $value) {
+            $scoutState[$key] = $this->state($file, $ack, 'scout', 'all', $key, $changed["scout|all|$key"] ?? null);
+        }
+
         $symbols = [];
         foreach ($configured as $c) {
             $s = $c['symbol'] ?? '';
@@ -63,6 +68,7 @@ final class ControlsData
             'updated_utc' => $file['updated_utc'] ?? null,
             'updated_by' => $file['updated_by'] ?? null,
             'ack' => $ack === null ? null : ['version' => $ack['version'] ?? 0, 'applied_utc' => $ack['applied_utc'] ?? null, 'error' => $ack['error'] ?? null],
+            'scout' => ['set' => (object) ($file['scout'] ?? []), 'state' => (object) $scoutState],
             'symbols' => $symbols,
             'setups' => (object) $setups,
         ];
@@ -87,6 +93,9 @@ final class ControlsData
             throw new HttpError(400, 'bad_request', "No $scope option \"$key\" in the catalogue");
         }
         $symbols = array_column($configured, null, 'symbol');
+        if ($scope === 'scout' && $target !== 'all') {
+            throw new HttpError(400, 'bad_request', 'An option for all of Scout has the target "all"');
+        }
         if ($scope === 'symbol' && !isset($symbols[$target])) {
             throw new HttpError(400, 'bad_request', "$target is not one of Scout's symbols on this account");
         }
@@ -113,10 +122,21 @@ final class ControlsData
         $lock = fopen("{$this->controlsDir}/.lock", 'c');
         flock($lock, LOCK_EX);
         try {
-            $file = $this->file($broker, $ctid) ?? ['version' => 0, 'account' => $accountId, 'scout' => new \stdClass(), 'symbols' => [], 'setups' => []];
+            $file = $this->file($broker, $ctid) ?? ['version' => 0, 'account' => $accountId, 'scout' => [], 'symbols' => [], 'setups' => []];
             $now = $this->clock->now();
-            $old = $scope === 'symbol' ? ($file['symbols'][$target][$key] ?? null) : ($file['setups'][$target]['decision'] ?? null);
-            if ($scope === 'symbol') {
+            $old = match ($scope) {
+                'scout' => $file['scout'][$key] ?? null,
+                'symbol' => $file['symbols'][$target][$key] ?? null,
+                default => $file['setups'][$target]['decision'] ?? null,
+            };
+            if ($scope === 'scout') {
+                // Kept once set, even at the default: the laptop's scout.json could say otherwise (scout.md §2.6).
+                if ($value === null) {
+                    unset($file['scout'][$key]);
+                } else {
+                    $file['scout'][$key] = $value;
+                }
+            } elseif ($scope === 'symbol') {
                 if ($asConfigured) {
                     unset($file['symbols'][$target][$key]);
                     if (($file['symbols'][$target] ?? []) === []) {
@@ -140,6 +160,7 @@ final class ControlsData
             $file['updated_by'] = $by;
             $file['catalogue'] = $options['catalogue']['version'] ?? null;
             $file['account'] = $accountId;
+            $file['scout'] = (object) ($file['scout'] ?? []);
             $file['symbols'] = (object) ($file['symbols'] ?? []);
             $file['setups'] = (object) ($file['setups'] ?? []);
             $path = $this->path($broker, $ctid);

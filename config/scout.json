@@ -73,6 +73,9 @@
   "historyDays": 30,      // past candles read at start to rebuild the state
 
   // Scout spec §3.2, the same defaults as Scout_Pine; leave out to use them.
+  // Daily direction (scout.md §2.10, owner 09-Nov-2026): on 1H and 4H charts no order against the daily trend; when it is unknown, no buy near
+  // daily resistance and no sell near daily support. The dashboard's Settings page can turn it off for an account.
+  "daily": { "enabled": true, "zoneSwing": 3, "zoneCandles": 250, "zoneTouches": 2, "zoneWidthAtr": 0.25, "zoneNearAtr": 0.5 },
   "setup": {
     "pushBody": 0.6, "minMove": 1.5, "minPause": 2, "maxPause": 16, "maxPauseHeight": 3.0, "maxRetrace": 0.6,
     "reversalAfter": 4, "flipAtr": 3.0, "channel": 20, "atrLength": 14, "level": "smart", "wickTolerance": 0.6, "offset": 0

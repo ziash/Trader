@@ -29,7 +29,9 @@ Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 
 | F-15, F-28 one set of order rules for live and replay (Phase 3, P-09) | Built (Scout v1.36); not deployed |
 | F-12, F-29 full-system replay (P-06) | Built on Rewind with the bots' `--lockstep` switch, instead of a separate `Trader.Sim` (owner, 09-Nov-2026). **[Baseline](2026-11-09-phase3-baseline.md): −57 % and −44 %.** [Matched to 46 hours of real trading](2026-11-09-phase3-real-week.md): 7 of 8 checks pass on the broker's prices, 2 of 8 on Dukascopy's; issue #1 reproduces, issue #2 does not. Tolerance agreed by the owner, 09-Nov-2026 |
 | F-30 to F-32 validation report (P-07) | Built (`scripts/replay-report.py`) on development and validation. The locked period is unused |
-| Phases 4–6 | Not started |
+| Phase 3 | Closed with its gaps recorded (owner, 09-Nov-2026): the sum check is outside tolerance, the match covers 46 hours, issue #2 does not reproduce |
+| Phase 4, P-08 strategy experiments | Started, daily-first rules ahead of exits (owner). [Daily direction](2026-11-09-phase4-daily-direction.md): built, on by default in the code, **not deployed**; misses the pass mark |
+| Phases 5–6 | Not started |
 
 ## Rules
 

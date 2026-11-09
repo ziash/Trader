@@ -20,6 +20,7 @@ internal sealed class FakeGateway(Func<DateTime> clock) : IBrokerGateway
     private long _nextId = 5000, _nextDeal = 9000;
 
     public Dictionary<long, IReadOnlyList<Candle>> Candles { get; } = [];
+    public Dictionary<long, IReadOnlyList<Candle>> DailyCandles { get; } = [];
     public List<ProtoOAOrder> Orders { get; } = [];
     public List<ProtoOAPosition> Positions { get; } = [];
     public List<ProtoOAOrder> History { get; } = [];
@@ -56,6 +57,8 @@ internal sealed class FakeGateway(Func<DateTime> clock) : IBrokerGateway
     public Task<IReadOnlyList<Candle>> GetTrendbarsAsync(long accountId, long symbolId, ProtoOATrendbarPeriod period, DateTime fromUtc, DateTime toUtc)
     {
         Online();
+        if (period == ProtoOATrendbarPeriod.D1)
+            return Task.FromResult(DailyCandles.TryGetValue(symbolId, out var d) ? d : (IReadOnlyList<Candle>)[]);
         return Task.FromResult(period == ProtoOATrendbarPeriod.H1 && Candles.TryGetValue(symbolId, out var c) ? c : (IReadOnlyList<Candle>)[]);
     }
 

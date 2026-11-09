@@ -67,6 +67,15 @@ $status = [
 ];
 Files::writeAtomic("$root/data/status.json", json_encode($status, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
+// The controls' catalogue, with two sample symbols per account, so that the Symbols and Settings pages draw their options.
+$catalogue = json_decode((string) preg_replace('#^\s*//.*$#m', '', (string) file_get_contents(__DIR__ . '/../../../config/scout-controls.json')), true);
+$charts = [['symbol' => 'EURUSD', 'timeframe' => 'H1', 'mode' => 'trade'], ['symbol' => 'XAUUSD', 'timeframe' => 'H1', 'mode' => 'trade']];
+$accounts = [];
+foreach ($status['accounts'] ?? [] as $a) {
+    $accounts[$a['id']] = $charts;
+}
+Files::writeAtomic("$root/data/scout-options.json", json_encode(['catalogue' => $catalogue, 'accounts' => $accounts], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
 // Scout's logs for the Scout page: the laptop's own staged upload when there is one (stays in the git-ignored .data folder).
 $outbox = getenv('HOME') . '/tradebot/dashboard/outbox/logs';
 if (is_dir($outbox)) {

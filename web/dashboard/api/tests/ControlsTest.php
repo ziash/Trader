@@ -47,7 +47,7 @@ final class ControlsTest extends TestCase
         $r = $this->set(['scope' => 'symbol', 'target' => 'XNGUSD', 'key' => 'enabled', 'value' => false]);
         self::assertSame(200, $r->status);
         $f = $this->controlFile();
-        self::assertSame([1, 'brokerA-49123893', false, 1], [$f['version'], $f['account'], $f['symbols']['XNGUSD']['enabled'], $f['catalogue']]);
+        self::assertSame([1, 'brokerA-49123893', false, 2], [$f['version'], $f['account'], $f['symbols']['XNGUSD']['enabled'], $f['catalogue']]);
         $xng = $r->data()['symbols'][1];
         self::assertSame(['XNGUSD', 'saved'], [$xng['symbol'], $xng['state']['enabled']['state']]);
 
@@ -64,6 +64,29 @@ final class ControlsTest extends TestCase
         self::assertSame([], (array) $this->controlFile()['symbols']);
         $status = $this->kit->request('GET', '/api/status', ['headers' => $this->admin]);
         self::assertSame(200, $status->status);
+    }
+
+    public function testAnOptionForAllOfScoutIsWrittenForTheAccountAndKeptWhenSwitchedBack(): void
+    {
+        self::assertSame(true, $this->kit->request('GET', '/api/controls', ['headers' => $this->admin, 'query' => ['account' => 'brokerA-49123893']])->data()['options'][0]['default']);
+        $r = $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'dailyDirection', 'value' => false]);
+        self::assertSame(200, $r->status);
+        self::assertSame(false, $this->controlFile()['scout']['dailyDirection']);
+        self::assertSame(false, $r->data()['scout']['set']['dailyDirection']);
+        self::assertSame('saved', $r->data()['scout']['state']['dailyDirection']['state']);
+
+        $r = $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'dailyDirection', 'value' => true]);
+        self::assertSame(true, $this->controlFile()['scout']['dailyDirection']);
+        self::assertSame(200, $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'dailyDirection', 'value' => null])->status);
+        self::assertArrayNotHasKey('dailyDirection', $this->controlFile()['scout']);
+    }
+
+    public function testAnOptionForAllOfScoutTakesOnlyItsTargetValuesAndAdmins(): void
+    {
+        self::assertSame(400, $this->set(['scope' => 'scout', 'target' => 'EURUSD', 'key' => 'dailyDirection', 'value' => false])->status);
+        self::assertSame(400, $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'dailyDirection', 'value' => 'off'])->status);
+        self::assertSame(400, $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'lots', 'value' => true])->status);
+        self::assertSame(403, $this->set(['scope' => 'scout', 'target' => 'all', 'key' => 'dailyDirection', 'value' => false], $this->viewer)->status);
     }
 
     public function testOnlyTheCataloguesOptionsValuesAndSymbolsAndNeverForViewers(): void

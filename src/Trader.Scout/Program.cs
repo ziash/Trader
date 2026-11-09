@@ -56,20 +56,25 @@ if (Array.IndexOf(args, "--replay") is var replayAt and >= 0)
         // expiry come from scout.json when it is there (else Scout_Pine's defaults); the outcome is played out by Rewind.
         if (Arg("--symbol") is not { } symbol)
         {
-            Console.Error.WriteLine("--replay … --orders needs --symbol <SYMBOL> (and optionally --higher <file.csv>, --timeframe H1)");
+            Console.Error.WriteLine("--replay … --orders needs --symbol <SYMBOL> (and optionally --higher <file.csv>, --daily <D1.csv>, --daily-rule off, --timeframe H1)");
             return BotRunner.ExitUsage;
         }
         var tf = Arg("--timeframe") ?? "H1";
         var settings = new DetectorSettings();
         var expiry = 16;
+        var dailyRule = new DailySettings();
         var configPath = Path.Combine(configDir, ScoutConfig.FileName);
         if (File.Exists(configPath))
         {
             var cfg = ScoutConfig.Load(configPath);
-            (settings, expiry) = (cfg.SetupSettings, cfg.ExpiryCandles);
+            (settings, expiry, dailyRule) = (cfg.SetupSettings, cfg.ExpiryCandles, cfg.DailyInForce);
         }
         var higher = Arg("--higher") is { } hp ? CandleFile.Read(hp) : [];
-        var orders = ReplayOrders.Run(symbol, tf, CandleFile.Read(args[replayAt + 1]), higher, settings, expiry);
+        // With --daily the rule of scout.md §2.10 applies; --daily-rule off keeps every order and only labels it (Scout Lens's dataset).
+        var daily = Arg("--daily") is { } dp ? CandleFile.Read(dp) : null;
+        if (Arg("--daily-rule") == "off")
+            dailyRule = dailyRule with { Enabled = false };
+        var orders = ReplayOrders.Run(symbol, tf, CandleFile.Read(args[replayAt + 1]), higher, settings, expiry, daily, dailyRule);
         ReplayOrders.Write(ordersPath, symbol, tf, orders);
         Console.WriteLine($"{symbol} {tf}: {orders.Count(o => o.Action == "place")} orders placed, {orders.Count(o => o.Action == "cancel")} cancelled → {ordersPath}" +
             $" (settings from {(File.Exists(configPath) ? configPath : "defaults")}, expiry {expiry} candles)");

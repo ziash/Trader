@@ -116,7 +116,7 @@ public sealed class ConditionsTests : IDisposable
               "lots": 0.1 }
             """);
         var o = ScoutOptions.Build(Path.Combine(_dir, "config"))!;
-        Assert.Equal(3, o["catalogue"]!["options"]!.AsArray().Count);
+        Assert.Equal(4, o["catalogue"]!["options"]!.AsArray().Count);
         var chart = o["accounts"]!["brokerA-49123893"]![0]!;
         Assert.Equal(("EURUSD", "H1", "trade"), (chart["symbol"]!.GetValue<string>(), chart["timeframe"]!.GetValue<string>(), chart["mode"]!.GetValue<string>()));
         Assert.DoesNotContain("lots", o.ToJsonString());                         // only what the controls need

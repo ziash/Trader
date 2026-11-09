@@ -8,7 +8,7 @@ import { hhmm, parseUtc, type TimeZoneChoice } from "./time";
 import { Chip } from "@/components/Chips";
 import type { ControlOption, ControlState, ControlsView } from "@/api/types";
 
-export type ControlChange = { scope: "symbol" | "setup"; target: string; key: string; value: boolean | string | null };
+export type ControlChange = { scope: "scout" | "symbol" | "setup"; target: string; key: string; value: boolean | string | null };
 
 /** Every 30 s while on the page, so "saved" turns into "applied" without a reload (the laptop syncs every minute). */
 export function useControls(account: string | null) {

@@ -30,6 +30,7 @@ public sealed class ControlFile
     public long Version { get; set; }
     [JsonPropertyName("updated_utc")] public string? UpdatedUtc { get; set; }
     public string? Account { get; set; }
+    public Dictionary<string, JsonElement> Scout { get; set; } = [];
     public Dictionary<string, Dictionary<string, JsonElement>> Symbols { get; set; } = [];
     public Dictionary<string, SetupControl> Setups { get; set; } = [];
 
@@ -60,7 +61,7 @@ public sealed record ControlEntry(string Scope, string Target, string Key, strin
 public sealed class Controls
 {
     /// <summary>The options this Scout knows how to apply; any other catalogue entry is refused ("needs a newer Scout").</summary>
-    public static readonly string[] Known = ["symbol.enabled", "symbol.timeframe", "setup.decision"];
+    public static readonly string[] Known = ["scout.dailyDirection", "symbol.enabled", "symbol.timeframe", "setup.decision"];
 
     public static readonly TimeSpan SetupsKeptFor = TimeSpan.FromDays(7);
 
@@ -72,6 +73,9 @@ public sealed class Controls
     public HashSet<string> Disabled { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> Timeframes { get; } = new(StringComparer.Ordinal);
     public HashSet<string> Skipped { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The dashboard's choice for the daily rule (scout.md §2.10); null = as in scout.json.</summary>
+    public bool? DailyDirection { get; private set; }
     public List<ControlEntry> Entries { get; } = [];
 
     /// <summary>"EURUSD|H1|202611031400|M" (Scout's memory key) → "EURUSD-H1-202611031400" (the setup key the site uses).</summary>
@@ -116,6 +120,21 @@ public sealed class Controls
         var c = new Controls { Version = file.Version };
         var accountId = $"{account.Broker}-{account.AccountId}";
         void Refuse(string scope, string target, string key, string value, string why) => c.Entries.Add(new(scope, target, key, value, false, why));
+
+        foreach (var (key, raw) in file.Scout)
+        {
+            var value = raw.ValueKind == JsonValueKind.String ? raw.GetString()! : raw.GetRawText();
+            var why = Check(file, catalogue, accountId, "scout", key, value);
+            if (why is null && raw.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                why = "on / off expected";
+            if (why is not null)
+            {
+                Refuse("scout", "all", key, value, why);
+                continue;
+            }
+            c.DailyDirection = raw.GetBoolean();
+            c.Entries.Add(new("scout", "all", key, value, true, null));
+        }
 
         foreach (var (symbol, options) in file.Symbols)
         foreach (var (key, raw) in options)
