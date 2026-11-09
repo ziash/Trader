@@ -8,7 +8,7 @@
 | Bots | The builds that really ran (Scout `6711a92`, TM `2b56e33`), with the lock-step switch added to throw-away copies. Not today's rules |
 | Issue #1, margin ran out | **Reproduced** |
 | Issue #2, rollover spike | **Not reproduced.** The first half appears, the chain does not |
-| Tolerance | Written down before the first run (below). **It is the reviewer's proposal, and the review asks for an agreed one: the owner still has to accept it** |
+| Tolerance | Written down before the first run (below). Proposed by the reviewer, **accepted by the owner on 09-Nov-2026, after seeing these results** |
 
 ## The eight checks
 
@@ -81,7 +81,7 @@ The closeness of the equity is partly luck. The replay starts without the trades
 
 Limits that remain in every replay: 5-minute candles with four price steps, no second-by-second spread, and a spread borrowed from Dukascopy.
 
-**Acceptance of P-06 is partly met.** The review asks for a match within an agreed tolerance with the gaps explained. 7 of 8 checks pass on the broker's prices, the eighth is explained, and the owner has not yet agreed the tolerance. Issue #2 stays open for lack of second-by-second prices.
+**Acceptance of P-06 is partly met.** The review asks for a match within an agreed tolerance with the gaps explained. The owner agreed the tolerance on 09-Nov-2026. 7 of 8 checks pass on the broker's prices and the eighth, the sum of results, is explained but still outside tolerance. The check covers 46 hours, not a full week. Issue #2 stays open for lack of second-by-second prices.
 
 ## How to repeat it
 
