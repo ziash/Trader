@@ -26,11 +26,11 @@ Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 
 | F-14 TM health check (Phase 2) | Built and live on the demos (Scout v1.30, TM v1.16) |
 | F-08, F-09, F-24 margin by scenario, stress test, protection label (Phase 2, P-05) | Built and live on the demos (Scout v1.32, TM v1.18). The Portfolio Risk Manager reads the same facts straight from the broker (Scout v1.33) |
 | F-13 remote dead-man alarm | **Left for later** (owner, 09-Nov-2026); needs a choice of off-machine channel |
-| F-15, F-28 one set of order rules for live and replay (Phase 3, P-09) | Built (Scout v1.36); not deployed |
+| F-15, F-28 one set of order rules for live and replay (Phase 3, P-09) | Built (Scout v1.36); deployed with v1.41 |
 | F-12, F-29 full-system replay (P-06) | Built on Rewind with the bots' `--lockstep` switch, instead of a separate `Trader.Sim` (owner, 09-Nov-2026). **[Baseline](2026-11-09-phase3-baseline.md): −57 % and −44 %.** [Matched to 46 hours of real trading](2026-11-09-phase3-real-week.md): 7 of 8 checks pass on the broker's prices, 2 of 8 on Dukascopy's; issue #1 reproduces, issue #2 does not. Tolerance agreed by the owner, 09-Nov-2026 |
 | F-30 to F-32 validation report (P-07) | Built (`scripts/replay-report.py`) on development and validation. The locked period is unused |
 | Phase 3 | Closed with its gaps recorded (owner, 09-Nov-2026): the sum check is outside tolerance, the match covers 46 hours, issue #2 does not reproduce |
-| Phase 4, P-08 strategy experiments | Started, daily-first rules ahead of exits (owner). [Daily direction](2026-11-09-phase4-daily-direction.md): built, on by default in the code, **not deployed**; misses the pass mark |
+| Phase 4, P-08 strategy experiments | Started, daily-first rules ahead of exits (owner). [Daily direction](2026-11-09-phase4-daily-direction.md): built, misses the pass mark, and **live and on** on the Pepperstone demo by the owner's decision (Scout v1.41) |
 | Phases 5–6 | Not started |
 
 ## Rules

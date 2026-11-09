@@ -1,6 +1,6 @@
 # Phase 4: the daily direction rule
 
-**The rule misses the pass mark set before the run. It helped in one period and hurt in the other, and trades with and against the daily direction do equally badly. The support and resistance part never acted.** Run on 09-Nov-2026 on Dukascopy's history. Review reference: [P-08](2026-11-08-v1.0-independent-review.md), experiment 5. Rule: [scout.md §2.10](../scout.md). The locked period, Jul to Oct 2026, was not used.
+**The rule misses the pass mark set before the run. It helped in one period and hurt in the other, and trades with and against the daily direction do equally badly. The support and resistance part never acted.** Run on 09-Nov-2026 on Dukascopy's history. Review reference: [P-08](2026-11-08-v1.0-independent-review.md), experiment 5. Rule: [scout.md §2.10](../scout.md). The locked period, Jul to Oct 2026, was not used. The owner deployed the rule to the Pepperstone demo, on, the same day, knowing this result.
 
 ## Whole account: real Scout and TM on Rewind
 
