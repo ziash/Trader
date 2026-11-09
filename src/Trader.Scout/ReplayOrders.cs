@@ -65,10 +65,11 @@ public static class ReplayOrders
 
             foreach (var (key, w) in wants.OrderBy(x => x.Key, StringComparer.Ordinal))
             {
+                if (OrderPlanner.StopLoss(w.Dir, w.Level, w.FarSide) is not { } sl)
+                    continue; // as live: no order without a valid stop-loss, looked at again while the setup lasts
                 if (!placed.Add(key))
                     continue;
                 pending.Add(key);
-                var sl = OrderPlanner.StopLoss(w.Dir, w.Level, w.FarSide);
                 var ev = lastEvent.GetValueOrDefault(key);
                 orders.Add(new ReplayOrder(now, key, "place", w.Dir, w.Level, sl, OrderPlanner.Expiry(w.SinceUtc, len, expiryCandles), w.PauseStartUtc, w.Reversal,
                     ev?.Event.Pause, ev?.Event.Atr ?? d.Atr ?? 0, tracker.Higher?.Trend ?? 0, null));

@@ -23,6 +23,18 @@ public sealed class ReplayOrdersTests
 
     private static List<ReplayOrder> Run(List<Candle> candles) => ReplayOrders.Run("EURUSD", "H1", candles, [], new DetectorSettings(), 16);
 
+    [Theory]
+    [InlineData(1, 100.0, 95.0, 95.0)]    // a buy: the stop-loss is below the price
+    [InlineData(-1, 100.0, 105.0, 105.0)] // a sell: above it
+    [InlineData(1, 100.0, 105.0, null)]   // on the winning side: no valid stop-loss
+    [InlineData(-1, 100.0, 95.0, null)]
+    [InlineData(1, 100.0, 100.0, null)]   // at the price
+    [InlineData(1, 100.0, null, null)]    // no far side yet
+    public void The_stop_loss_must_be_on_the_losing_side(int dir, double price, double? far, double? expected)
+    {
+        Assert.Equal(expected, OrderPlanner.StopLoss(dir, price, far));
+    }
+
     [Fact]
     public void Main_stop_is_placed_once_when_the_pause_gets_its_level_with_the_far_side_as_stop_loss()
     {
