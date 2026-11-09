@@ -25,8 +25,9 @@ Phase 1 is built, tested and **live on the Pepperstone demo** since 08-Nov-2026 
 | F-01, F-23 limits across the account, one margin limit shared with TM (Phase 2, P-03) | Built and **on** on the Pepperstone demo (Scout v1.35). Exposure is visible with `--risk` |
 | F-14 TM health check (Phase 2) | Built and live on the demos (Scout v1.30, TM v1.16) |
 | F-08, F-09, F-24 margin by scenario, stress test, protection label (Phase 2, P-05) | Built and live on the demos (Scout v1.32, TM v1.18). The Portfolio Risk Manager reads the same facts straight from the broker (Scout v1.33) |
-| F-13 remote dead-man alarm | **Open:** needs the owner's choice of an off-machine channel |
-| Phases 3–6 | Not started |
+| F-13 remote dead-man alarm | **Left for later** (owner, 09-Nov-2026); needs a choice of off-machine channel |
+| F-15, F-28 one set of order rules for live and replay (Phase 3, P-09) | Built (Scout v1.36); not deployed |
+| Rest of Phase 3 (`Trader.Sim` P-06, validation P-07); Phases 4–6 | Not started |
 
 ## Rules
 

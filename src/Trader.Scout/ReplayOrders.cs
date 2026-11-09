@@ -13,10 +13,8 @@ public sealed record ReplayOrder(
 
 /// <summary>
 /// Plays a chart's closed candles through the detector (with the next timeframe up for the tag) and lists the orders
-/// Scout's Trade mode would place and cancel, with the same rules as <c>AccountScout.SyncAsync</c> (scout.md §2.3):
-/// after each candle, the current pause's main and reversal levels are the wanted orders; each role is placed once,
-/// at its level when first wanted, with the stop-loss at the far side (none if that side is wrong) and expiry after
-/// <c>expiryCandles</c> candles; an order whose setup ended is cancelled. What happens to the orders (fills, one
+/// Scout's Trade mode would place and cancel, from the same rules as the live bot (<see cref="OrderPlanner"/>, scout.md §2.3):
+/// after each candle the planner's wanted orders are taken; each role is placed once, when first wanted; an order whose setup ended is cancelled. What happens to the orders (fills, one
 /// cancels the other, expiry, refusals, the result in R) is left to the broker that plays them out (Rewind's
 /// <c>rewind-lab outcomes</c>). No margin budget and no dashboard controls: every wanted order is placed.
 /// </summary>
@@ -56,14 +54,7 @@ public static class ReplayOrders
             }
 
             var d = tracker.Main;
-            var wants = new Dictionary<string, (bool Reversal, int Dir, double Level, double? Far)>();
-            if (d.PauseStartUtc is { } start)
-            {
-                if (d.MainLevel is { } m)
-                    wants[ScoutState.Key(symbol, timeframe, start, false)] = (false, d.Trend, m, d.MainFarSide);
-                if (d.ReversalLevel is { } r)
-                    wants[ScoutState.Key(symbol, timeframe, start, true)] = (true, -d.Trend, r, d.ReversalFarSide);
-            }
+            var wants = OrderPlanner.Wanted(d, symbol, timeframe).ToDictionary(i => i.Key);
 
             foreach (var key in pending.Where(k => !wants.ContainsKey(k)).Order(StringComparer.Ordinal).ToList())
             {
@@ -77,9 +68,9 @@ public static class ReplayOrders
                 if (!placed.Add(key))
                     continue;
                 pending.Add(key);
-                var sl = w.Far is { } f && (f - w.Level) * w.Dir < 0 ? f : (double?)null; // as AccountScout.StopLoss
+                var sl = OrderPlanner.StopLoss(w.Dir, w.Level, w.FarSide);
                 var ev = lastEvent.GetValueOrDefault(key);
-                orders.Add(new ReplayOrder(now, key, "place", w.Dir, w.Level, sl, now + expiryCandles * len, d.PauseStartUtc!.Value, w.Reversal,
+                orders.Add(new ReplayOrder(now, key, "place", w.Dir, w.Level, sl, OrderPlanner.Expiry(w.SinceUtc, len, expiryCandles), w.PauseStartUtc, w.Reversal,
                     ev?.Event.Pause, ev?.Event.Atr ?? d.Atr ?? 0, tracker.Higher?.Trend ?? 0, null));
             }
         }

@@ -128,6 +128,43 @@ public sealed class OrderLifecycleTests : IDisposable
 
     private RoleRecord Role => _state.Roles[Key];
 
+    // ── One set of order rules (review P-09, F-28) ─────────────────────────────────────────────────────────────────────
+    /// <summary>The live bot, fed real candles one at a time against the fake broker, and the replay on the same candles: every order, its price, stop-loss and expiry alike.</summary>
+    [Fact]
+    public async Task The_live_bot_and_the_replay_place_the_same_orders_on_real_candles()
+    {
+        const long Btc = 2;
+        var all = CandleFile.Read(Path.Combine(AppContext.BaseDirectory, "Data", "BTCUSD-H1.csv"));
+        const int First = 200;
+        Assert.True(all.Count > First + 500, $"{all.Count} candles");
+        _broker.Candles.Remove(Eur);
+        (_broker.Equity, _broker.Bid, _broker.Ask) = (1e12, 1e12, 0); // no level is ever passed by the price, and margin is never short: only the order rules decide
+        _broker.Candles[Btc] = all.Take(First).ToList();
+        _now = all[First - 1].OpenUtc.AddHours(1).AddSeconds(30);
+        Restart(null, Sym(Btc, "BTCUSD"));
+        await Run();
+
+        var started = _now;
+        for (var i = First; i < all.Count; i++)
+        {
+            _broker.Candles[Btc] = all.Take(i + 1).ToList();
+            _now = all[i].OpenUtc.AddHours(1).AddSeconds(30);
+            await Run();
+        }
+
+        var settings = new ScoutConfig([new ScoutAccount("brokerT", 1, [])]);
+        var replay = ReplayOrders.Run("BTCUSD", "H1", all, [], settings.SetupSettings, settings.ExpiryCandles).Where(o => o.Action == "place" && o.TimeUtc > started)
+            .Select(o => (Setup: CsvFormat.Time(o.PauseStartUtc), Role: o.Reversal ? "R" : "M", Side: o.Dir > 0 ? "Buy" : "Sell", Price: Math.Round(o.Price, 2),
+                Stop: o.StopLoss is { } s ? Math.Round(s, 2) : (double?)null, Expires: CsvFormat.Time(o.ExpiresUtc!.Value)))
+            .ToList();
+        var live = Rows("place").Where(r => r["symbol"] == "BTCUSD" && r["result"] == "ok" && r.Time("time_utc") > started)
+            .Select(r => (Setup: r["setup_utc"], Role: r["role"], Side: r["side"], Price: r.Num("price_req")!.Value, Stop: r.Num("stop_loss"), Expires: r["expires_utc"]))
+            .ToList();
+
+        Assert.True(replay.Count >= 10, $"{replay.Count} orders");
+        Assert.Equal(replay, live);
+    }
+
     // ── Money at risk across the account (scout.md §2.9, review P-03) ────────────────────────────────────────────────
     // A lot of these symbols is 100 units: with the sizing on, $5,000 × 0.5 % gives 0.01 lot and a whole trade risks $18.20. EURUSD (100,000 units) stays below its minimum and is never placed.
     private static SymbolInfo Small(long id, string name) =>

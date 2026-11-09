@@ -417,19 +417,10 @@ internal sealed class AccountScout(
         var wants = new Dictionary<string, Want>();
         foreach (var chart in _charts)
         {
-            var d = chart.Main;
-            if (d.PauseStartUtc is not { } ps || !symbols.TryGetValue(chart.Chart.Symbol, out var sym))
+            if (!symbols.TryGetValue(chart.Chart.Symbol, out var sym))
                 continue;
-            if (d.MainLevel is { } m)
-            {
-                var k = ScoutState.Key(sym.Name, chart.Chart.Timeframe, ps, false);
-                wants[k] = new Want(chart, sym, k, ps, false, d.Trend, m, d.MainFarSide, d.MainSinceUtc ?? ps);
-            }
-            if (d.ReversalLevel is { } r)
-            {
-                var k = ScoutState.Key(sym.Name, chart.Chart.Timeframe, ps, true);
-                wants[k] = new Want(chart, sym, k, ps, true, -d.Trend, r, d.ReversalFarSide, d.ReversalSinceUtc ?? ps);
-            }
+            foreach (var i in OrderPlanner.Wanted(chart.Main, sym.Name, chart.Chart.Timeframe))
+                wants[i.Key] = new Want(chart, sym, i.Key, i.PauseStartUtc, i.Reversal, i.Dir, i.Level, i.FarSide, i.SinceUtc);
         }
 
         // One cancels the other (Scout spec §4.4 I4), a halt (§2.7), the dashboard's controls (§2.6), and setups that ended: cancel
@@ -576,7 +567,7 @@ internal sealed class AccountScout(
     }
 
     /// <summary>The server expiry of a setup's order: <see cref="ScoutConfig.ExpiryCandles"/> candles after the candle that gave its level, however late it is placed.</summary>
-    private DateTime ExpiryOf(Want w) => w.SinceUtc + w.Chart.Length + config.ExpiryCandles * w.Chart.Length;
+    private DateTime ExpiryOf(Want w) => OrderPlanner.Expiry(w.SinceUtc, w.Chart.Length, config.ExpiryCandles);
 
     /// <summary>
     /// The checks before an order is sent (scout.md §2.3, review F-03, F-10, F-20): a size the broker takes without raising it, candles that are
@@ -1013,8 +1004,7 @@ internal sealed class AccountScout(
 
     private static double? StopLoss(Want w)
     {
-        var price = Math.Round(w.Level, w.Sym.Digits);
-        return w.Far is { } f && (f - price) * w.Dir < 0 ? Math.Round(f, w.Sym.Digits) : null;
+        return OrderPlanner.StopLoss(w.Dir, Math.Round(w.Level, w.Sym.Digits), w.Far) is { } stop ? Math.Round(stop, w.Sym.Digits) : null;
     }
 
     private string? KeyOf(string? label, long symbolId) => KeyOf(label, symbolId, _symbols);
