@@ -33,7 +33,7 @@ public sealed class ScoutTests
         Assert.Equal(new RiskLimits(3, 6, 15), c.Limits);
         Assert.NotNull(c.Stress);
         Assert.True(c.RequireTm);
-        Assert.NotNull(c.Portfolio);
+        Assert.True(c.Portfolio is { Enabled: true, TradePercent: 0.5, TotalPercent: 5, SymbolPercent: 1, GroupPercent: 2, MarginUsePercent: 33 });
     }
 
     /// <summary>Scout must stop adding trades at or before the margin level where TM stops mirroring them (review F-23). 300 % margin level = 33.3 % margin use.</summary>

@@ -67,8 +67,8 @@
   // Size from the money at risk instead of the lots above (scout.md §2.8). On since 08-Nov-2026 (owner); preview with --sizes.
   "sizing": { "enabled": true, "riskPercent": 0.5, "legs": 2, "slippageSpreads": 1, "minStopSpreads": 2, "limitR": 3, "maxLossPercent": 2 },
   // Limits on the money at risk across the account, in % of equity (scout.md §2.9). marginUsePercent applies while this is on, and matches TM's 300 % margin level.
-  // Off until the owner turns it on; see what it would count with --risk. Starting values, to calibrate on replay.
-  "portfolio": { "enabled": false, "tradePercent": 0.5, "totalPercent": 5, "symbolPercent": 1, "groupPercent": 2, "marginUsePercent": 33, "maxTrades": 8, "maxPendingOrders": 12, "hedgeCycleR": 0.5 },
+  // On since 09-Nov-2026 (owner); see what it counts with --risk. Starting values, to calibrate on replay.
+  "portfolio": { "enabled": true, "tradePercent": 0.5, "totalPercent": 5, "symbolPercent": 1, "groupPercent": 2, "marginUsePercent": 33, "maxTrades": 8, "maxPendingOrders": 12, "hedgeCycleR": 0.5 },
   "expiryCandles": 16,    // an unfilled order expires on the server this many candles after it is placed (Scout spec §4.2)
   "historyDays": 30,      // past candles read at start to rebuild the state
 
