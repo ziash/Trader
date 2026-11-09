@@ -30,6 +30,9 @@ scout = re.sub(r'"broker":\s*"\w+",\s*"accountId":\s*\d+,', '"broker": "rewind",
 scout = re.sub(r'^\s*"symbolNames":.*\n', '', scout, flags=re.M)
 scout, n = re.subn(r'"requireTm":\s*true', '"requireTm": false', scout)  # TM's health report runs on the computer's clock, the replay on its own
 assert n == 1
+# A weekly or peak halt lasts until the owner resets it, and a replay has no owner: left in force it ends the run within weeks. The daily halt stays.
+scout, n = re.subn(r'"weeklyLossPercent":\s*[\d.]+,\s*"peakDrawdownPercent":\s*[\d.]+', '"weeklyLossPercent": 100, "peakDrawdownPercent": 100', scout)
+assert n == 1
 open(f'{out}/home/config/scout.json', 'w', encoding='utf-8').write(scout)
 tm = open(f'{repo}/config/tm.json', encoding='utf-8').read()
 symbols = ["EURUSD","GBPUSD","USDJPY","GBPJPY","EURJPY","AUDJPY","XAUUSD","XAGUSD","XPTUSD","US500","USTEC","DE40","XTIUSD","XBRUSD","XNGUSD","BTCUSD","ETHUSD","SOLUSD"]

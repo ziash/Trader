@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.36 (09-Nov-2026) — history in §8 |
+| Document version | v1.37 (09-Nov-2026) — history in §8 |
 | Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
@@ -227,6 +227,8 @@ By hand (stop the service first, so only one Scout acts): `dotnet run --project 
 | `--test-order` | One far-away EURUSD Buy Stop (0.01 lot, stop-loss, trailing, 1-hour expiry) on the first account, read back, cancelled. Run with TM stopped (TM would mirror it) |
 | `--sizes` | Prints, read-only, the size §2.8 would give on each symbol of the first account beside today's fixed lots, for a tight, median and wide stop |
 | `--risk` | Prints, read-only, the money at risk on the first account, by symbol and group, against the limits of §2.9, whether they are on or off |
+| `--export-symbols <file>` | Writes, read-only, the first account's symbol details, swaps, commission and margin rate in Rewind's `symbols.json` format |
+| `--lockstep` | A whole-account replay on Rewind, in step with it ([Open Code Pieces](../../open-code-pieces.md) §3). Replay mode only. Run with `scripts/full-replay.sh <from> <to>` and report with `scripts/replay-report.py <run>` |
 | `--candles <SYMBOL> <TF> <from> <file.csv>` | Writes the first account's closed candles to a file (read-only); used for the tests and the review |
 | `--replay <file.csv>` | Runs the detector on such a file and prints its events (no connection) |
 | `--replay <h1.csv> --symbol <SYMBOL> --orders <out.csv> [--higher <h4.csv>] [--timeframe H1]` | Writes the orders Trade mode would place and cancel on those candles (§2.3 rules, setup settings and expiry from `scout.json`; no margin budget or controls), for Scout Lens ([scout-lens.md](scout-lens.md) §8 step 1); `scripts/lens-replay.sh` runs it on Rewind's history and has Rewind play the orders out in R |
@@ -286,6 +288,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.21 | 07 Nov 2026 | Owner: 30M is the lowest chart Scout trades on; 15M and 5M only for checks (Scout spec v1.9) |
 | v1.22 | 08 Nov 2026 | **Gentler candle requests** (owner, §2): market hours from the broker (no requests while closed), late candles asked for after 1, 2, 4, 8 min then once per candle, charts spread 0–18 s, all candle requests paced to 2/s (Trader.Core). Tests: 41 (3 new) |
 | v1.23 | 08 Nov 2026 | §5: `--replay … --orders` writes the orders Scout would place on past candles, for Scout Lens (scout-lens.md v1.9) |
+| v1.37 | 09 Nov 2026 | **Full-system replay built and first baseline** (review P-06, P-07; owner: use Rewind and a switch, no separate simulator): `--lockstep`, `--export-symbols`, `scripts/full-replay.sh`, `scripts/replay-report.py`, Rewind v0.15. [Baseline](reviews/2026-11-09-phase3-baseline.md): −54.3 % (Nov 2024 to Dec 2025) and −32.2 % (Jan to Jun 2026), no edge shown; old hedged trades fill the limit of 8 trades. Locked period unused; not yet matched to a real trial week. Live bots unchanged |
 | v1.36 | 09 Nov 2026 | **Phase 3 of the review started** (owner; the off-machine alarm F-13 left for later). Step 1, shared order rules (P-09, F-28): `OrderPlanner` holds which orders a setup wants, the stop-loss rule and the expiry, for the live bot and the replay; `ReplayOrders` has none of its own. No change in behaviour: the replay on all 19 symbols' history gives byte-identical orders before and after, and a new test feeds the live path real candles one at a time and gets the replay's orders exactly. Tests: 159. Not deployed |
 | v1.35 | 09 Nov 2026 | **Portfolio limits turned on** on the Pepperstone demo, 01:40 UTC (owner; instance `Scout-0aadfa`, same build). At the start: 4.07 % of equity at risk across the account, 5 trades, 3 entry orders; the old BTCUSD trade (2.58 %) is above the symbol limit and the crypto group above its limit, so new crypto orders wait until it ends. Nothing on the account was changed |
 | v1.34 | 09 Nov 2026 | v1.33 live on the Pepperstone demo, 01:39 UTC (owner's OK; build `Scout-8b28fe9`, instance `Scout-a43191`), portfolio limits **off**: Scout counts nothing against them until they are turned on, and `--risk` shows the exposure. TM not restarted (no code change) |

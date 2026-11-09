@@ -5,7 +5,7 @@ The reusable code every bot is built from: connection, tokens, orders, prices an
 | Item | Value |
 |---|---|
 | Status | **In use** by Scout, TM, the Audit Bot and the Dashboard export (`Trader.DashboardExport`) |
-| Document version | v1.18 (08-Nov-2026) — history in §10 |
+| Document version | v1.19 (09-Nov-2026) — history in §10 |
 | Code | [`src/Trader.Core`](../src/Trader.Core), template bot [`src/Trader.SampleBot`](../src/Trader.SampleBot) |
 | Tests | [`tests/Trader.Core.Tests`](../tests/Trader.Core.Tests) |
 
@@ -42,6 +42,7 @@ Still to come when a bot needs it: respect the request-rate budget when many ord
 - One cTrader ID (cTID) linked to both broker demo accounts; OAuth grants the app access to each account.
 - .NET worker service using Spotware's official OpenAPI.Net library (NuGet `cTrader.OpenAPI.Net`) for the TCP/Protobuf connection.
 - Demo and live use separate API hosts: `demo.ctraderapi.com:5035` and `live.ctraderapi.com:5035` (Protobuf over TLS; confirmed). One connection serves all demo accounts; a second serves all live accounts.
+- **Lock-step replay** (`LockStep`, `--lockstep`, 09-Nov-2026): a bot on Rewind's whole-account run ([Rewind spec](https://github.com/ziash/Rewind) §7.2) takes its time from the replay, acts once per turn, and says when it has finished. Refused unless `CTRADER_ENV=replay`. Candle requests are not paced on that connection.
 - **Replay environment** (21-Oct-2026, for [Rewind](https://github.com/ziash/Rewind), a separate project that replays past prices and speaks the Open API): `CTRADER_ENV=replay` with `CTRADER_HOST` and `CTRADER_PORT` in the secrets file. Only `localhost`, `127.0.0.1` or `::1` are accepted — checked when the file is read and again when connecting — so a replay setting can never reach a real broker; host and port are refused with `demo`, and `live` stays refused. The secrets file is chosen with `TRADER_SECRETS_FILE` (default `~/.config/trader/secrets.env`), so a bot run against Rewind never reads or rewrites the real tokens. Rewind's own certificate: since v1.5 (23-Oct-2026) the secrets file names Rewind's certificate authority with `CTRADER_CA_FILE` (replay only, refused with `demo`); the bot then connects with its own small client (`OpenApi/ReplayClient`) that trusts **that authority only** — not the system's list — and works on Linux and Windows alike; nothing is installed in the system. Spotware's library cannot do this (it accepts only what the system trusts, with no way to add a certificate); demo connections still use it, unchanged. Without `CTRADER_CA_FILE` a replay connection uses Spotware's library as before, trusted through `SSL_CERT_FILE` (Linux only; the v1.2 way). Rewind writes the secrets file and a launcher that sets all of this (`~/rewind/tm/run-tm.sh` on Linux, `run-tm.ps1` on Windows).
 - Access token lasts about 30 days; the bot renews it with the refresh token and must save the new refresh token each time (the old one is invalidated).
 - *(step 2)* Token refresh runs over the same Protobuf connection (`ProtoOARefreshTokenReq`), when the token has under 7 days left, when its expiry is unknown, or when the server rejects it. The new pair and its expiry (`CTRADER_ACCESS_TOKEN_EXPIRES_UTC`) are written to `secrets.env` atomically (temp file, then rename; mode 600), under a lock file (`secrets.env.lock`) so only one instance refreshes at a time. First refresh 17-Oct-2026: the server returned a lifetime of about 30 days 10 h (expires 16-Nov-2026).
@@ -136,3 +137,4 @@ Every bot writes its logs as CSV in the shared format ([shared §5](shared.md#5-
 | v1.16 | 08 Nov 2026 | `SymbolInfo.MaxVolume` and `SymbolInfo.Commission` (`CommissionRule`: a lot's commission opened and closed, in USD), moved from the dashboard export so Scout's sizing and the export share one formula |
 | v1.17 | 08 Nov 2026 | `InstanceRegistry.ReportHealthy` and `HealthyUtc`: a bot reports each finished working cycle in its status file, and another bot can read when the Primary on an account last did |
 | v1.18 | 08 Nov 2026 | `AccountStatus.MarginMode`, `MarginOf` (one position) and `Combine` (a symbol's two sides by the broker's rule) |
+| v1.19 | 09 Nov 2026 | §3: `LockStep`, the bots' switch for a whole-account replay on Rewind |

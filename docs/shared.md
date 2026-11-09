@@ -5,7 +5,7 @@ Each bot is a project of its own, with its own document in [`docs/bots/`](bots/R
 | Item | Value |
 |---|---|
 | Owner | Zeeshan |
-| Document version | v1.15 (09-Nov-2026) — history in §10 |
+| Document version | v1.16 (09-Nov-2026) — history in §10 |
 | Setup record | [setup.md](setup.md) (environment, accounts, Open API app; check with `bash scripts/check-env.sh`) |
 | Archive | [The old single plan, v1.0–v1.22](archive/plan-v1.22.md) — split into these documents on 20-Oct-2026 |
 
@@ -126,6 +126,7 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | TM, main, mirror | TM = Trade Manually bot ([TM](bots/tm.md)). Main = the owner's manual position; mirror = TM's same-size copy of it. Each has its own hedge. |
 | Trendbar | A candle (open, high, low, close) for a given timeframe. |
 | Equity, margin, margin level | Equity = balance + the open positions' profit or loss. Margin = the deposit the broker holds for open positions; free margin = equity − margin, what new orders (and hedges) can use. Margin level = equity ÷ margin × 100 %. IC Markets calls margin at 100 % and closes positions itself at 50 % (stop-out). |
+| Lock-step | A replay where each program waits for the other: the replay moves one price step, the bot acts and says it has finished, and only then does the replay move on. Years of history run in minutes, with the same result every time. |
 | Correlated group | Symbols that tend to move together, such as gold and silver, so that losing on one often means losing on the other. Scout limits the money at risk per group ([scout.md §2.9](bots/scout/scout.md)). |
 | Backstop | TM's stop-loss at the 3R loss limit on a leg that has no filled hedge, so the leg keeps a stop on the server even when a hedge is refused ([tm.md §5.1](bots/tm.md#51-margin-and-the-backstop-v19-06-nov-2026)). |
 | Webhook | An HTTP POST sent automatically by one system (e.g. TradingView) to a URL when an event fires. |
@@ -210,3 +211,4 @@ All logs and reports are CSV files that open directly in Google Sheets, Excel or
 | v1.13 | 07 Nov 2026 | Documents reorganised (owner): Scout's documents moved to `docs/bots/scout/` and the Dashboard's to `docs/dashboard/`; the projects table now kept only on the front page README (§1 points to it); new [documents map](README.md); §6 updated |
 | v1.14 | 08 Nov 2026 | §5: Scout's stop and reset files in `control/` ([scout.md §2.7](bots/scout/scout.md#27-stopping-new-entries-v125-08-nov-2026)) |
 | v1.15 | 09 Nov 2026 | Glossary: correlated group ([Scout](bots/scout/scout.md) v1.33) |
+| v1.16 | 09 Nov 2026 | Glossary: lock-step |
