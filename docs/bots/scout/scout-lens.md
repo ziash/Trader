@@ -5,7 +5,7 @@
 | Item | Value |
 |---|---|
 | Status | **Decided — options 1 + 3** (owner, 07-Nov-2026); option 3 in two phases (§4.1). **Building: §8 step 1 started 08-Nov-2026** — the replay dataset with outcomes in R runs on Rewind (§8.1); first full run on all 18 symbols done (08-Nov-2026): −0.14R per trade, no asset group clearly positive. Planned: the §1.2 tags, near-miss rows (§1.1), phase a's laptop loop (§9) |
-| Document version | v1.10 (08-Nov-2026) |
+| Document version | v1.11 (09-Nov-2026) |
 | Interactive version | [claude.ai artifact](https://claude.ai/artifact/9ChjnZcXq2w6j7BeomXNet) (private; same content, charts with hover) and [`docs/scout-lens.html`](https://github.com/ziash/Scout/blob/main/docs/scout-lens.html) in the Scout repository — both show v1.1, before the decision |
 | Charts | [`docs/bots/scout/images/`](images) — all candle charts use **made-up candles** to show the idea; scores and R values on them are examples, not results |
 
@@ -269,7 +269,7 @@ rewind-lab candles  →  <SYMBOL>-H1/H4/D1.csv  →  Trader.Scout --replay … -
 
 | Piece | Where | What |
 |---|---|---|
-| History | Rewind `rewind-download` | 19 symbols (Scout's 18 + EURGBP for currency conversion), 1-Oct-2024 → yesterday. Downloaded 08-Nov-2026. Dukascopy has no SOLUSD after 22-Aug-2026, so that symbol ends there |
+| History | Rewind `rewind-download` | 19 symbols (Scout's 18 + EURGBP for currency conversion), 1-Oct-2024 → yesterday. Downloaded 08-Nov-2026, 25,664 files, none missing. Dukascopy has no SOLUSD after 22-Aug-2026, so that symbol ends there. State of each symbol: [Rewind spec §4.1](https://github.com/ziash/Rewind/blob/main/docs/spec.md) |
 | Candles | Rewind `rewind-lab candles` | 1H, 4H, daily candles built from the 5-minute history as cTrader draws them (4H / daily from 17:00 New York), in Scout's candle-file format → `~/rewind/lab/candles/` |
 | Orders | Trader `Trader.Scout --replay … --orders` (`ReplayOrders.cs`) | Scout's detector and the 4H tag on those candles; after each candle, Trade mode's rules (scout.md §2.3): each setup role placed once at its level, stop-loss at the far side, expiry 16 candles, cancelled when the setup ends. Settings from `scout.json` → `~/tradebot/lens/orders/<SYMBOL>-H1.orders.csv` |
 | Outcomes | Rewind `rewind-lab outcomes` | The orders on Rewind's simulated broker, 4 price steps per 5-minute candle: fills on the ask / bid, slippage after gaps, trailing stop, one cancels the other, expiry, refusals → `~/rewind/lab/outcomes.csv`, one row per order with `result` and `r`, `best_r`, `worst_r`, `hours_held` |
@@ -394,3 +394,4 @@ Each caveat change gets a new run on the **same** set, and the report is compare
 | v1.8 | 07 Nov 2026 | Owner: Scout_Pine closed for development — rule changes go from the Scout spec straight into `Detector.cs` (§1, §1.1); 5M is the lowest chart for the lower-timeframe check |
 | v1.9 | 08 Nov 2026 | **Step 1 started on Rewind** (owner, §8.1): Rewind's `rewind-lab` exports candles and plays Scout's orders out in R; Scout's `--replay … --orders` (scout.md v1.23) writes the orders; `scripts/lens-replay.sh` runs the chain. First run on 6 symbols: −0.20R per trade, 29 % won (Scout's order alone). Download of the other 12 symbols started |
 | v1.10 | 08 Nov 2026 | §8.1: step 1's first full run on Scout's 18 symbols (−0.14R per trade; by group and symbol). Rewind v0.13: all history downloaded, XNGUSD and SOLUSD price factors corrected, SOLUSD ends 22-Aug-2026 |
+| v1.11 | 09 Nov 2026 | §8.1: the history row points to Rewind spec §4.1, the state of each symbol's download |
