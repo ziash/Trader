@@ -113,6 +113,21 @@ public sealed class OrderChartTests
     }
 
     [Fact]
+    public void A_setup_whose_order_would_already_have_expired_says_the_expiry_passed()
+    {
+        var (p, candles) = FirstOrder("EURUSD", 5, 0.0001);
+        var old = p with { OrderId = null, Outcome = "not placed: setup too old", ExpiresUtc = p.PlacedUtc.AddHours(-9) };
+        var texts = XDocument.Parse(OrderChart.Svg(old, candles)).Descendants(Svg + "text").Select(t => t.Value).ToList();
+        Assert.Contains(texts, t => t.Contains("expiry passed") && !t.Contains("would expire"));
+
+        // A setup still inside its expiry, and any order, read as before.
+        var live = XDocument.Parse(OrderChart.Svg(p with { OrderId = null }, candles)).Descendants(Svg + "text").Select(t => t.Value).ToList();
+        Assert.Contains(live, t => t.Contains("would expire"));
+        var order = XDocument.Parse(OrderChart.Svg(p, candles)).Descendants(Svg + "text").Select(t => t.Value).ToList();
+        Assert.Contains(order, t => t.Contains("expires") && !t.Contains("would expire") && !t.Contains("expiry passed"));
+    }
+
+    [Fact]
     public void A_setup_still_being_tried_says_so()
     {
         var (p, candles) = FirstOrder("EURUSD", 5, 0.0001);

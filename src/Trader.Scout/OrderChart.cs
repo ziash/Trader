@@ -155,7 +155,9 @@ public static class OrderChart
         var title = $"{p.Symbol} {p.Timeframe} · {side} {Price(p.Level, p)}{risk} · {(p.Reversal ? "reversal stop" : "main stop")}";
         var higher = p.HigherTimeframe is null ? "" : $" · {p.HigherTimeframe} trend: {p.WithHigher}";
         var seen = $"{(p.SetupOnly ? "seen" : "placed")} {p.PlacedUtc.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture)}Z";
-        var until = $"{(p.SetupOnly ? "would expire" : "expires")} {p.ExpiresUtc.ToString("dd MMM HH:mm", CultureInfo.InvariantCulture)}Z";
+        // A setup whose order would already have expired (too old to send) says so, rather than "would expire" in the past.
+        var when = !p.SetupOnly ? "expires" : p.ExpiresUtc > p.PlacedUtc ? "would expire" : "expiry passed";
+        var until = $"{when} {p.ExpiresUtc.ToString("dd MMM HH:mm", CultureInfo.InvariantCulture)}Z";
         var end = p.OrderId is { } subId ? $" · order {subId.ToString(CultureInfo.InvariantCulture)}" : $" · {p.Outcome ?? "no order yet"}";
         var sub = $"{p.Broker} {p.AccountId} · {seen} · {until}{higher}{end}";
         sb.Append($"<text x=\"{N(Left + 4)}\" y=\"20\" font-size=\"15\" font-weight=\"bold\" fill=\"#111827\">{Esc(title)}</text>\n");
