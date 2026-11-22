@@ -70,6 +70,8 @@ internal sealed class AccountScout(
     private readonly Func<DateTime> _utcNow = utcNow ?? (() => DateTime.UtcNow);
     private readonly string _controlDir = controlDir ?? Path.Combine(TradebotPaths.Root, "control");
     private readonly HashSet<string> _skipLogged = [];                // setup role + reason already logged as a skip
+    private readonly Dictionary<string, (string Action, string Result, string Detail)> _outcome = [];  // setup role → its latest orders.csv row (scout.md §3.2)
+    private readonly Dictionary<string, string> _setupShot = [];      // setup role → the setup picture already drawn (level, stop-loss, outcome)
     private readonly HashSet<long> _duplicatesAlerted = [];
     private readonly Dictionary<string, string> _sizing = [];         // the size worked out for a setup role, for its log line
     private volatile IBrokerGateway? _gateway;
@@ -552,7 +554,57 @@ internal sealed class AccountScout(
             await PlaceAsync(session, want, volume, now);
             risk?.Take(want.Sym.Name, want.Dir, riskCash, RiskBook.PauseOf(want.Key));
         }
+
+        DrawSetupPictures(wants.Values.Concat(dailyHeld.Values.Select(x => x.Want)), ourOrders, ourPositions, _utcNow());
     }
+
+    /// <summary>
+    /// A picture for every setup that has no order of its own (scout.md §3.2). Runs after the order pass, never
+    /// before it: a setup is drawn when it is first seen and drawn again when its level, its stop-loss or what
+    /// became of it changes, over the same file. A setup that got an order keeps that order's picture (§3.1).
+    /// </summary>
+    private void DrawSetupPictures(IEnumerable<Want> wants, Dictionary<string, ProtoOAOrder> ourOrders, Dictionary<string, ProtoOAPosition> ourPositions, DateTime now)
+    {
+        OrderLog.LogCache? cache = null;   // the log files this batch reads, parsed once (scout.md §3.2)
+        foreach (var w in wants)
+        {
+            if (ourOrders.ContainsKey(w.Key) || ourPositions.ContainsKey(w.Key))
+                continue;
+            if (state.Roles.GetValueOrDefault(w.Key) is { } role && (role.OrderId != 0 || role.PositionId is not null))
+                continue;
+            var sl = StopLoss(w);
+            var outcome = OutcomeOf(w.Key);
+            var shot = $"{Num(w.Level, w.Sym)}|{(sl is { } x ? Num(x, w.Sym) : "")}|{outcome}";
+            if (_setupShot.GetValueOrDefault(w.Key) == shot)
+                continue;
+            cache ??= new OrderLog.LogCache();
+            if (DrawChart(w.Chart, Picture(w, null, Math.Round(w.Level, w.Sym.Digits), sl, now, ExpiryOf(w), outcome, cache)) is not { Length: > 0 } path)
+                continue;
+            _setupShot[w.Key] = shot;
+            OrderRow(now, w, "chart", 0, sl, null, null, "ok", outcome, null, path);
+        }
+    }
+
+    /// <summary>What happened to a setup instead of an order, for its picture and the dashboard (scout.md §3.2).</summary>
+    private string OutcomeOf(string key)
+    {
+        if (!_outcome.TryGetValue(key, out var last))
+            return "no order yet";
+        var (action, result, detail) = last;
+        var text = action switch
+        {
+            "skip" => $"not placed: {result}" + (detail.Length > 0 && detail != result ? $" — {Pretty(detail)}" : ""),
+            "alert" => $"alert only — {detail}",
+            "place" when result is not ("ok" or "dry run") => $"{result}: {Pretty(detail)}",
+            _ => "no order yet",
+        };
+        text = string.Join(' ', text.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return text.Length <= 110 ? text : text[..109] + "…";
+    }
+
+    /// <summary>"LEVEL_PASSED: bid 1.3 is already past the level" → "LEVEL_PASSED — bid 1.3 …": one line a person reads.</summary>
+    private static string Pretty(string detail) =>
+        detail.IndexOf(": ", StringComparison.Ordinal) is var i && i > 0 ? $"{detail[..i]} — {detail[(i + 2)..]}" : detail;
 
     // ── Money at risk across the account (scout.md §2.9, review P-03): new risk only; what is on the account is never touched ──
     private RiskBook BuildRisk(IBrokerGateway session, AccountStatus? status, ProtoOAReconcileRes rec)
@@ -1336,26 +1388,30 @@ internal sealed class AccountScout(
             positionId?.ToString(CultureInfo.InvariantCulture) ?? "", fill, slip, gross, net, "ok", detail, "",
         ]);
 
-    private void OrderRow(DateTime now, Want w, string action, long orderId, double? sl, DateTime? expires, long? positionId, string result, string detail, long? volume = null, string? chart = null) =>
+    private void OrderRow(DateTime now, Want w, string action, long orderId, double? sl, DateTime? expires, long? positionId, string result, string detail, long? volume = null, string? chart = null)
+    {
+        if (action != "chart")
+            _outcome[w.Key] = (action, result, detail); // what the setup's picture says happened instead of an order (scout.md §3.2)
         ordersCsv.Write(now,
         [
             CsvFormat.Time(now), w.Sym.Name, w.Chart.Chart.Timeframe, CsvFormat.Time(w.PauseStart), w.Reversal ? "R" : "M", action, Side(w.Dir),
             volume is { } v ? Lots(w.Sym, v) : "", Num(w.Level, w.Sym), sl is { } x ? Num(x, w.Sym) : "", expires is { } ex ? CsvFormat.Time(ex) : "",
             orderId == 0 ? "" : orderId.ToString(CultureInfo.InvariantCulture), positionId?.ToString(CultureInfo.InvariantCulture) ?? "", "", "", "", "", result, detail, chart ?? "",
         ]);
+    }
 
     // ── Order pictures (scout.md §3.1): never in the way of an order ────────────────────────────────────────────────
-    private OrderPicture Picture(Want w, long orderId, double price, double? sl, DateTime placed, DateTime expires) =>
+    private OrderPicture Picture(Want w, long? orderId, double price, double? sl, DateTime placed, DateTime expires, string? outcome = null, OrderLog.LogCache? cache = null) =>
         new(w.Sym.Name, w.Chart.Chart.Timeframe, w.Sym.Digits, w.Sym.PipSize, account.Broker, account.AccountId, orderId, w.Dir, w.Reversal,
-            price, sl, placed, expires, w.PauseStart, w.Chart.HigherTimeframe, WithHigher(w), History(w.Chart, placed));
+            price, sl, placed, expires, w.PauseStart, w.Chart.HigherTimeframe, WithHigher(w), History(w.Chart, placed, cache), outcome);
 
     /// <summary>Scout's other setups on the chart in view of a picture, from the logs (scout.md §3.1); none when they cannot be read.</summary>
-    private List<PastSetup> History(ChartTracker chart, DateTime placed)
+    private List<PastSetup> History(ChartTracker chart, DateTime placed, OrderLog.LogCache? cache = null)
     {
         try
         {
             var first = chart.Main.Candles.Where(c => c.OpenUtc + chart.Length <= placed).TakeLast(OrderChart.CandlesShown).FirstOrDefault();
-            return first is null ? [] : OrderLog.ReadHistory(Path.GetDirectoryName(logFolder)!, chart.Chart.Symbol, chart.Chart.Timeframe, first.OpenUtc, placed);
+            return first is null ? [] : OrderLog.ReadHistory(Path.GetDirectoryName(logFolder)!, chart.Chart.Symbol, chart.Chart.Timeframe, first.OpenUtc, placed, cache);
         }
         catch (Exception ex)
         {

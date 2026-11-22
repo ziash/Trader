@@ -6,13 +6,20 @@ using Trader.Core.MarketData;
 namespace Trader.Scout;
 
 /// <summary>
-/// What one order picture shows (scout.md §3.1). <see cref="WithHigher"/>: "with", "against" or "unknown".
-/// <see cref="Others"/>: Scout's other setups on the chart with what had become of them when this order was placed.
+/// What one picture shows: an order (scout.md §3.1) or a setup that has no order (§3.2).
+/// <see cref="WithHigher"/>: "with", "against" or "unknown".
+/// <see cref="Others"/>: Scout's other setups on the chart with what had become of them at that moment.
+/// <see cref="OrderId"/> null = a setup picture: <see cref="PlacedUtc"/> is when Scout looked, <see cref="ExpiresUtc"/>
+/// the expiry its order would have had, and <see cref="Outcome"/> what happened instead ("not placed: against daily").
 /// </summary>
 public sealed record OrderPicture(
-    string Symbol, string Timeframe, int Digits, double PipSize, string Broker, long AccountId, long OrderId,
+    string Symbol, string Timeframe, int Digits, double PipSize, string Broker, long AccountId, long? OrderId,
     int Dir, bool Reversal, double Level, double? StopLoss, DateTime PlacedUtc, DateTime ExpiresUtc, DateTime PauseStartUtc,
-    string? HigherTimeframe, string WithHigher, IReadOnlyList<PastSetup>? Others = null);
+    string? HigherTimeframe, string WithHigher, IReadOnlyList<PastSetup>? Others = null, string? Outcome = null)
+{
+    /// <summary>True when no order was placed: the picture is the setup's own (scout.md §3.2).</summary>
+    public bool SetupOnly => OrderId is null;
+}
 
 /// <summary>
 /// Draws one Scout order as it stood when it was placed (scout.md §3.1): the last 60 closed candles, the pause, the
@@ -32,9 +39,12 @@ public static class OrderChart
     private const string Up = "#26a69a", Down = "#ef5350", Entry = "#1e66f5", Stop = "#e11d48", Pause = "#f59e0b", Grid = "#e5e7eb", Muted = "#6b7280";
     private const string Warn = "#b45309", Loss = "#dc2626", Profit = "#16a34a";
 
-    /// <summary>"GBPJPY-H1-202611031500-M-1035054512.svg": chart, pause start, main/reversal, order ID.</summary>
+    /// <summary>
+    /// "GBPJPY-H1-202611031500-M-1035054512.svg": chart, pause start, main/reversal, order ID. A setup with no order
+    /// ends in "-setup.svg" (scout.md §3.2): one file per setup role, overwritten by each redraw.
+    /// </summary>
     public static string FileName(OrderPicture p) =>
-        $"{p.Symbol}-{p.Timeframe}-{p.PauseStartUtc:yyyyMMddHHmm}-{(p.Reversal ? "R" : "M")}-{p.OrderId}.svg";
+        $"{p.Symbol}-{p.Timeframe}-{p.PauseStartUtc:yyyyMMddHHmm}-{(p.Reversal ? "R" : "M")}-{(p.OrderId?.ToString(CultureInfo.InvariantCulture) ?? "setup")}.svg";
 
     public static string Svg(OrderPicture p, IReadOnlyList<Candle> candles)
     {
@@ -63,7 +73,8 @@ public static class OrderChart
         var side = $"{(p.Dir == 1 ? "Buy" : "Sell")} Stop";
         var sb = new StringBuilder();
         sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{W}\" height=\"{H}\" viewBox=\"0 0 {W} {H}\" font-family=\"DejaVu Sans, Arial, sans-serif\">\n");
-        sb.Append($"<title>{Esc($"{p.Symbol} {p.Timeframe} {side} {Price(p.Level, p)} — {p.Broker} order {p.OrderId}")}</title>\n");
+        var who = p.OrderId is { } titleId ? $"order {titleId.ToString(CultureInfo.InvariantCulture)}" : "setup, no order";
+        sb.Append($"<title>{Esc($"{p.Symbol} {p.Timeframe} {side} {Price(p.Level, p)} — {p.Broker} {who}")}</title>\n");
         sb.Append($"<rect width=\"{W}\" height=\"{H}\" fill=\"#ffffff\"/>\n");
         sb.Append($"<rect x=\"{N(placedX)}\" y=\"{N(Top)}\" width=\"{N(endX - placedX)}\" height=\"{N(H - Top - Bottom)}\" fill=\"#f3f4f6\"/>\n");
 
@@ -125,7 +136,7 @@ public static class OrderChart
 
         // The moment of the order and its expiry.
         sb.Append($"<line x1=\"{N(placedX)}\" x2=\"{N(placedX)}\" y1=\"{N(Top)}\" y2=\"{N(H - Bottom)}\" stroke=\"{Muted}\" stroke-dasharray=\"2 3\"/>\n");
-        sb.Append($"<text x=\"{N(placedX + 3)}\" y=\"{N(H - 7)}\" font-size=\"11\" fill=\"{Muted}\">placed {p.PlacedUtc.ToString("HH:mm", CultureInfo.InvariantCulture)}Z</text>\n");
+        sb.Append($"<text x=\"{N(placedX + 3)}\" y=\"{N(H - 7)}\" font-size=\"11\" fill=\"{Muted}\">{(p.SetupOnly ? "seen" : "placed")} {p.PlacedUtc.ToString("HH:mm", CultureInfo.InvariantCulture)}Z</text>\n");
 
         // The order: stop level, stop-loss, tags with their prices, and an arrow for the side.
         Level(sb, p.Level, pauseX, endX, Entry, $"{(p.Dir == 1 ? "Buy" : "Sell")} {Price(p.Level, p)}", Y(p.Level));
@@ -143,7 +154,10 @@ public static class OrderChart
         var risk = p.StopLoss is { } r ? $" · SL {Price(r, p)} ({(Math.Abs(p.Level - r) / p.PipSize).ToString("0.#", CultureInfo.InvariantCulture)} pips)" : " · no stop-loss";
         var title = $"{p.Symbol} {p.Timeframe} · {side} {Price(p.Level, p)}{risk} · {(p.Reversal ? "reversal stop" : "main stop")}";
         var higher = p.HigherTimeframe is null ? "" : $" · {p.HigherTimeframe} trend: {p.WithHigher}";
-        var sub = $"{p.Broker} {p.AccountId} · placed {p.PlacedUtc.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture)}Z · expires {p.ExpiresUtc.ToString("dd MMM HH:mm", CultureInfo.InvariantCulture)}Z{higher} · order {p.OrderId}";
+        var seen = $"{(p.SetupOnly ? "seen" : "placed")} {p.PlacedUtc.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture)}Z";
+        var until = $"{(p.SetupOnly ? "would expire" : "expires")} {p.ExpiresUtc.ToString("dd MMM HH:mm", CultureInfo.InvariantCulture)}Z";
+        var end = p.OrderId is { } subId ? $" · order {subId.ToString(CultureInfo.InvariantCulture)}" : $" · {p.Outcome ?? "no order yet"}";
+        var sub = $"{p.Broker} {p.AccountId} · {seen} · {until}{higher}{end}";
         sb.Append($"<text x=\"{N(Left + 4)}\" y=\"20\" font-size=\"15\" font-weight=\"bold\" fill=\"#111827\">{Esc(title)}</text>\n");
         sb.Append($"<text x=\"{N(Left + 4)}\" y=\"38\" font-size=\"12\" fill=\"{Muted}\">{Esc(sub)}</text>\n");
         sb.Append("</svg>\n");

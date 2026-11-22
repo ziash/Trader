@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Status | **Live with Scout's and TM's data** (06-Nov-2026): build steps 0–5 done — Google sign-in for the owner (account pinned) and viewers, Claude's machine account, Users and Status pages, the 30-min data upload, the **Scout page (view only)**, the read-only **account snapshot**, the **Accounts** and **Trades** pages with trade pictures, and the **Trading conditions** and **Audit** pages; step 6, the **controls** (Symbols, Keep / Skip, Settings), built. Next: step 7, a few days' use (§8) |
-| Document version | v1.16 (09-Nov-2026) — history in §11 |
+| Document version | v1.17 (22-Nov-2026) — history in §11 |
 | Address | `https://trader.uzlabz.com` — people sign in with Google (owner `zia.zeeshan@gmail.com`; others watch once approved), machines with M2M sign-in (`claude`, administrator); API under `/api/` (§5) |
 | Hosting | Hostinger **web hosting**, plan "Unlimited" (PHP 8.3, MySQL, SSH), account `u624663837`, until 25-Jul-2027. No VPS (a rented Linux server) and no Node.js — so nothing of ours can run there all the time; the site is plain files (the screens) plus a small PHP API (§4.1) |
 | Design | [`dashboard-design-brief.md`](dashboard-design-brief.md) — the brief for Claude Design (screens, states, look); its result, [`design/`](design/HANDOFF.md) (tokens, screen sources, handoff notes), is the reference for the pages |
@@ -38,6 +38,8 @@ The screens, their states and the look are in the [design brief](dashboard-desig
 - **Keep / skip switch on each live setup** (§3.4): **green = keep** (the default — Scout trades it), **grey = skip** (Scout cancels its pending order and leaves the setup alone). The switch shows how far your choice has got: *saved* → *applied by Scout HH:MM*, or *too late — filled* (TM manages it; close it in cTrader if you want out).
 - **Orders by day** from `orders.csv` (one line per order, its rows merged): time placed, symbol, side, main or reversal (M/R), level, stop-loss and its distance in pips, lots, expiry, and where it stands now: *pending*, *filled* (price, slippage), *expired*, *cancelled* (reason, including "skipped by you"), *closed* (net profit in USD).
 - **The order's picture** ([Scout §3.1](../bots/scout/scout.md#31-order-pictures-owner-04-nov-2026)) as a small image beside each order; a tap opens it full size. When an order has several pictures, the latest `chart` row wins.
+- **A picture on every setup** (22-Nov-2026): a setup that never became an order shows its own picture ([Scout §3.2](../bots/scout/scout.md#32-setup-pictures-owner-22-nov-2026)), redrawn while it lasts; one that did shows the order's. Before this, a day on which Scout placed nothing showed no pictures at all.
+- **Why it was not taken** (22-Nov-2026): the `skip`, `alert` and refused `place` rows have no order ID and used to be dropped. The setup now carries *Not placed · <reason>* on its card (*portfolio limit*, *against daily*, *LEVEL_PASSED*, *no margin*, *held back*, *watch mode*…) and each of those rows appears in its timeline.
 - Day picker (previous / next day), filter by symbol, and the day's totals: orders, filled, closed, net profit.
 
 ### 2.2 Symbols and settings (owner, 04-Nov-2026)
@@ -432,3 +434,4 @@ scripts/dashboard-api.sh GET /api/status                      # call the API as 
 | v1.14 | 07 Nov 2026 | Build step 7 started: the controls checked live end to end; three fixes (§3.4): each change's own applied time on the Status page and the Symbols page, switch values as JSON, `ControlReset` logged ([Scout](../bots/scout/scout.md) v1.9) |
 | v1.15 | 07 Nov 2026 | Documents reorganised (owner, [shared](../shared.md) v1.13): this document, the design brief and `design/` moved to `docs/dashboard/` (with a [README](README.md)); the tokens test now reads `docs/dashboard/design/tokens.css`; Related line |
 | v1.16 | 09 Nov 2026 | **Settings in tabs** (owner, §2.2): Scout, Scout Lens, TM. First option of scope `scout`: *Trade with the daily direction* (§3.4, Scout v1.40), a working switch with its state. API: `POST /api/controls` takes scope `scout`, `GET` returns its value and state |
+| v1.17 | 22 Nov 2026 | **A picture on every setup** (§2.1, owner): setups that never became an order now carry their own picture ([Scout](../bots/scout/scout.md) §3.2), and the `skip` / `alert` / refused `place` rows — dropped until now because they have no order ID — appear as *Not placed · reason* on the card and in the timeline. Found on 22-Nov: twelve crypto setups on the page, no picture on any of them |

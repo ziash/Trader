@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from "vitest";
-import { chartUrl, distance, market, orderState, tfLabel, usd } from "@/screens/ScoutScreen";
+import { chartUrl, distance, market, orderState, pictureOf, tfLabel, usd } from "@/screens/ScoutScreen";
 import type { ScoutOrder } from "@/api/types";
 
 const order = (o: Partial<ScoutOrder>): ScoutOrder => ({
@@ -25,6 +25,15 @@ group("Scout page", () => {
     expect([market("XAUUSD"), market("EURJPY"), market("US500"), market("BTCUSD"), market("XNGUSD")]).toEqual(["Metals", "Forex", "Indices", "Crypto", "Energies"]);
     expect([tfLabel("H1"), tfLabel("D1")]).toEqual(["1H", "1D"]);
     expect([usd(12.4), usd(0), usd(null)]).toEqual(["+$12.40", "+$0.00", ""]);
+  });
+
+  it("shows the setup's own picture until it has an order's (scout.md §3.2)", () => {
+    const setup = "brokerB/1/Scout-a/2026-11-22/charts/ETHUSD-H1-202611221000-M-setup.svg";
+    const placed = "brokerB/1/Scout-a/2026-11-22/charts/ETHUSD-H1-202611221000-M-1001.svg";
+    expect(pictureOf({ chart: setup, order: null })).toBe(setup);
+    expect(pictureOf({ chart: setup, order: order({ chart: placed }) })).toBe(placed);
+    expect(pictureOf({ chart: null, order: order({ chart: null }) })).toBeNull();
+    expect(pictureOf({ chart: null, order: null })).toBeNull();
   });
 
   it("asks the API for pictures, never a path of its own", () => {

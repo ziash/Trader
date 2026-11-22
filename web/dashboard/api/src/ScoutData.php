@@ -235,10 +235,11 @@ final class ScoutData
             $ordersByKey[$o['setup_key']][] = $o;
         }
         foreach ($orderRows as $r) {
-            if (($r['order_id'] ?? '') !== '' && $r['action'] !== 'chart') {
-                $orderRowsByKey[self::setupKey($r)][] = $r;
+            if ($r['action'] !== 'chart') {
+                $orderRowsByKey[self::setupKey($r)][] = $r; // skip, alert and refused rows have no order ID (scout.md §3.2)
             }
         }
+        [$setupCharts, $notPlaced] = self::withoutOrder($orderRows);
 
         $out = [];
         foreach ($byKey as $key => $rows) {
@@ -288,6 +289,8 @@ final class ScoutData
                 'pause_height_atr' => self::num($found['pause_height_atr']),
                 'move_atr' => self::num($found['move_atr']),
                 'atr' => self::price($found['atr']),
+                'chart' => $order['chart'] ?? $setupCharts[$key] ?? null,
+                'not_placed' => $order === null ? ($notPlaced[$key] ?? null) : null,
                 'order' => $order === null ? null : array_diff_key($order, ['_day' => 0]),
                 'orders' => array_map(fn ($o) => $o['order_id'], $candidates),
                 'timeline' => self::timeline($rows, $orderRowsByKey[$key] ?? []),
@@ -295,6 +298,44 @@ final class ScoutData
         }
         usort($out, fn ($a, $b) => strcmp($b['event_utc'], $a['event_utc']));
         return $out;
+    }
+
+    /**
+     * The orders.csv rows that have no order ID (scout.md §3.2), by setup key: the setup's own picture from its
+     * `chart` row, and why no order was placed, from its latest skip, alert or refused place row.
+     *
+     * @return array{0: array<string, string>, 1: array<string, string>}
+     */
+    private static function withoutOrder(array $orderRows): array
+    {
+        $charts = $reasons = [];
+        foreach ($orderRows as $r) {   // in time order: the latest row of a setup wins
+            if (($r['order_id'] ?? '') !== '') {
+                continue;
+            }
+            $key = self::setupKey($r);
+            if (($r['chart'] ?? '') !== '' && preg_match(self::CHART, $r['chart'])) {
+                $charts[$key] = $r['chart'];
+            }
+            $detail = self::oneLine($r['detail'] ?? '');
+            $result = $r['result'] ?? '';
+            $reason = match ($r['action']) {
+                'skip' => $result . ($detail !== '' && $detail !== $result ? " — $detail" : ''),
+                'alert' => 'watch mode' . ($detail !== '' && $detail !== 'watch mode' ? " — $detail" : ''),
+                'place' => in_array($result, ['ok', 'dry run'], true) ? null : $result . ($detail !== '' ? " — $detail" : ''),
+                default => null,
+            };
+            if ($reason !== null && $reason !== '') {
+                $reasons[$key] = $reason;
+            }
+        }
+        return [$charts, $reasons];
+    }
+
+    /** A detail that Scout wrote over several lines, as one line for the page. */
+    private static function oneLine(string $text): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', $text));
     }
 
     private static function roleOf(string $event): ?string
@@ -331,7 +372,9 @@ final class ScoutData
             $role = $r['role'] === 'R' ? 'reversal' : 'main';
             $text = match ($r['action']) {
                 'place' => ($r['result'] === 'ok' ? "Order placed · $role · {$r['side']} stop {$r['price_req']} · SL {$r['stop_loss']} · {$r['lots']} lot"
-                    : "Order not placed ({$r['result']})"),
+                    : 'Order not placed · ' . $r['result'] . (self::oneLine($r['detail']) !== '' ? ' · ' . self::oneLine($r['detail']) : '')),
+                'skip' => 'Not placed · ' . $r['result'] . (self::oneLine($r['detail']) !== '' && self::oneLine($r['detail']) !== $r['result'] ? ' · ' . self::oneLine($r['detail']) : ''),
+                'alert' => 'Alert only · ' . (self::oneLine($r['detail']) !== '' ? self::oneLine($r['detail']) : 'watch mode'),
                 'filled' => "Order filled at {$r['price_fill']}" . ($r['slip_pips'] !== '' ? " · slippage {$r['slip_pips']} pips" : ''),
                 'closed' => 'Position closed · net ' . self::usd(self::num($r['net'])),
                 'cancel' => 'Order cancelled by Scout' . ($r['detail'] !== '' ? " · {$r['detail']}" : ''),
@@ -341,7 +384,8 @@ final class ScoutData
                 default => null,
             };
             if ($text !== null) {
-                $kind = ['place' => 'placed', 'filled' => 'filled', 'closed' => 'closed', 'cancel' => 'cancelled', 'cancelled' => 'cancelled'][$r['action']] ?? 'info';
+                $kind = ['place' => $r['result'] === 'ok' ? 'placed' : 'cancelled', 'filled' => 'filled', 'closed' => 'closed',
+                    'cancel' => 'cancelled', 'cancelled' => 'cancelled', 'skip' => 'cancelled', 'alert' => 'info'][$r['action']] ?? 'info';
                 $items[] = ['time_utc' => $r['time_utc'], 'kind' => $kind, 'text' => $text];
             }
         }

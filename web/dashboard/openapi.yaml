@@ -468,6 +468,8 @@ components:
         pause_height_atr: { type: [number, 'null'] }
         move_atr: { type: [number, 'null'] }
         atr: { type: [string, 'null'] }
+        chart: { type: [string, 'null'], description: the picture for GET /api/scout/chart?file= — the order's (scout.md §3.1) or, with no order, the setup's own (§3.2) }
+        not_placed: { type: [string, 'null'], description: why no order was placed (scout.md §3.2), e.g. "portfolio limit: group Crypto $144.30 with this trade"; null once an order exists }
         order: { oneOf: [{ $ref: '#/components/schemas/ScoutOrder' }, { type: 'null' }] }
         orders: { type: array, items: { type: string }, description: all its order IDs (main and reversal) }
         timeline:

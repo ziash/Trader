@@ -119,6 +119,7 @@ public sealed class ExportTests : IDisposable
     [Theory]
     [InlineData("status.json", true)]
     [InlineData("logs/brokerA/49123893/Scout-6d48a6/2026-11-05/charts/X-H1-1-M-2.svg", true)]
+    [InlineData("logs/brokerB/49124666/Scout-cdfe2a/2026-11-22/charts/ETHUSD-H1-202611221000-M-setup.svg", true)]  // a setup picture (scout.md 3.2)
     [InlineData("logs/brokerA/49123893/Scout-6d48a6/2026-11-05/charts/../../../../../../config/scout.json", false)]
     [InlineData("logs/brokerA/49123893/TM-0d4d6c/2026-11-05/orders.csv", false)]
     [InlineData("config/scout.json", false)]

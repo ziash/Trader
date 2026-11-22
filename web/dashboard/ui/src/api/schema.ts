@@ -998,6 +998,10 @@ export interface components {
             pause_height_atr?: number | null;
             move_atr?: number | null;
             atr?: string | null;
+            /** @description the picture for GET /api/scout/chart?file= — the order's (scout.md §3.1) or */
+            chart?: string | null;
+            /** @description why no order was placed (scout.md §3.2) */
+            not_placed?: string | null;
             order?: components["schemas"]["ScoutOrder"] | null;
             /** @description all its order IDs (main and reversal) */
             orders: string[];

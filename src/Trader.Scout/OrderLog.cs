@@ -26,12 +26,29 @@ public sealed record PastSetup(
 public static class OrderLog
 {
     /// <summary>
+    /// Holds the log files one batch of pictures reads, so a file is parsed once however many pictures need it
+    /// (scout.md §3.2). One cache per batch: today's files grow while Scout runs, so it is never kept longer.
+    /// </summary>
+    public sealed class LogCache
+    {
+        private readonly Dictionary<string, CsvTable> _tables = new(StringComparer.Ordinal);
+
+        public CsvTable Read(string file)
+        {
+            if (!_tables.TryGetValue(file, out var table))
+                _tables[file] = table = CsvTable.Read(file);
+            return table;
+        }
+    }
+
+    /// <summary>
     /// Scout's setups on one chart whose pause started from <paramref name="fromUtc"/> on, with what had become of each
     /// by <paramref name="untilUtc"/> (scout.md §3.1): only rows written before that moment count, so a picture drawn
     /// later is the same picture. Reads setups.csv and orders.csv of the day folders in that range, of every Scout instance.
     /// </summary>
-    public static List<PastSetup> ReadHistory(string accountFolder, string symbol, string timeframe, DateTime fromUtc, DateTime untilUtc)
+    public static List<PastSetup> ReadHistory(string accountFolder, string symbol, string timeframe, DateTime fromUtc, DateTime untilUtc, LogCache? cache = null)
     {
+        CsvTable Read(string file) => cache is null ? CsvTable.Read(file) : cache.Read(file);
         var history = new List<PastSetup>();
         if (!Directory.Exists(accountFolder))
             return history;
@@ -45,12 +62,12 @@ public static class OrderLog
         var found = new Dictionary<string, (int Dir, double Level)>();
         var rows = new Dictionary<string, List<CsvRow>>();
         foreach (var file in folders.Select(d => Path.Combine(d, "setups.csv")).Where(File.Exists))
-            foreach (var row in CsvTable.Read(file).Rows)
+            foreach (var row in Read(file).Rows)
                 if (row["event"] is "NewStop" or "NewReversal" && row["symbol"] == symbol && row["timeframe"] == timeframe
                     && row.Time("time_utc") < untilUtc && row.Time("setup_utc") is { } setup && setup >= fromUtc && row.Num("level") is { } level)
                     found.TryAdd(ScoutState.Key(symbol, timeframe, setup, row["event"] == "NewReversal"), (row["side"] == "Buy" ? 1 : -1, level));
         foreach (var file in folders.Select(d => Path.Combine(d, "orders.csv")).Where(File.Exists))
-            foreach (var row in CsvTable.Read(file).Rows)
+            foreach (var row in Read(file).Rows)
                 if (row["symbol"] == symbol && row["timeframe"] == timeframe && row.Time("time_utc") < untilUtc
                     && row.Time("setup_utc") is { } setup && setup >= fromUtc && row["role"] is "M" or "R")
                 {

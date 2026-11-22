@@ -440,6 +440,58 @@ public sealed class OrderLifecycleTests : IDisposable
         Assert.Contains("LEVEL_PASSED", Assert.Single(Rows("place"))["detail"]);
     }
 
+    // ── Setup pictures (scout.md §3.2) ──────────────────────────────────────────────────────────────────────────────
+    private string[] SetupPictures() =>
+        Directory.Exists(Path.Combine(_dir, "logs")) ? Directory.GetFiles(Path.Combine(_dir, "logs"), "*-setup.svg", SearchOption.AllDirectories) : [];
+
+    [Fact]
+    public async Task A_setup_that_never_becomes_an_order_still_gets_a_picture()
+    {
+        _broker.Ask = 163.5;                                  // the price is past the level: nothing is sent
+        await Run();
+
+        Assert.Equal(0, _broker.PlaceCalls);
+        var picture = Assert.Single(SetupPictures());
+        Assert.EndsWith($"EURUSD-H1-202610011900-M-setup.svg", picture);
+        var row = Assert.Single(Rows("chart"));
+        Assert.Equal("", row["order_id"]);                    // no order: the dashboard reads it as the setup's picture
+        Assert.Contains("LEVEL_PASSED", row["detail"]);
+        Assert.EndsWith("-setup.svg", row["chart"]);
+        Assert.Contains("refused: LEVEL_PASSED — ask", File.ReadAllText(picture));
+    }
+
+    [Fact]
+    public async Task The_setup_picture_is_redrawn_only_when_something_changes()
+    {
+        _broker.HasQuote = false;                             // no price to send against: skipped, tried again every cycle
+        await Run();
+        var picture = Assert.Single(SetupPictures());
+        Assert.Single(Rows("chart"));
+        Assert.Contains("not placed: no live price", File.ReadAllText(picture));
+
+        await Cycle();                                        // same setup, same outcome: no redraw, no second chart row
+        await Cycle();
+        Assert.Single(Rows("chart"));
+
+        _broker.HasQuote = true;                              // a new outcome: drawn again, over the same file
+        _broker.Ask = 163.5;
+        await Cycle();
+        Assert.Equal(2, Rows("chart").Count);
+        Assert.Single(SetupPictures());
+        Assert.Contains("refused: LEVEL_PASSED", File.ReadAllText(picture));
+    }
+
+    [Fact]
+    public async Task An_order_keeps_its_own_picture_and_gets_no_setup_one()
+    {
+        await Run();
+
+        Assert.Equal(1, _broker.PlaceCalls);
+        Assert.Empty(SetupPictures());
+        Assert.Empty(Rows("chart"));
+        Assert.EndsWith($"-M-{Assert.Single(Rows("place"))["order_id"]}.svg", Role.Chart);
+    }
+
     [Fact]
     public async Task Without_a_live_price_nothing_is_sent_until_one_arrives()
     {

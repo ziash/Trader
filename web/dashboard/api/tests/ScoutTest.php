@@ -12,6 +12,7 @@ final class ScoutTest extends TestCase
     private const SETUPS = 'time_utc,candle_utc,symbol,timeframe,event,side,level,far_side,setup_utc,pause_candles,pause_height_atr,move_atr,pullback,atr,higher_tf,higher_trend,with_higher,mode,reason';
     private const ORDERS = 'time_utc,symbol,timeframe,setup_utc,role,action,side,lots,price_req,stop_loss,expires_utc,order_id,position_id,price_fill,slip_pips,gross,net,result,detail,chart';
     private const CHART = 'brokerA/49123893/Scout-aaaaaa/2026-11-04/charts/GBPJPY-H1-202611041400-M-1001.svg';
+    private const SETUP_CHART = 'brokerA/49123893/Scout-bbbbbb/2026-11-05/charts/SOLUSD-H1-202611050900-M-setup.svg';
 
     private TestKit $kit;
     private array $bearer;
@@ -37,13 +38,17 @@ final class ScoutTest extends TestCase
             '2026-11-05 10:00:04,2026-11-05 09:00:00,XAUUSD,H1,NewStop,Sell,4055.44,4070.46,2026-11-05 07:00:00,3,0.5,2.1,0.2,16.3,H4,up,against,Trade,',
             '2026-11-05 11:00:04,2026-11-05 10:00:00,XAUUSD,H1,Cancelled,Sell,4055.44,4070.46,2026-11-05 07:00:00,,,,,16.3,H4,up,against,Trade,trend turned',
             '2026-11-05 11:00:09,2026-11-05 10:00:00,XAUUSD',
+            '2026-11-05 12:00:04,2026-11-05 11:00:00,SOLUSD,H1,NewStop,Buy,69.50,67.80,2026-11-05 09:00:00,2,0.60,2.80,0.30,1.200,H4,down,against,Trade,',
         ]);
         $this->put('Scout-bbbbbb/2026-11-05/orders.csv', self::ORDERS, [
             '2026-11-05 08:41:00,GBPJPY,H1,2026-11-04 14:00:00,M,filled,Buy,0.10,212.686,212.474,,1001,692232259,212.688,0.2,,,ok,,',
             '2026-11-05 10:00:05,XAUUSD,H1,2026-11-05 07:00:00,M,place,Sell,0.01,4055.44,4070.46,2026-11-06 02:00:05,1002,,,,,,ok,Scout-bbbbbb-H1-202611050700-M,',
             '2026-11-05 10:16:00,GBPJPY,H1,2026-11-04 14:00:00,M,closed,Buy,0.10,212.686,212.474,,1001,692232259,,,12.90,12.40,ok,,',
             '2026-11-05 11:00:05,XAUUSD,H1,2026-11-05 07:00:00,M,cancel,Sell,0.01,4055.44,4070.46,,1002,,,,,,ok,trend turned,',
+            '2026-11-05 12:00:05,SOLUSD,H1,2026-11-05 09:00:00,M,skip,Buy,0.20,69.50,67.80,,,,,,,,portfolio limit,group Crypto: $144.30 with this trade,',
+            '2026-11-05 12:00:06,SOLUSD,H1,2026-11-05 09:00:00,M,chart,Buy,,69.50,67.80,,,,,,,,ok,not placed: portfolio limit,' . self::SETUP_CHART,
         ]);
+        $this->put('Scout-bbbbbb/2026-11-05/charts/SOLUSD-H1-202611050900-M-setup.svg', null, ['<svg xmlns="http://www.w3.org/2000/svg"/>']);
     }
 
     protected function tearDown(): void
@@ -78,16 +83,30 @@ final class ScoutTest extends TestCase
     {
         $d = $this->get(['account' => 'brokerA-49123893'])->data(); // default: the latest day
         self::assertSame('2026-11-05', $d['day']);
-        self::assertSame(['XAUUSD-H1-202611050700', 'GBPJPY-H1-202611041400'], array_column($d['setups'], 'key'));
+        self::assertSame(['SOLUSD-H1-202611050900', 'XAUUSD-H1-202611050700', 'GBPJPY-H1-202611041400'], array_column($d['setups'], 'key'));
 
-        [$xau, $gbp] = $d['setups'];
+        [, $xau, $gbp] = $d['setups'];
         self::assertSame(['Cancelled', '2026-11-05 11:00:00', 'trend turned', false, 'cancelled'],
             [$xau['event'], $xau['candle_close_utc'], $xau['reason'], $xau['with_higher'], $xau['order']['state']]);
         self::assertSame(['StopFilled', 'M', '212.686', '212.474', 0.1, 'closed', true],
             [$gbp['event'], $gbp['role'], $gbp['level'], $gbp['stop_loss'], $gbp['lots'], $gbp['order']['state'], $gbp['with_higher']]);
         self::assertSame(['found', 'placed', 'filled', 'filled', 'closed'], array_column($gbp['timeline'], 'kind'));
+        self::assertSame([self::CHART, null], [$gbp['chart'], $gbp['not_placed']]);
         self::assertSame('Position closed · net +$12.40', end($gbp['timeline'])['text']);
         self::assertSame(['1002'], array_column($d['orders'], 'order_id'));
+    }
+
+    /** scout.md §3.2: a setup that never became an order carries its own picture and why no order was placed. */
+    public function testASetupWithoutAnOrderShowsItsPictureAndWhyItWasNotPlaced(): void
+    {
+        $sol = $this->get(['account' => 'brokerA-49123893'])->data()['setups'][0];
+
+        self::assertSame(['SOLUSD', null, [], self::SETUP_CHART], [$sol['symbol'], $sol['order'], $sol['orders'], $sol['chart']]);
+        self::assertSame('portfolio limit — group Crypto: $144.30 with this trade', $sol['not_placed']);
+        self::assertSame(['found', 'cancelled'], array_column($sol['timeline'], 'kind'));
+        self::assertSame('Not placed · portfolio limit · group Crypto: $144.30 with this trade', $sol['timeline'][1]['text']);
+        self::assertStringStartsWith('<svg', $this->kit->request('GET', '/api/scout/chart',
+            ['headers' => $this->bearer, 'query' => ['file' => self::SETUP_CHART]])->body);
     }
 
     public function testBadParametersAre400(): void

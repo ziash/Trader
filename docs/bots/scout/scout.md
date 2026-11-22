@@ -7,8 +7,8 @@
 | Item | Value |
 |---|---|
 | Status | **Running on demo — trial from 03-Nov-2026** (Scout spec §4.6): Trade mode, 1H, small sizes per symbol (§7); review after one week (≈ 10-Nov-2026). From 04-Nov-2026: IC Markets only, 18 symbols; **from 07-Nov-2026 17:27Z: Pepperstone only, same 18 symbols** (§7) |
-| Document version | v1.42 (11-Nov-2026) — history in §8 |
-| Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order pictures) |
+| Document version | v1.43 (22-Nov-2026) — history in §8 |
+| Code | [`src/Trader.Scout`](../../../src/Trader.Scout) (`Detector.cs` = Scout_Pine's rules, `ChartTracker.cs` = one chart + its higher timeframe, `AccountScout.cs` = candles, orders and logs per account, `OrderChart.cs` = order and setup pictures) |
 | Tests | [`tests/Trader.Scout.Tests`](../../../tests/Trader.Scout.Tests) — the detector against made-up charts and against Scout's Python prototype on real IC Markets 1H candles (identical events); the order pictures |
 | Accounts | **Pepperstone demo 49124666 (`brokerB`) only from 07-Nov-2026**; IC Markets demo 49123893 (`brokerA`) only 04–07 Nov; both 03–04 Nov — demo only ([shared §4](../../shared.md#4-safety-rules-for-every-bot)) |
 | Symbols | From 04-Nov-2026, top three per market on 1H: EURUSD, GBPUSD, USDJPY · GBPJPY, EURJPY, AUDJPY · XAUUSD, XAGUSD, XPTUSD · US500, USTEC, DE40 · XTIUSD, XBRUSD, XNGUSD · BTCUSD, ETHUSD, SOLUSD — `config/scout.json` (TM must list the same symbols in `tm.json`). 03–04 Nov: AUDJPY, EURGBP, EURUSD, GBPJPY, BTCUSD, ETHUSD on both demos. At Pepperstone five have other names, mapped in `symbolNames`: XTIUSD = SpotCrude, XBRUSD = SpotBrent, XNGUSD = NatGas, USTEC = NAS100, DE40 = GER40 |
@@ -202,9 +202,9 @@ A Scout on a 1H or 4H chart also reads closed daily candles. Before an order is 
 | File | One row per |
 |---|---|
 | `setups.csv` | detector event: `NewStop`, `StopMoved`, `NewReversal`, `ReversalMoved`, `StopFilled`, `ReversalFilled`, `Cancelled` (with reason), `TrendTurned` — with level, far side, pause start, pause candles, pause height and move in ATR, pull-back, ATR, higher-timeframe trend and *with / against* |
-| `orders.csv` | order action or result: `place` (ok / refused / unknown), `skip` (the reason in `result`), `cancel` (with reason; `result` ok / refused / no reply), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode), `chart` (a picture drawn later for an earlier order, §3.1). Column `chart`: the order's picture (§3.1), on its `place` or `chart` row |
+| `orders.csv` | order action or result: `place` (ok / refused / unknown), `skip` (the reason in `result`), `cancel` (with reason; `result` ok / refused / no reply), `filled` (fill price, slippage in pips, position), `expired`, `cancelled` (not by Scout), `rejected`, `closed` (gross and net profit of each closing deal of a Scout position), `alert` (Watch mode), `chart` (a picture drawn later for an earlier order, §3.1, or a setup's own picture, §3.2). Column `chart`: the order's picture (§3.1), on its `place` or `chart` row; a `chart` row with an empty `order_id` carries the setup's picture (§3.2) |
 | `events.csv` | every log line with an event name (shared format, open-code-pieces.md §8) |
-| `charts/*.svg` | one picture per order Scout placed (§3.1) |
+| `charts/*.svg` | one picture per order Scout placed (§3.1) and one per setup without an order (§3.2) |
 
 Pop-ups: "order placed" and Watch-mode setups (`notifications.json`: a desktop channel for Scout's `OrderPlaced` and `Setup`), refused orders and stops as warnings. TM's own `actions.csv` shows the mirrors, hedges and stops; its mirror labels carry Scout's order ID (`TM-…-O<orderId>-MIR`), which links the two logs for the trial review.
 
@@ -224,6 +224,21 @@ For a later web dashboard that shows Scout's entries by date: when Scout places 
 | Safety | Drawn only after the order is placed; a picture that cannot be drawn is logged (`ScoutChartError`) and skipped, never in the way of an order |
 
 TM's actions on the same order join by order ID (TM's mirror label `TM-…-O<orderId>-MIR`), so one picture serves both bots.
+
+### 3.2 Setup pictures (owner, 22-Nov-2026)
+
+Pictures of *orders* answer "what did the chart look like when Scout bought?", but not "why wasn't that one taken?". On 22-Nov-2026 (a Sunday: crypto only) every setup was skipped or refused — portfolio limit, stop too close, *against daily*, `LEVEL_PASSED` — so the Scout page showed twelve setups and not one picture. Every setup now gets a picture, whether or not it becomes an order.
+
+| Item | Value |
+|---|---|
+| When | For a setup with no order of its own: drawn at the end of the cycle, **after the order pass** (never before it), and redrawn while the setup lasts whenever its level, its stop-loss or what became of it changes. Once an order is placed, §3.1's order picture takes over and the setup picture is not drawn again |
+| Shows | The same picture as §3.1 — the last 60 closed candles, the pause, the level and stop-loss, the other setups in view — with the moment marked *seen* instead of *placed*, the room up to the expiry the order **would** have had, and, in place of the order ID, what became of it: `not placed: portfolio limit — group Crypto $144.30 with this trade`, `not placed: against daily`, `refused: LEVEL_PASSED — bid 1668.58 is already past the level`, `alert only — watch mode`, or `no order yet` while Scout is still trying |
+| File | `<date>/charts/<symbol>-<tf>-<pause start>-<M/R>-setup.svg` in the instance's log folder — one file per setup role, overwritten by each redraw. An order picture keeps the order ID in its name (§3.1) and is never overwritten |
+| Link | A `chart` row in `orders.csv` with an empty `order_id`, the path in column `chart` and the outcome in `detail`; the dashboard reads the latest such row as the setup's picture ([dashboard.md](../../dashboard/dashboard.md) §2.1). The memory file is not involved — a setup picture is not remembered across a restart, it is simply drawn again |
+| Cost | ≈ 60 setups a day on one account ≈ 0.8 MB of SVG a day, well inside the 14-day upload window. Each batch reads every log file it needs once (`OrderLog.LogCache`), not once per picture |
+| Safety | As §3.1: drawn after the order pass, in a try/catch; a picture that cannot be drawn is logged (`ScoutChartError`) and skipped, never in the way of an order |
+
+The reasons themselves were already in `orders.csv` but never reached the page: a `skip`, `alert` or refused `place` row has no order ID, and the dashboard only read rows that had one. It now shows them in the setup's timeline and as *Not placed · reason* on the card ([dashboard.md](../../dashboard/dashboard.md) §2.1).
 
 ## 4. Run and operate
 
@@ -314,6 +329,7 @@ Decisions are in Scout spec §4 and §7 (v1.2). Open here:
 | v1.40 | 09 Nov 2026 | **Daily direction built** (§2.10; owner, Scout spec v1.11 §4.7 D1): by rule from closed daily candles, on by default, switch on the dashboard's Settings page; when the direction is unknown, no buy near daily resistance and no sell near daily support. Phase 4 of the review started with this, ahead of exits (owner); Phase 3 closed with its gaps recorded (owner). Replay labels every order (`daily_trend`, `with_daily`, `daily_zone`). [Measured](reviews/2026-11-09-phase4-daily-direction.md): misses the pass mark set before the run (−41 % and −49 % against −57 % and −44 %); the zones never acted, as the direction was almost never unknown. Not deployed |
 | v1.41 | 09 Nov 2026 | **Daily direction deployed to the Pepperstone demo, on** (owner, knowing it missed the pass mark): Scout `ddb3819`, restarted 12:50 UTC; `daily` in the live `scout.json`, catalogue v2; the dashboard's Settings tabs live. This build also carries the shared order rules and the replay switches of v1.36–v1.38, which change nothing on the demo. TM unchanged |
 | v1.42 | 11 Nov 2026 | **Trial week 1 scored** (§7): [week-1 review](../../reviews/scout-trial-week1.md) of 03-Nov 17:41Z → 09-Nov 18:14Z — 236 roles, 190 orders, 43 % fill rate, 85 fills, 71 fully closed groups; Scout's legs −4.3R (−$224), the TM groups −41R (−$1,905); *against*-4H and reversal stops are the profitable halves, the rollover window and the 3R limit on two legs carry the loss. Nine proposals, none implemented. No change to the bot, its config or the spec |
+| v1.43 | 22 Nov 2026 | **Setup pictures** (§3.2, owner): every setup gets a picture, not only the ones that became an order — drawn after the order pass, redrawn while the setup lasts, named `…-setup.svg` and linked by a `chart` row with an empty `order_id`. The picture names what happened instead of an order (*not placed: against daily*, *refused: LEVEL_PASSED*, *alert only*). The dashboard now also shows the skip and refusal rows it used to drop ([dashboard.md](../../dashboard/dashboard.md) §2.1). Found on 22-Nov: a Sunday with twelve crypto setups and no picture on the page |
 | v1.36 | 09 Nov 2026 | **Phase 3 of the review started** (owner; the off-machine alarm F-13 left for later). Step 1, shared order rules (P-09, F-28): `OrderPlanner` holds which orders a setup wants, the stop-loss rule and the expiry, for the live bot and the replay; `ReplayOrders` has none of its own. No change in behaviour: the replay on all 19 symbols' history gives byte-identical orders before and after, and a new test feeds the live path real candles one at a time and gets the replay's orders exactly. Tests: 159. Not deployed |
 | v1.35 | 09 Nov 2026 | **Portfolio limits turned on** on the Pepperstone demo, 01:40 UTC (owner; instance `Scout-0aadfa`, same build). At the start: 4.07 % of equity at risk across the account, 5 trades, 3 entry orders; the old BTCUSD trade (2.58 %) is above the symbol limit and the crypto group above its limit, so new crypto orders wait until it ends. Nothing on the account was changed |
 | v1.34 | 09 Nov 2026 | v1.33 live on the Pepperstone demo, 01:39 UTC (owner's OK; build `Scout-8b28fe9`, instance `Scout-a43191`), portfolio limits **off**: Scout counts nothing against them until they are turned on, and `--risk` shows the exposure. TM not restarted (no code change) |

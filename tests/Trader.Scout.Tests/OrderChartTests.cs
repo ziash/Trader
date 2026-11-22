@@ -78,6 +78,48 @@ public sealed class OrderChartTests
         Assert.EndsWith("-R-7.svg", OrderChart.FileName(p with { Reversal = true, OrderId = 7 }));
     }
 
+    // --- Setups without an order (scout.md §3.2) ------------------------------------------------------------------
+
+    [Fact]
+    public void A_setup_without_an_order_is_one_file_per_role_whatever_its_outcome()
+    {
+        var (p, _) = FirstOrder("EURUSD", 5, 0.0001);
+        var setup = p with { OrderId = null, Outcome = "not placed: against daily" };
+        Assert.Equal($"EURUSD-H1-{p.PauseStartUtc:yyyyMMddHHmm}-M-setup.svg", OrderChart.FileName(setup));
+        // A redraw with another outcome overwrites the same file; the order's picture keeps its own name.
+        Assert.Equal(OrderChart.FileName(setup), OrderChart.FileName(setup with { Outcome = "not placed: no margin" }));
+        Assert.NotEqual(OrderChart.FileName(setup), OrderChart.FileName(p));
+        Assert.EndsWith("-R-setup.svg", OrderChart.FileName(setup with { Reversal = true }));
+    }
+
+    [Fact]
+    public void A_setup_picture_says_what_happened_instead_of_an_order()
+    {
+        var (p, candles) = FirstOrder("EURUSD", 5, 0.0001);
+        var setup = p with { OrderId = null, Outcome = "not placed: portfolio limit — group Crypto $144.30 with this trade" };
+        var text = OrderChart.Svg(setup, candles);
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "chart-sample-setup.svg"), text); // to look at by eye
+
+        var doc = XDocument.Parse(text);
+        var texts = doc.Descendants(Svg + "text").Select(t => t.Value).ToList();
+        Assert.Equal(OrderChart.CandlesShown, doc.Descendants(Svg + "g").Count(g => (string?)g.Attribute("class") == "candle"));
+        Assert.Contains(texts, t => t.Contains("not placed: portfolio limit") && t.Contains("would expire") && t.Contains("seen "));
+        Assert.DoesNotContain(texts, t => t.Contains("order 1035054512"));
+        Assert.Contains(texts, t => t.StartsWith("seen ", StringComparison.Ordinal));          // the moment on the x axis
+        Assert.Contains("setup, no order", XDocument.Parse(text).Descendants(Svg + "title").Single().Value);
+        // The level, the stop-loss and the pause are drawn exactly as on an order's picture.
+        var level = setup.Level.ToString("F5", CultureInfo.InvariantCulture);
+        Assert.Contains(texts, t => t == $"{(setup.Dir == 1 ? "Buy" : "Sell")} {level}");
+    }
+
+    [Fact]
+    public void A_setup_still_being_tried_says_so()
+    {
+        var (p, candles) = FirstOrder("EURUSD", 5, 0.0001);
+        var texts = XDocument.Parse(OrderChart.Svg(p with { OrderId = null }, candles)).Descendants(Svg + "text").Select(t => t.Value).ToList();
+        Assert.Contains(texts, t => t.Contains("no order yet"));
+    }
+
     [Fact]
     public void Past_orders_are_read_back_from_every_instance_log_with_their_trend_tag()
     {

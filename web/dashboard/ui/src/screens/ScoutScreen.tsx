@@ -155,6 +155,9 @@ export function distance(level?: string | null, sl?: string | null): string {
 
 export const usd = (v: number | null | undefined) => (v == null ? "" : `${v < 0 ? "−" : "+"}$${Math.abs(v).toFixed(2)}`);
 
+/** The picture to show for a setup: its order's (scout.md §3.1), or the setup's own when it never got an order (§3.2). */
+export const pictureOf = (s: Pick<ScoutSetup, "chart" | "order">) => s.order?.chart ?? s.chart ?? null;
+
 /** Where the setup's order stands now, in words and colour (never colour alone). */
 export function orderState(o: ScoutOrder | null | undefined, zone: TimeZoneChoice): { tone: Tone; text: string } {
   if (!o) return { tone: "plain", text: "No order" };
@@ -183,7 +186,7 @@ function Trend({ s }: { s: ScoutSetup }) {
 }
 
 function Picture({ file, symbol, big }: { file?: string | null; symbol: string; big?: boolean }) {
-  if (!file) return <div className={`pic none${big ? " big" : ""}`}><span className="upd">No picture</span></div>;
+  if (!file) return <div className={`pic none${big ? " big" : ""}`}><span className="upd">No picture yet</span></div>;
   // eslint-disable-next-line @next/next/no-img-element -- pictures come from the API after sign-in, not from the build
   return <img className={`pic${big ? " big" : ""}`} src={chartUrl(file)} alt={`Order picture for ${symbol}`} loading="lazy" width={720} height={400} />;
 }
@@ -193,8 +196,8 @@ function SetupCard({ s, zone, selected, onSelect, ctl }: { s: ScoutSetup; zone: 
   const gone = s.order?.state === "cancelled" || s.order?.state === "expired" || (!s.order && s.event === "Cancelled");
   return (
     <article className={`card setup${selected ? " is-sel" : ""}${gone ? " is-gone" : ""}`} aria-label={`${s.symbol} setup`}>
-      <button type="button" className="thumbbtn" onClick={onSelect} aria-label={`Open ${s.symbol} order picture and details`}>
-        <Picture file={s.order?.chart} symbol={s.symbol} />
+      <button type="button" className="thumbbtn" onClick={onSelect} aria-label={`Open ${s.symbol} picture and details`}>
+        <Picture file={pictureOf(s)} symbol={s.symbol} />
       </button>
       <div className="setup-body">
         <div className="row">
@@ -217,6 +220,7 @@ function SetupCard({ s, zone, selected, onSelect, ctl }: { s: ScoutSetup; zone: 
       </div>
       <div className="setup-state">
         <Chip tone={st.tone}>{st.text}</Chip>
+        {s.not_placed && <Chip tone="amber">Not placed · {s.not_placed}</Chip>}
         {s.reason && !s.order && <span className="upd">{s.reason}</span>}
         <KeepSkip s={s} ctl={ctl} zone={zone} />
       </div>
@@ -267,6 +271,8 @@ function Detail({ s, zone }: { s: ScoutSetup; zone: TimeZoneChoice }) {
   ];
   if (o?.price_fill) fields.push(["Filled at", `${o.price_fill}${o.slip_pips != null ? ` · ${o.slip_pips} pips slip` : ""}`]);
   if (o?.position_id) fields.push(["Position", `P${o.position_id}`]);
+  if (s.not_placed) fields.push(["Not placed", s.not_placed]);
+  const pic = pictureOf(s);
   return (
     <aside aria-label="Setup detail" className="card detail">
       <div className="ch">
@@ -275,9 +281,9 @@ function Detail({ s, zone }: { s: ScoutSetup; zone: TimeZoneChoice }) {
         <span className="upd">{s.side ? `${s.side} stop` : ""}{s.role ? ` · ${s.role === "R" ? "reversal" : "main"}` : ""}</span>
       </div>
       <div className="detail-body">
-        {o?.chart ? (
-          <a className="frame" href={chartUrl(o.chart)} target="_blank" rel="noopener" aria-label={`Open ${s.symbol} picture full size`}>
-            <Picture file={o.chart} symbol={s.symbol} big />
+        {pic ? (
+          <a className="frame" href={chartUrl(pic)} target="_blank" rel="noopener" aria-label={`Open ${s.symbol} picture full size`}>
+            <Picture file={pic} symbol={s.symbol} big />
           </a>
         ) : (
           <div className="frame"><Picture symbol={s.symbol} big /></div>
